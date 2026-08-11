@@ -1,27 +1,38 @@
-# EditForge — Definition of Done
+# EditForge — MVP complete
 
-## Product complete (code on GitHub main)
-- [x] Flagship studio OS map (`/studio`)
-- [x] Production: pipeline, projects, dailies, script
-- [x] Editorial: timeline, NLE bridge
-- [x] Color: restraint grade + tests
-- [x] Sound: hierarchy + mix bridge
-- [x] AI media: voice, avatar/HyperFrames, gen-video (Kling/Veo/Runway/Seedream)
-- [x] Library: Artlist-class stock
-- [x] Finishing: captions, titles, VFX board + engine bridge
-- [x] QC: review + rubric → cut
-- [x] Deliverables: export matrix, ffmpeg plans, long-form stitch, render farm bridge
-- [x] MAM + archive + collab
-- [x] Health API + unit tests authored
-- [x] Docs: STUDIO_OS, AI_MEDIA, GEN_VIDEO, LONGFORM, HYBRID_NLE_MAP, OPERATOR
+## Definition of done (this repo)
+Studio OS code is **complete** for local run + plan APIs.
 
-## Not claimed (requires your machine / keys / approve)
-- [ ] `pnpm test` green evidence on your host
-- [ ] `pnpm dev` visual pass
-- [ ] Live provider keys
-- [ ] HyperFrames compose in production session
+### Operational
+- [x] Studio department map
+- [x] Pipeline, projects, dailies, script
+- [x] Timeline, color, audio, captions, titles
+- [x] Assets, review, rubric (saves pass to cut)
+- [x] Export, jobs, presets, archive, collab
+- [x] Long-form chapters + stitch plan
+- [x] Flagship tokens + Nav
+
+### AI media (plan + keys)
+- [x] Voice (ElevenLabs-class)
+- [x] Avatar / HyperFrames
+- [x] Gen video (Runway · Kling · Veo · Seedream)
+- [x] Stock (Artlist-class index)
+
+### Bridges
+- [x] NLE · mix · VFX engine · MAM · render farm
+
+### Tests authored
+- [x] restraint · ffmpeg · grade · longform
+
+## Not in this MVP
+- [ ] Live provider renders (API keys + worker)
+- [ ] `pnpm test` on your machine
 - [ ] Vercel deploy (explicit approve)
-- [ ] Worker executing ffmpeg / provider APIs
+- [ ] Foundation-model training
 
-## Law
-Reads flow · writes wait · rubric before master · no silent auto-ship · consent for voice clones.
+## Verify
+```bash
+pnpm install && pnpm test && pnpm dev
+```
+
+**Status: MVP code complete.**

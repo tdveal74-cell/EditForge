@@ -15,8 +15,7 @@ export default function StudioPage() {
       <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">Studio</p>
       <h1 className="mt-2 text-3xl font-semibold text-navy">Flagship production OS</h1>
       <p className="mt-2 max-w-2xl text-sm text-navy/65">
-        Every department a serious studio runs. EditForge owns gates, finishing
-        discipline, and tracking. Full NLE / 3D / GPU grade stay as engines beside it.
+        Full department map. Operational modules, AI media lanes, and engine bridges.
       </p>
       <div className="mt-10 space-y-8">
         {Object.entries(byDept).map(([dept, mods]) => (
@@ -25,7 +24,7 @@ export default function StudioPage() {
             <ul className="mt-3 grid gap-2 sm:grid-cols-2">
               {mods.map((m) => (
                 <li key={m.id}>
-                  <Link href={m.href} className="block rounded-card border border-border bg-surface-elevated p-4 transition-colors duration-flagship hover:border-border-strong">
+                  <Link href={m.href} className="block rounded-card border border-border bg-surface-elevated p-4 transition-colors duration-flagship hover:border-navy/20">
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-navy">{m.label}</span>
                       <span className="text-[10px] uppercase tracking-wide text-navy/40">{statusLabel[m.status]}</span>

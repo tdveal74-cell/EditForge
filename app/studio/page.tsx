@@ -4,7 +4,8 @@ import { modulesByDept, type ModuleStatus } from "@/lib/studio";
 const statusLabel: Record<ModuleStatus, string> = {
   operational: "Live in EditForge",
   planner: "Board / tracker",
-  "external-engine": "External engine",
+  bridge: "Engine bridge",
+  "ai-media": "AI media",
 };
 
 export default function StudioPage() {

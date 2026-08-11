@@ -1,23 +1,30 @@
 # How to test EditForge
 
 ```bash
+git clone https://github.com/tdveal74-cell/EditForge.git
+cd EditForge
 pnpm install
 pnpm test
 pnpm dev
 ```
 
-- / — home
-- /rubric — restraint
-- /projects — cuts API + store
-- /presets — TSWS lanes
-- /jobs — stubs
-- GET /api/health
+Open http://localhost:3000 — start at `/studio`.
 
-ffmpeg plan (does not execute):
-```bash
-curl -s -X POST http://localhost:3000/api/ffmpeg/plan \
-  -H 'content-type: application/json' \
-  -d '{"kind":"export","rubricPass":false}'
+| Check | URL |
+|-------|-----|
+| Studio map | /studio |
+| Long-form | /longform |
+| Gen video | /gen-video |
+| Voice | /voice |
+| Avatar | /avatar |
+| Rubric | /rubric |
+| Health | /api/health |
+
+Optional env (never commit secrets):
 ```
-
-Vercel deploy requires explicit approve.
+ELEVENLABS_API_KEY=
+RUNWAY_API_KEY=
+KLING_API_KEY=
+VEO_API_KEY=
+SEEDREAM_API_KEY=
+```

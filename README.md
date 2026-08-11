@@ -2,13 +2,12 @@
 
 **Flagship production studio OS** — Ultra Meta Supreme AAA.
 
-Not one NLE. The full studio map: production, editorial, color, sound, captions, QC, deliverables, archive — restraint-first.
+Departments, AI media (voice · HyperFrames · Kling/Veo/Runway/Seedream), long-form stitch, engine bridges. Restraint-first.
 
-## Run
 ```bash
 pnpm install && pnpm test && pnpm dev
 ```
 
-Open `/studio` for the department map.
+Start at **`/studio`**.
 
-See `docs/STUDIO_OS.md` · `docs/HYBRID_NLE_MAP.md` · `OPERATOR.md`.
+Docs: `docs/STUDIO_OS.md` · `docs/LONGFORM.md` · `docs/GEN_VIDEO.md` · `docs/AI_MEDIA.md` · `COMPLETION.md` · `OPERATOR.md`

@@ -28,3 +28,75 @@ export function pickProvider(requested?: string): GenProvider {
   const id = (requested || "mock") as GenProvider;
   return GEN_PROVIDERS.some((p) => p.id === id) ? id : "mock";
 }
+
+export type GenSubmitRequest = {
+  provider: GenProvider;
+  mode: GenMode;
+  prompt: string;
+  tier: QualityTier;
+  idempotencyKey: string;
+};
+
+export type GenSubmitResult =
+  | {
+      ok: true;
+      provider: GenProvider;
+      jobId: string;
+      mode: "mock" | "live";
+      status: "queued";
+      note: string;
+    }
+  | {
+      ok: false;
+      provider: GenProvider;
+      error: string;
+      mode: "mock" | "live";
+    };
+
+/**
+ * Single entry for gen-video execution boundary.
+ * Live providers require env keys; without keys, only mock is allowed.
+ * This is the one path CI and the UI must call — never ad-hoc provider SDKs.
+ */
+export function submitGenVideo(req: GenSubmitRequest): GenSubmitResult {
+  const provider = pickProvider(req.provider);
+  const meta = GEN_PROVIDERS.find((p) => p.id === provider)!;
+
+  if (provider === "mock") {
+    return {
+      ok: true,
+      provider: "mock",
+      jobId: `mock-${req.idempotencyKey}`,
+      mode: "mock",
+      status: "queued",
+      note: "Offline plan only — no cloud spend",
+    };
+  }
+
+  const key = process.env[meta.envKey];
+  if (!key) {
+    return {
+      ok: false,
+      provider,
+      mode: "live",
+      error: `${meta.envKey} not configured — use mock or set the key for live path`,
+    };
+  }
+
+  // Live path is intentionally a boundary stub: auth exists, worker/polling is next increment.
+  return {
+    ok: true,
+    provider,
+    jobId: `live-${provider}-${req.idempotencyKey}`,
+    mode: "live",
+    status: "queued",
+    note: "Live credentials present — submit/poll worker not yet attached in this MVP",
+  };
+}
+
+export function providerHasCredentials(provider: GenProvider): boolean {
+  if (provider === "mock") return true;
+  const meta = GEN_PROVIDERS.find((p) => p.id === provider);
+  if (!meta?.envKey) return false;
+  return Boolean(process.env[meta.envKey]);
+}

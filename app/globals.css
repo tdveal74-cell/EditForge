@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --navy: #0A1628;
+  --navy-800: #0F1C30;
+  --amber: #D4A017;
+  --surface: #F8F5F0;
+  --surface-muted: #F0EBE3;
+  --surface-elevated: #FFFFFF;
+  --border: #E5DFD5;
+}
+
+html, body {
+  background: var(--surface);
+  color: var(--navy);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

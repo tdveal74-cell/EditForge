@@ -2,16 +2,18 @@ import Link from "next/link";
 
 const links = [
   { href: "/studio", label: "Studio" },
+  { href: "/voice", label: "Voice" },
+  { href: "/avatar", label: "Avatar" },
+  { href: "/gen-video", label: "Gen video" },
+  { href: "/stock", label: "Stock" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/projects", label: "Projects" },
-  { href: "/dailies", label: "Dailies" },
   { href: "/timeline", label: "Timeline" },
   { href: "/color", label: "Grade" },
-  { href: "/audio", label: "Audio" },
-  { href: "/captions", label: "Captions" },
   { href: "/rubric", label: "Rubric" },
   { href: "/export", label: "Export" },
-  { href: "/review", label: "Review" },
+  { href: "/nle", label: "NLE" },
+  { href: "/render", label: "Render" },
 ];
 
 export function Nav() {

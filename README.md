@@ -1,25 +1,14 @@
 # EditForge
 
-**Post-production OS** — Ultra Meta Supreme Flagship AAA.
+**Flagship production studio OS** — Ultra Meta Supreme AAA.
 
-Hybrid of Resolve / Premiere / CapCut / Descript **ideas**, restraint-first. Not a full NLE.
+Not one NLE. The full studio map: production, editorial, color, sound, captions, QC, deliverables, archive — restraint-first.
 
 ## Run
 ```bash
 pnpm install && pnpm test && pnpm dev
 ```
 
-## Surfaces
-| Route | Role |
-|-------|------|
-| `/pipeline` | Production stages map |
-| `/projects` | Cuts / bins |
-| `/timeline` | Assembly sketch |
-| `/color` | Restraint grade |
-| `/captions` | Text lane + SRT |
-| `/rubric` | QC gate |
-| `/export` | Deliverable plans |
-| `/presets` | TSWS lanes |
-| `/jobs` | ffmpeg plans |
+Open `/studio` for the department map.
 
-See `docs/HYBRID_NLE_MAP.md` · `OPERATOR.md`.
+See `docs/STUDIO_OS.md` · `docs/HYBRID_NLE_MAP.md` · `OPERATOR.md`.

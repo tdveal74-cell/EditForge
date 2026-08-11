@@ -1,21 +1,15 @@
-# EditForge completion
+# EditForge — studio OS
 
-## Hybrid MVP (this build)
-- [x] Pipeline map (Resolve/Premiere/CapCut/Descript inspired)
-- [x] Timeline assembly sketch
-- [x] Restraint grade controls + envelope test
-- [x] Captions + SRT export
-- [x] Export deliverable matrix (16:9, 9:16, 1:1, proxy)
-- [x] Rubric gate → cut
-- [x] ffmpeg plan API
-- [x] Flagship UI
+## Departments covered in-app
+- [x] Studio map
+- [x] Pipeline / projects / dailies / script notes
+- [x] Timeline / grade / audio / captions / titles
+- [x] Assets / review / rubric
+- [x] Export / jobs / presets
+- [x] Archive / collab / VFX board
 
-## Still not a desktop NLE
-- No real-time playback engine
-- No GPU color pipeline
-- No auto cloud render
+## External by design
+Full NLE playback, GPU grade, heavy VFX, Pro Tools mix.
 
 ## Verify
-```bash
-pnpm test && pnpm dev
-```
+pnpm test && pnpm dev → /studio

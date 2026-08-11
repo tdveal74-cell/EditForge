@@ -1,18 +1,20 @@
 # EditForge completion checklist
 
-## Scaffold
-- [x] Repo created
-- [x] OPERATOR.md + FLAGSHIP_SPEC
-- [x] Next app shell + flagship tokens
-- [x] Restraint rubric module
+## Done (code on repo)
+- [x] OPERATOR + FLAGSHIP
+- [x] Next shell + tokens
+- [x] Rubric module + UI
+- [x] Health route
+- [x] Nav
+- [x] Projects sample
+- [x] TSWS presets
+- [x] ffmpeg job stubs
 
-## Build
-- [ ] Project list / cut ingest UI
-- [ ] Rubric runner UI
-- [ ] ffmpeg job stubs
-- [ ] TSWS lane presets
-- [ ] Health route
+## Not done (no false complete)
+- [ ] Real ingest/storage
+- [ ] Worker ffmpeg
 - [ ] Tests
-- [ ] Visual verify (screenshot)
+- [ ] Visual verify
+- [ ] Vercel (needs explicit approve)
 
-## Do not mark complete without evidence
+Reads flow · writes wait.

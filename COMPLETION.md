@@ -1,20 +1,16 @@
-# EditForge completion checklist
+# EditForge completion
 
-## Done (code on repo)
-- [x] OPERATOR + FLAGSHIP
-- [x] Next shell + tokens
-- [x] Rubric module + UI
-- [x] Health route
-- [x] Nav
-- [x] Projects sample
-- [x] TSWS presets
-- [x] ffmpeg job stubs
+## MVP code on repo
+- [x] Flagship + OPERATOR
+- [x] Rubric UI + tests
+- [x] Health
+- [x] Nav, projects, presets, jobs
+- [x] Local cut store + API
+- [x] ffmpeg planner (gated)
+- [x] Vitest
+- [x] HOW_TO_TEST
 
-## Not done (no false complete)
-- [ ] Real ingest/storage
-- [ ] Worker ffmpeg
-- [ ] Tests
-- [ ] Visual verify
-- [ ] Vercel (needs explicit approve)
-
-Reads flow · writes wait.
+## Your verify
+- [ ] pnpm test
+- [ ] pnpm dev visual
+- [ ] Vercel only if you approve

@@ -4,5 +4,6 @@ out
 dist
 .env
 .env.local
+.data
 *.log
 .DS_Store

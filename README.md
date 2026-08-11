@@ -2,25 +2,24 @@
 
 **Post-production OS** — Ultra Meta Supreme Flagship AAA.
 
-Restraint-first finishing for TSWS, faceless, Shorts/Reels.
+Hybrid of Resolve / Premiere / CapCut / Descript **ideas**, restraint-first. Not a full NLE.
 
 ## Run
 ```bash
-pnpm install
-pnpm test
-pnpm dev
+pnpm install && pnpm test && pnpm dev
 ```
 
-| Route | Purpose |
-|-------|---------|
-| `/` | Home |
-| `/projects` | Cuts (local JSON) |
-| `/rubric` | Restraint checks → save pass |
+## Surfaces
+| Route | Role |
+|-------|------|
+| `/pipeline` | Production stages map |
+| `/projects` | Cuts / bins |
+| `/timeline` | Assembly sketch |
+| `/color` | Restraint grade |
+| `/captions` | Text lane + SRT |
+| `/rubric` | QC gate |
+| `/export` | Deliverable plans |
 | `/presets` | TSWS lanes |
-| `/jobs` | ffmpeg plan builder |
-| `/api/health` | Health JSON |
+| `/jobs` | ffmpeg plans |
 
-## Law
-Reads flow · writes wait. Export plans require rubric pass. No silent auto-ship.
-
-See `OPERATOR.md` · `HOW_TO_TEST.md` · `COMPLETION.md`.
+See `docs/HYBRID_NLE_MAP.md` · `OPERATOR.md`.

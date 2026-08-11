@@ -1,22 +1,21 @@
-# EditForge — status
+# EditForge completion
 
-## MVP product loop (code complete)
-- [x] Flagship UI + OPERATOR
-- [x] Cuts store + API
-- [x] Rubric UI → saves pass to cut
-- [x] ffmpeg plan API (export gated)
-- [x] Jobs UI builds plans
-- [x] TSWS presets
-- [x] Health route
-- [x] Unit tests authored (restraint + ffmpeg)
+## Hybrid MVP (this build)
+- [x] Pipeline map (Resolve/Premiere/CapCut/Descript inspired)
+- [x] Timeline assembly sketch
+- [x] Restraint grade controls + envelope test
+- [x] Captions + SRT export
+- [x] Export deliverable matrix (16:9, 9:16, 1:1, proxy)
+- [x] Rubric gate → cut
+- [x] ffmpeg plan API
+- [x] Flagship UI
 
-## Your machine (required for evidence)
+## Still not a desktop NLE
+- No real-time playback engine
+- No GPU color pipeline
+- No auto cloud render
+
+## Verify
 ```bash
-pnpm install
-pnpm test
-pnpm dev
+pnpm test && pnpm dev
 ```
-
-## Out of MVP scope until you approve
-- Vercel production deploy
-- Remote encode workers executing ffmpeg

@@ -5,6 +5,7 @@ const links = [
   { href: "/voice", label: "Voice" },
   { href: "/avatar", label: "Avatar" },
   { href: "/gen-video", label: "Gen video" },
+  { href: "/longform", label: "Long-form" },
   { href: "/stock", label: "Stock" },
   { href: "/pipeline", label: "Pipeline" },
   { href: "/projects", label: "Projects" },

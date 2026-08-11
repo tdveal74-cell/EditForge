@@ -1,20 +1,16 @@
 # EditForge Flagship Studio OS
 
-## Position
-EditForge is the **operating system for a production studio**, not a single NLE clone.
+Studio OS: departments + AI media + engine bridges.
 
-| Studio need | EditForge | External engine when needed |
-|-------------|-----------|----------------------------|
-| Edit / multi-cam | Timeline sketch + projects | Resolve / Premiere / FCP |
-| Color | Restraint grade envelope | Resolve Color |
-| Audio mix | Hierarchy + rubric | Fairlight / Pro Tools |
-| VFX | Shot board | Fusion / AE / 3D |
-| Motion titles | Minimal cards | AE / Motion |
-| Captions | Cues + SRT | CapCut / specialist |
-| MAM | Asset index | Drive / S3 / Frame.io |
-| QC | Review notes + rubric | — |
-| Deliver | Export matrix + ffmpeg plans | Render farm |
-| Archive | Checklist | LTO / cold storage |
+| Need | EditForge | Engine |
+|------|-----------|--------|
+| NLE | `/nle` + `/timeline` | Resolve · Premiere · FCP |
+| Color | `/color` | Resolve Color |
+| Mix | `/mix` + `/audio` | Fairlight · Pro Tools |
+| VFX | `/vfx` + `/vfx-engine` | Fusion · AE · 3D |
+| MAM | `/assets` + `/mam` | Drive · S3 · Frame.io |
+| Render | `/render` + `/jobs` | Worker / farm |
+| Voice | `/voice` | ElevenLabs-class |
+| Avatar | `/avatar` | HyperFrames / HeyGen |
 
-## Law
-Reads flow · writes wait. No silent auto-ship. Rubric before master export.
+Consent for clones. Rubric before master. No silent auto-ship.

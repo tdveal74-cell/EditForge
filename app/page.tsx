@@ -1,9 +1,10 @@
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+
 export default function HomePage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">
-        EditForge
-      </p>
+      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">EditForge</p>
       <h1 className="mt-3 text-4xl font-semibold tracking-tight text-navy">
         Post-production OS
       </h1>
@@ -11,6 +12,21 @@ export default function HomePage() {
         Premium restraint finishing for commercials, faceless content, Shorts,
         Reels, and TSWS cuts. Protect existing quality. Intentional endings.
       </p>
+      <div className="mt-8 flex flex-wrap gap-3">
+        <Link href="/projects">
+          <Button type="button">Projects</Button>
+        </Link>
+        <Link href="/rubric">
+          <Button type="button" variant="secondary">
+            Rubric
+          </Button>
+        </Link>
+        <Link href="/jobs">
+          <Button type="button" variant="ghost">
+            ffmpeg plans
+          </Button>
+        </Link>
+      </div>
       <div className="mt-10 grid gap-4 sm:grid-cols-2">
         <section className="rounded-card border border-border bg-surface-elevated p-5 shadow-sm">
           <h2 className="text-sm font-semibold text-navy">Restraint grade</h2>

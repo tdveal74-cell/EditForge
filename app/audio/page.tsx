@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
+import { Section } from "@/components/ui/section";
+import { Waveform } from "@/components/media/Viewer";
 
 export const metadata: Metadata = { title: "Audio hierarchy" };
 
@@ -18,6 +20,13 @@ export default function AudioPage() {
         title="Audio hierarchy"
         description="Fairlight / Essential Sound discipline — tactile, not loud. The ladder is the law: anything lower never competes with anything above it."
       />
+
+      {/* Drawn from real samples when a stem is attached. Nothing is drawn
+          from nothing — a picture of sound the operator does not have would
+          teach them to distrust the screen. */}
+      <Section title="Waveform">
+        <Waveform />
+      </Section>
 
       <ol className="mt-10 space-y-2">
         {hierarchy.map((h) => (

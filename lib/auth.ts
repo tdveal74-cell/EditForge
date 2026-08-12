@@ -41,22 +41,35 @@ export function bearerFrom(header: string | null): string {
   return value.startsWith("Bearer ") ? value.slice(7) : "";
 }
 
+/** Query parameter carrying the MCP token when headers are not available. */
+export const URL_TOKEN_PARAM = "key";
+
 /**
- * Whether a caller has valid credentials — either the MCP bearer token or a
- * session cookie from the login form.
+ * Whether a caller has valid credentials — the MCP bearer token, the same
+ * token in the URL, or a session cookie from the login form.
  *
- * Takes the two values rather than a request object: middleware holds a
+ * Takes the values rather than a request object: middleware holds a
  * NextRequest with `.cookies`, but a route handler receives a plain Request
  * that has no cookie accessor, and passing one where the other is expected
  * fails at runtime rather than at the type level.
+ *
+ * `urlToken` exists because some MCP clients only accept a URL — there is no
+ * field to put a header in. It is weaker than the header: URLs are recorded in
+ * server and proxy logs, where headers usually are not. Callers pass it only
+ * for the MCP endpoint, so it never unlocks the rest of the app.
  */
 export async function isAuthenticated(opts: {
   authorization?: string | null;
   sessionCookie?: string | null;
+  urlToken?: string | null;
 }): Promise<boolean> {
   const mcpToken = process.env.EDITFORGE_MCP_TOKEN;
-  const bearer = bearerFrom(opts.authorization ?? null);
-  if (mcpToken && bearer && secretsMatch(bearer, mcpToken)) return true;
+  if (mcpToken) {
+    const bearer = bearerFrom(opts.authorization ?? null);
+    if (bearer && secretsMatch(bearer, mcpToken)) return true;
+    const fromUrl = opts.urlToken ?? "";
+    if (fromUrl && secretsMatch(fromUrl, mcpToken)) return true;
+  }
 
   const password = process.env.EDITFORGE_ACCESS_PASSWORD;
   if (!password) return false;

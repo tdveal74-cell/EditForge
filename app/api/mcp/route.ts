@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { SERVER_INFO, findTool, negotiateVersion, toolsFor } from "@/lib/mcp";
+import { URL_TOKEN_PARAM } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -38,10 +39,16 @@ function isAuthenticated(req: Request): boolean {
   const expected = process.env.EDITFORGE_MCP_TOKEN;
   // No token configured means no write access for anyone, including us.
   if (!expected) return false;
+
   const header = req.headers.get("authorization") ?? "";
-  const provided = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (!provided) return false;
-  return tokenMatches(provided, expected);
+  const fromHeader = header.startsWith("Bearer ") ? header.slice(7) : "";
+  if (fromHeader && tokenMatches(fromHeader, expected)) return true;
+
+  // Some MCP clients only accept a URL — there is no field for a header. The
+  // same token is accepted as `?key=`, which is weaker (URLs land in logs,
+  // headers usually do not) but is the difference between usable and not.
+  const fromUrl = new URL(req.url).searchParams.get(URL_TOKEN_PARAM) ?? "";
+  return Boolean(fromUrl) && tokenMatches(fromUrl, expected);
 }
 
 export async function POST(req: Request) {

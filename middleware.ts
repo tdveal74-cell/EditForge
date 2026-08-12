@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, accessGateEnabled, isAuthenticated } from "@/lib/auth";
+import { SESSION_COOKIE, URL_TOKEN_PARAM, accessGateEnabled, isAuthenticated } from "@/lib/auth";
 
 /**
  * Makes the whole studio private when `EDITFORGE_ACCESS_PASSWORD` is set.
@@ -23,6 +23,9 @@ export async function middleware(req: NextRequest) {
   const authed = await isAuthenticated({
     authorization: req.headers.get("authorization"),
     sessionCookie: req.cookies.get(SESSION_COOKIE)?.value,
+    // Scoped to the MCP endpoint on purpose: a token in a URL is the weaker
+    // credential, so it opens the one door that needs it rather than the app.
+    urlToken: pathname === "/api/mcp" ? req.nextUrl.searchParams.get(URL_TOKEN_PARAM) : null,
   });
   if (authed) return NextResponse.next();
 

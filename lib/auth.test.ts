@@ -56,6 +56,19 @@ describe("authentication", () => {
     expect(await isAuthenticated({ sessionCookie: stale })).toBe(false);
   });
 
+  it("accepts the MCP token from the URL when one is offered", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = "tok-123";
+    expect(await isAuthenticated({ urlToken: "tok-123" })).toBe(true);
+    expect(await isAuthenticated({ urlToken: "tok-999" })).toBe(false);
+  });
+
+  it("does not accept the access password as a URL token", async () => {
+    // The URL token is the MCP credential only; the password is for browsers
+    // and must not become a shareable link.
+    process.env.EDITFORGE_ACCESS_PASSWORD = "studio-pass";
+    expect(await isAuthenticated({ urlToken: "studio-pass" })).toBe(false);
+  });
+
   it("authenticates nobody when nothing is configured", async () => {
     // The property that matters: live keys on an open deployment are unusable
     // by anyone rather than usable by everyone.

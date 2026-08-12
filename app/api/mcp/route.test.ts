@@ -103,6 +103,32 @@ describe("MCP authentication", () => {
     }
   });
 
+  it("accepts the token in the URL, for clients that cannot send headers", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await POST(
+      new Request(`http://localhost/api/mcp?key=${TOKEN}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      })
+    );
+    const names = (await res.json()).result.tools.map((t: { name: string }) => t.name);
+    expect(names).toContain("submit_media_job");
+  });
+
+  it("refuses a wrong token in the URL", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await POST(
+      new Request("http://localhost/api/mcp?key=not-the-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+      })
+    );
+    const names = (await res.json()).result.tools.map((t: { name: string }) => t.name);
+    expect(names).not.toContain("submit_media_job");
+  });
+
   it("grants nobody write access when no token is configured", async () => {
     delete process.env.EDITFORGE_MCP_TOKEN;
     const body = await (await POST(rpc("tools/list", undefined, "anything"))).json();

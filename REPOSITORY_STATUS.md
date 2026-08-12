@@ -9,7 +9,8 @@
 | Completion vocabulary | **code-complete** for Studio plan/control plane MVP |
 | Job lifecycle | `lib/jobs.ts` — planned→authorized→queued→running→validating→completed/failed/cancelled + rubric decision record |
 | Gen-video boundary | `lib/genvideo.ts` `submitGenVideo` — mock always; live requires env key |
-| Not proven | Full live provider worker polling; Vercel deploy |
+| Deployed | Vercel production — https://editforge.vercel.app (file-upload deploys; git-connect pending, `docs/DEPLOY.md`) |
+| Not proven | Full live provider worker polling; KV store against a real Redis (code + mocked tests only until a store is provisioned) |
 | Required checks | `.github/workflows/ci.yml` |
 | Entry points | `npm install && npm test && npm run build && npm run dev` · `/studio` |
 | Quality gate | Master export blocked without rubric pass |

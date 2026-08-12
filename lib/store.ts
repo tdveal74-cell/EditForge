@@ -47,6 +47,27 @@ export function storeBackend(): "kv" | "file" {
   return kvCreds() ? "kv" : "file";
 }
 
+/**
+ * Liveness probe for the configured backend.
+ * `storeBackend()` only reports which backend is *selected* from env; this
+ * actually reaches it, so invalid, expired, or unreachable credentials are
+ * reported as unreachable instead of passing as configured.
+ */
+export async function probeStore(): Promise<{
+  backend: "kv" | "file";
+  reachable: boolean;
+  error?: string;
+}> {
+  const backend = storeBackend();
+  try {
+    if (backend === "kv") await kvCommand(["PING"]);
+    else await fs.mkdir(DATA_DIR, { recursive: true });
+    return { backend, reachable: true };
+  } catch (err) {
+    return { backend, reachable: false, error: (err as Error).message };
+  }
+}
+
 async function kvCommand(cmd: string[]): Promise<unknown> {
   const creds = kvCreds();
   if (!creds) throw new Error("KV not configured");

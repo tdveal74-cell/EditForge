@@ -67,6 +67,23 @@ describe("the dailies gate", () => {
     expect(roll.selectedForCutId).toBeUndefined();
   });
 
+  it("holds the invariant when a reject and a select race", async () => {
+    // Whichever wins, the end state must never be "rejected and in a cut".
+    // The approval check runs inside the atomic write for this reason: checking
+    // first and writing after leaves a window where the reject lands between
+    // the two and the select is written anyway.
+    await POST(post({ action: "review", id: "d-0811-a", decision: "approve" }));
+
+    await Promise.all([
+      POST(post({ action: "select", id: "d-0811-a", cutId: "cut-x" })),
+      POST(post({ action: "review", id: "d-0811-a", decision: "reject", note: "Pulled" })),
+    ]);
+
+    const rolls = (await (await GET()).json()).rolls;
+    const roll = rolls.find((r: { id: string }) => r.id === "d-0811-a");
+    if (roll.status === "rejected") expect(roll.selectedForCutId).toBeUndefined();
+  });
+
   it("refuses to file a roll against a cut that does not exist", async () => {
     await POST(post({ action: "review", id: "d-0811-a", decision: "approve" }));
     const res = await POST(post({ action: "select", id: "d-0811-a", cutId: "ghost" }));

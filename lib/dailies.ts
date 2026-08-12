@@ -86,31 +86,47 @@ export type SelectResult =
 /**
  * Put a roll into a cut — the one place "nothing enters the cut unreviewed" is
  * either true or false. It reads the recorded status; it does not ask.
+ *
+ * The check runs INSIDE the atomic section, against the copy that is about to be
+ * written. Checking first and writing after leaves a window where a reviewer
+ * rejects the roll between the two, and the write lands anyway — the gate
+ * failing precisely when two people are working at once, which is the only time
+ * it is under any pressure.
  */
 export async function selectForCut(id: string, cutId: string): Promise<SelectResult> {
-  const roll = await getRoll(id);
-  if (!roll) return { ok: false, reason: `No roll "${id}"` };
-
-  if (roll.status !== "approved") {
-    return {
-      ok: false,
-      status: roll.status,
-      reason:
-        roll.status === "rejected"
-          ? `"${roll.id}" was rejected in review — it cannot enter a cut`
-          : `"${roll.id}" has no recorded approval — review it before it enters a cut`,
-    };
-  }
-
+  let refusal: SelectResult | null = null;
   let updated: Roll | null = null;
+
   await rolls.mutate((all) => {
-    const target = all.find((r) => r.id === id);
-    if (!target) return;
-    target.selectedForCutId = cutId;
-    target.selectedAt = new Date().toISOString();
-    updated = target;
+    // Reset per attempt: mutate may re-run the callback on a concurrent-write
+    // retry, and a refusal recorded on a stale read must not survive into it.
+    refusal = null;
+    updated = null;
+
+    const roll = all.find((r) => r.id === id);
+    if (!roll) {
+      refusal = { ok: false, reason: `No roll "${id}"` };
+      return;
+    }
+
+    if (roll.status !== "approved") {
+      refusal = {
+        ok: false,
+        status: roll.status,
+        reason:
+          roll.status === "rejected"
+            ? `"${roll.id}" was rejected in review — it cannot enter a cut`
+            : `"${roll.id}" has no recorded approval — review it before it enters a cut`,
+      };
+      return;
+    }
+
+    roll.selectedForCutId = cutId;
+    roll.selectedAt = new Date().toISOString();
+    updated = roll;
   });
 
+  if (refusal) return refusal;
   return updated ? { ok: true, roll: updated } : { ok: false, reason: `No roll "${id}"` };
 }
 

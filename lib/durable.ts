@@ -17,10 +17,22 @@ const CAS_SCRIPT =
   "if (cur == ARGV[1]) or (cur == false and ARGV[1] == '') then " +
   "redis.call('SET', KEYS[1], ARGV[2]) return 1 end return 0";
 
-// Vercel serverless has a read-only project dir; /tmp is the only writable path (ephemeral per instance).
-export const DATA_DIR = process.env.VERCEL
-  ? path.join("/tmp", "editforge-data")
-  : path.join(process.cwd(), ".data");
+/**
+ * Where the file backend writes.
+ *
+ * Read per call rather than captured at import: a module-level constant is
+ * fixed by whichever test file imports first, which makes parallel test files
+ * share one store and clobber each other. `EDITFORGE_DATA_DIR` lets each one
+ * have its own.
+ *
+ * Vercel serverless has a read-only project dir; /tmp is the only writable
+ * path there, and is ephemeral per instance.
+ */
+export function dataDir(): string {
+  const override = process.env.EDITFORGE_DATA_DIR;
+  if (override) return override;
+  return process.env.VERCEL ? path.join("/tmp", "editforge-data") : path.join(process.cwd(), ".data");
+}
 
 const REST_PAIRS = [
   { url: "KV_REST_API_URL", token: "KV_REST_API_TOKEN" },
@@ -110,7 +122,7 @@ export async function probeStore(): Promise<{
   const backend = storeBackend();
   try {
     if (backend === "kv") await kvCommand(["PING"]);
-    else await fs.mkdir(DATA_DIR, { recursive: true });
+    else await fs.mkdir(dataDir(), { recursive: true });
     return { backend, reachable: true };
   } catch (err) {
     return { backend, reachable: false, error: (err as Error).message };
@@ -138,20 +150,23 @@ export function durableCollection<T extends { id: string }>(opts: {
   file: string;
   seed: () => T[];
 }): DurableCollection<T> {
-  const filePath = path.join(DATA_DIR, opts.file);
+  // Resolved per operation, not captured once: the collection is created at
+  // module scope, so a captured path would freeze the data dir at import time.
+  const filePath = () => path.join(dataDir(), opts.file);
 
   async function writeFile(items: T[]): Promise<void> {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    const tmp = `${filePath}.tmp`;
+    await fs.mkdir(dataDir(), { recursive: true });
+    const target = filePath();
+    const tmp = `${target}.tmp`;
     await fs.writeFile(tmp, JSON.stringify(items, null, 2));
-    await fs.rename(tmp, filePath);
+    await fs.rename(tmp, target);
   }
 
   async function readFile(): Promise<T[]> {
-    await fs.mkdir(DATA_DIR, { recursive: true });
+    await fs.mkdir(dataDir(), { recursive: true });
     let raw: string;
     try {
-      raw = await fs.readFile(filePath, "utf8");
+      raw = await fs.readFile(filePath(), "utf8");
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
       const seeded = opts.seed();

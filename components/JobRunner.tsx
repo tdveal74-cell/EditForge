@@ -18,6 +18,15 @@ import { StatusDot, toneForJob } from "@/components/ui/status-dot";
 
 export type ProviderChoice = { id: string; label: string };
 
+/** What /api/providers reports about one provider. Never carries a secret. */
+type ProviderReadiness = {
+  id: string;
+  billable: boolean;
+  wired: boolean;
+  envKey?: string;
+  credentialSet?: boolean;
+};
+
 type Props = {
   kind: JobKind;
   /** Human name for the job record. */
@@ -54,7 +63,7 @@ export function JobRunner({
   const [job, setJob] = useState<StudioJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [live, setLive] = useState(false);
+  const [readiness, setReadiness] = useState<Record<string, ProviderReadiness>>({});
   const [polls, setPolls] = useState(0);
   // Guards the poll effect against a response landing after unmount.
   const alive = useRef(true);
@@ -65,7 +74,24 @@ export function JobRunner({
     };
   }, []);
 
+  // Credential state is server-side only, so the picker has to ask for it.
+  // Until it answers the options still render — no flash of an empty select.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/providers", { cache: "no-store" });
+        if (!res.ok) return;
+        const data = (await res.json()) as { providers: ProviderReadiness[] };
+        if (!alive.current) return;
+        setReadiness(Object.fromEntries(data.providers.map((p) => [p.id, p])));
+      } catch {
+        // A picker without readiness detail is degraded, not broken.
+      }
+    })();
+  }, []);
+
   const key = idempotencyKeyFor(kind, { ...brief, provider });
+  const chosen = readiness[provider];
 
   async function run() {
     setBusy(true);
@@ -91,7 +117,6 @@ export function JobRunner({
         return;
       }
       setJob(data.job);
-      setLive(Boolean(data.live));
     } catch (err) {
       setError(`Could not reach the studio API: ${(err as Error).message}`);
     } finally {
@@ -142,11 +167,16 @@ export function JobRunner({
       <div className="flex flex-wrap items-end gap-3">
         <Label text="Run against" className="min-w-48 flex-1">
           <Select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={tracking}>
-            {providers.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
+            {providers.map((p) => {
+              const r = readiness[p.id];
+              const mark = !r ? "" : r.billable ? " · live" : p.id === "mock" ? "" : " · unavailable";
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.label}
+                  {mark}
+                </option>
+              );
+            })}
           </Select>
         </Label>
         <Button
@@ -159,7 +189,29 @@ export function JobRunner({
         </Button>
       </div>
 
-      <p className="mt-2.5 text-xs text-navy/50">
+      {/* Said before the button is pressed — a spend warning after the fact is
+          not a warning. */}
+      {chosen && (
+        <p className="mt-2.5 text-xs">
+          {chosen.billable ? (
+            <span className="text-amber-700">
+              Live provider — running this bills real work against {chosen.envKey}.
+            </span>
+          ) : chosen.id === "mock" ? (
+            <span className="text-navy/50">Offline path — no spend, and no media produced.</span>
+          ) : !chosen.wired ? (
+            <span className="text-navy/50">
+              No live path implemented for this provider yet — it will refuse rather than pretend.
+            </span>
+          ) : (
+            <span className="text-navy/50">
+              {chosen.envKey} is not set, so this will refuse rather than run.
+            </span>
+          )}
+        </p>
+      )}
+
+      <p className="mt-1.5 text-xs text-navy/50">
         {blockedReason ? (
           <span className="text-red-700">{blockedReason}</span>
         ) : (
@@ -247,10 +299,6 @@ export function JobRunner({
             )}
           </div>
         </div>
-      )}
-
-      {live && !job?.mode && (
-        <p className="mt-2 text-xs text-navy/45">Credentials present — this provider will bill real work.</p>
       )}
     </section>
   );

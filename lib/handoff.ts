@@ -161,8 +161,14 @@ export function buildShotPackage(opts: {
   clips: TimelineClip[];
   fps: Timebase;
   colorSpace: string;
+  /**
+   * The VFX board's entries for this cut. A compositor opening a package with
+   * no board state has no way to know a shot is already someone's work in
+   * progress, which is how two people comp the same plate.
+   */
+  board?: { id: string; desc: string; status: string; engine: string; note?: string }[];
 }): string {
-  const { title, clips, fps, colorSpace } = opts;
+  const { title, clips, fps, colorSpace, board } = opts;
   const shots = clips
     .filter((c) => c.track === "video" && c.durationSec > 0)
     .sort((a, b) => a.startSec - b.startSec)
@@ -186,6 +192,11 @@ export function buildShotPackage(opts: {
         colorSpace,
         deliverBack: "EXR sequence or pre-comp, conformed to the plate colour space",
         shots,
+        // Omitted rather than sent empty: an empty array reads as "the board is
+        // clear", which is a different claim from "no board was consulted".
+        ...(board && board.length > 0
+          ? { board: board.map((b) => ({ id: b.id, desc: b.desc, status: b.status, engine: b.engine, note: b.note })) }
+          : {}),
       },
       null,
       2

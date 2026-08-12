@@ -52,8 +52,15 @@ export function toneForJob(status: JobStatus): Tone {
 /** Map free-text statuses used across the studio onto a tone. */
 export function toneFor(status: string): Tone {
   const s = status.toLowerCase();
-  if (["approved", "resolved", "ready", "completed", "shipped", "done", "live"].includes(s)) return "done";
+  // `archived` is settled, not unstarted — it was falling through to `pending`
+  // and drawing the most finished state in the studio as "not begun".
+  if (["approved", "resolved", "ready", "completed", "shipped", "archived", "done", "live"].includes(s))
+    return "done";
   if (["wip", "running", "processing", "review", "grade", "rendering", "stitching"].includes(s)) return "active";
-  if (["hold", "blocked", "failed", "cancelled"].includes(s)) return "blocked";
+  // `rejected` belongs here, not in the fallthrough: a rejected roll landing on
+  // `pending` would draw the hollow "not started yet" ring, which is the exact
+  // opposite of what a refusal means and indistinguishable from an un-ingested
+  // one.
+  if (["hold", "blocked", "failed", "cancelled", "rejected"].includes(s)) return "blocked";
   return "pending";
 }

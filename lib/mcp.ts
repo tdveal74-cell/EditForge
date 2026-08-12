@@ -124,13 +124,13 @@ export const TOOLS: Tool[] = [
   {
     name: "plan_transcode",
     description:
-      "Build an ffmpeg plan for a proxy or a master export. Returns the command and whether it is allowed to run. Export-class work is refused without a rubric pass — that refusal is the product working, not an error to route around.",
+      "Build an ffmpeg plan for a proxy or a master export. Returns the command and whether it is allowed to run. An export must name the cut whose recorded rubric decision authorises it; the refusal is the product working, not an error to route around.",
     inputSchema: obj(
       {
         kind: { type: "string", enum: ["proxy", "export"], description: "proxy or export" },
         inputPath: str("Source file path"),
         outputPath: str("Destination file path"),
-        rubricPass: bool("Whether a rubric pass has been recorded for this cut"),
+        cutId: str("The cut whose recorded rubric decision authorises an export. Required for export."),
       },
       ["kind", "inputPath", "outputPath"]
     ),
@@ -139,11 +139,38 @@ export const TOOLS: Tool[] = [
       const input = String(args.inputPath);
       const output = String(args.outputPath);
       const plan = kind === "export" ? buildExportCommand(input, output) : buildProxyCommand(input, output);
-      const allowed = canRun(plan, Boolean(args.rubricPass));
+
+      if (kind !== "export") {
+        return { plan, allowed: true, reason: "Proxy — ungated. Run after human confirm" };
+      }
+
+      // Read the decision, never accept it. This tool used to take a
+      // `rubricPass` boolean and hand it to `canRun`, which meant an assistant
+      // could authorise its own master export by asserting the cut had passed —
+      // the same hole the HTTP route had, on the surface an assistant actually
+      // drives.
+      const cutId = String(args.cutId || "").trim();
+      if (!cutId) {
+        return {
+          plan,
+          allowed: false,
+          reason: "Blocked: an export must name the cut whose rubric decision authorises it",
+        };
+      }
+
+      const cut = await getCut(cutId);
+      if (!cut) {
+        return { plan, allowed: false, reason: `Blocked: no cut "${cutId}" in the store` };
+      }
+
+      const allowed = canRun(plan, Boolean(cut.rubricPass));
       return {
         plan,
         allowed,
-        reason: allowed ? undefined : "Master export requires a recorded rubric pass",
+        cut: { id: cut.id, title: cut.title, rubricPass: Boolean(cut.rubricPass) },
+        reason: allowed
+          ? `Authorised by the recorded rubric pass on "${cut.title}" — run after human confirm`
+          : `Blocked: "${cut.title}" has no recorded rubric pass`,
       };
     },
   },

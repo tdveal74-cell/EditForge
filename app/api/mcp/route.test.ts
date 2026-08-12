@@ -90,6 +90,21 @@ describe("MCP authentication", () => {
     expect(names).not.toContain("drive_job");
   });
 
+  it("treats every studio write as mutating, not just the ones that spend money", async () => {
+    // A roll approval and a shot status move change the studio's record. An
+    // unauthenticated caller reading state is fine; one editing it is not.
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const openNames = open.result.tools.map((t: { name: string }) => t.name);
+    for (const write of ["review_daily", "select_daily_for_cut", "move_vfx_shot"]) {
+      expect(openNames).not.toContain(write);
+    }
+    // Reads and artifact builds stay available without a token.
+    for (const read of ["list_dailies", "list_vfx_shots", "build_handoff"]) {
+      expect(openNames).toContain(read);
+    }
+  });
+
   it("offers mutating tools once the bearer token matches", async () => {
     process.env.EDITFORGE_MCP_TOKEN = TOKEN;
     const body = await (await POST(rpc("tools/list", undefined, TOKEN))).json();
@@ -245,6 +260,81 @@ describe("MCP tools", () => {
       outputPath: "proxy.mp4",
     });
     expect(res.parsed.allowed).toBe(true);
+  });
+});
+
+describe("the studio's other gates, over MCP", () => {
+  beforeEach(async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    await fs.rm(path.join(DATA_DIR, "dailies.json"), { force: true });
+    await fs.rm(path.join(DATA_DIR, "vfx.json"), { force: true });
+  });
+
+  it("refuses to select an unreviewed roll into a cut", async () => {
+    // The same refusal the web app gives, on the surface an assistant drives.
+    const res = await callTool("select_daily_for_cut", { id: "d-0811-a", cutId: "cut-01" }, TOKEN);
+    expect(res.parsed.allowed).toBe(false);
+    expect(res.parsed.reason).toMatch(/no recorded approval/i);
+  });
+
+  it("lets an approved roll in, and records the reason with the decision", async () => {
+    const reviewed = await callTool(
+      "review_daily",
+      { id: "d-0811-a", decision: "approve", note: "Focus good" },
+      TOKEN
+    );
+    expect(reviewed.parsed.roll.reviewNote).toBe("Focus good");
+
+    const res = await callTool("select_daily_for_cut", { id: "d-0811-a", cutId: "cut-01" }, TOKEN);
+    expect(res.parsed.allowed).toBe(true);
+  });
+
+  it("refuses to file a roll against a cut that does not exist", async () => {
+    await callTool("review_daily", { id: "d-0811-a", decision: "approve" }, TOKEN);
+    const res = await callTool("select_daily_for_cut", { id: "d-0811-a", cutId: "ghost" }, TOKEN);
+    expect(res.parsed.error).toMatch(/no cut/i);
+  });
+
+  it("moves a shot on the board and refuses an unknown status", async () => {
+    const moved = await callTool("move_vfx_shot", { action: "status", id: "VFX_010", status: "wip" }, TOKEN);
+    expect(moved.parsed.shot.status).toBe("wip");
+
+    const bad = await callTool("move_vfx_shot", { action: "status", id: "VFX_010", status: "shipped" }, TOKEN);
+    expect(bad.parsed.error).toMatch(/status must be one of/i);
+  });
+
+  it("refuses a duplicate shot id rather than merging two shots", async () => {
+    const res = await callTool("move_vfx_shot", { action: "add", id: "VFX_010", desc: "Clash" }, TOKEN);
+    expect(res.parsed.error).toMatch(/already on the board/i);
+  });
+
+  it("builds an EDL an assistant can hand straight to a conform", async () => {
+    const res = await callTool("build_handoff", { kind: "edl", cutId: "cut-01", fps: 24 });
+    expect(res.parsed.filename).toMatch(/\.edl$/);
+    expect(res.parsed.content).toContain("FCM: NON-DROP FRAME");
+    expect(res.parsed.content).toContain("* TIMEBASE: 24 FPS");
+  });
+
+  it("refuses a timebase it does not compute correctly", async () => {
+    const res = await callTool("build_handoff", { kind: "edl", cutId: "cut-01", fps: 29.97 });
+    expect(res.parsed.error).toMatch(/fps must be one of/i);
+  });
+
+  it("says which assembly the artifact was built from", async () => {
+    const res = await callTool("build_handoff", { kind: "stems", cutId: "cut-01" });
+    expect(res.parsed.assemblySource).toBe("sample assembly");
+  });
+
+  it("carries the VFX board into the shot package", async () => {
+    await callTool("move_vfx_shot", { action: "status", id: "VFX_020", status: "review" }, TOKEN);
+    const res = await callTool("build_handoff", { kind: "shots", cutId: "cut-01" });
+    const pkg = JSON.parse(res.parsed.content);
+    expect(pkg.board.find((b: { id: string }) => b.id === "VFX_020").status).toBe("review");
+  });
+
+  it("404s a cut that is not in the store", async () => {
+    const res = await callTool("build_handoff", { kind: "edl", cutId: "ghost" });
+    expect(res.parsed.error).toMatch(/no cut/i);
   });
 
   it("runs a job through the mock provider and dedupes a repeated brief", async () => {

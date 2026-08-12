@@ -5,6 +5,20 @@ import { getCut, listCuts, probeStore } from "./store";
 import { cancelJob, completeJob, createAndQueue, getJob, listJobs, pollJob, retryJob, submitJob } from "./jobstore";
 import { PROVIDERS, hasCredentials } from "./providers";
 import { idempotencyKeyFor } from "./idempotency";
+import { listRolls, reviewRoll, selectForCut } from "./dailies";
+import { addShot, listShots, setShotStatus, shotsForCut } from "./vfxboard";
+import { SHOT_STATUSES, isShotStatus } from "./vfxShot";
+import {
+  LOUDNESS_TARGETS,
+  TIMEBASES,
+  buildEDL,
+  buildPathContract,
+  buildShotPackage,
+  buildStemSheet,
+  slug,
+  type Timebase,
+} from "./handoff";
+import { SAMPLE_TIMELINE } from "./timeline";
 import type { JobKind } from "./jobs";
 
 /**
@@ -269,6 +283,188 @@ export const TOOLS: Tool[] = [
         return job ? { job } : { error: `No job with id ${id}` };
       } catch (err) {
         return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "list_dailies",
+    description:
+      "Day rolls and the review decision recorded against each — approved, rejected, or not yet reviewed, plus which cut a roll has been let into.",
+    inputSchema: obj({}),
+    run: async () => ({ rolls: await listRolls() }),
+  },
+  {
+    name: "review_daily",
+    description:
+      "Record an approve or reject decision on a day roll, with an optional reason. Rejecting also removes the roll from any cut it had entered.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        id: str("Roll id"),
+        decision: { type: "string", enum: ["approve", "reject"], description: "The decision to record" },
+        note: str("Why — kept with the decision"),
+      },
+      ["id", "decision"]
+    ),
+    run: async (args) => {
+      const decision = String(args.decision);
+      if (decision !== "approve" && decision !== "reject") {
+        return { error: 'decision must be "approve" or "reject"' };
+      }
+      const roll = await reviewRoll(
+        String(args.id),
+        decision,
+        args.note === undefined ? undefined : String(args.note)
+      );
+      return roll ? { roll } : { error: `No roll with id ${String(args.id)}` };
+    },
+  },
+  {
+    name: "select_daily_for_cut",
+    description:
+      "Put a day roll into a cut. Refused unless an approval is recorded against that roll — the refusal is the product working, not an error to route around. The decision is read from the store, so asserting a status here does nothing.",
+    mutating: true,
+    inputSchema: obj({ id: str("Roll id"), cutId: str("Cut to select it into") }, ["id", "cutId"]),
+    run: async (args) => {
+      const cutId = String(args.cutId);
+      if (!(await getCut(cutId))) return { error: `No cut with id ${cutId}` };
+
+      const result = await selectForCut(String(args.id), cutId);
+      return result.ok
+        ? { roll: result.roll, allowed: true }
+        : { allowed: false, reason: result.reason, status: result.status };
+    },
+  },
+  {
+    name: "list_vfx_shots",
+    description: "The VFX shot board — every shot, its status, engine, and the cut it belongs to.",
+    inputSchema: obj({ cutId: str("Only shots filed against this cut") }),
+    run: async (args) => {
+      const cutId = args.cutId ? String(args.cutId) : "";
+      return { shots: cutId ? await shotsForCut(cutId) : await listShots() };
+    },
+  },
+  {
+    name: "move_vfx_shot",
+    description:
+      "Move a shot's status on the board, or add a shot to it. A duplicate id is refused rather than merged — the id is the conform key between the board, the shot package, and the compositor's filename.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        action: { type: "string", enum: ["status", "add"], description: "Move an existing shot, or add one" },
+        id: str("Shot id, e.g. VFX_040"),
+        status: { type: "string", enum: [...SHOT_STATUSES], description: "Required for a status move" },
+        desc: str("What the shot is — required when adding"),
+        engine: str("Where the comp happens"),
+        cutId: str("Cut this shot belongs to"),
+        note: str("Note kept against the move"),
+      },
+      ["action", "id"]
+    ),
+    run: async (args) => {
+      const id = String(args.id);
+
+      if (String(args.action) === "add") {
+        const result = await addShot({
+          id,
+          desc: String(args.desc ?? ""),
+          engine: String(args.engine ?? ""),
+          cutId: args.cutId ? String(args.cutId) : undefined,
+        });
+        return result.ok ? { shot: result.shot } : { error: result.reason };
+      }
+
+      const status = String(args.status ?? "");
+      if (!isShotStatus(status)) return { error: `status must be one of ${SHOT_STATUSES.join(", ")}` };
+      const shot = await setShotStatus(id, status, args.note === undefined ? undefined : String(args.note));
+      return shot ? { shot } : { error: `No shot with id ${id}` };
+    },
+  },
+  {
+    name: "build_handoff",
+    description:
+      "Build the artifact that crosses an engine bridge for a cut: a CMX3600 EDL for picture conform, a stem sheet for the mix, a shot package for comp, or the storage path contract. Returns the file's text — an assistant can hand it straight to whoever is conforming. Read-only: nothing here spends money or changes a cut.",
+    inputSchema: obj(
+      {
+        kind: {
+          type: "string",
+          enum: ["edl", "stems", "shots", "paths"],
+          description: "Which artifact to build",
+        },
+        cutId: str("The cut the artifact describes"),
+        fps: {
+          type: "number",
+          enum: [...TIMEBASES],
+          description: "Timebase for edl and shots. Whole-number rates only — 23.976 and 29.97 need drop-frame arithmetic this does not compute.",
+        },
+        target: {
+          type: "string",
+          enum: LOUDNESS_TARGETS.map((t) => t.id),
+          description: "Delivery target for the stem sheet",
+        },
+      },
+      ["kind", "cutId"]
+    ),
+    run: async (args) => {
+      const cutId = String(args.cutId);
+      const cut = await getCut(cutId);
+      if (!cut) return { error: `No cut with id ${cutId}` };
+
+      // Same refusal as the HTTP route: a timebase we do not compute correctly
+      // is declined rather than coerced into one that drifts.
+      let fps: Timebase = 25;
+      if (args.fps !== undefined) {
+        const n = Number(args.fps);
+        if (!TIMEBASES.includes(n as Timebase)) {
+          return { error: `fps must be one of ${TIMEBASES.join(", ")}` };
+        }
+        fps = n as Timebase;
+      }
+
+      const clips = cut.clips ?? SAMPLE_TIMELINE;
+      const assemblySource = cut.clips ? "cut assembly" : "sample assembly";
+
+      switch (String(args.kind)) {
+        case "edl":
+          return {
+            filename: `${slug(cut.title) || cut.id}_${fps}fps.edl`,
+            assemblySource,
+            content: buildEDL({ title: `${cut.title} (${assemblySource})`, clips, fps }),
+          };
+
+        case "stems": {
+          const target = LOUDNESS_TARGETS.find((t) => t.id === String(args.target ?? "shortform"));
+          if (!target) {
+            return { error: `target must be one of ${LOUDNESS_TARGETS.map((t) => t.id).join(", ")}` };
+          }
+          return {
+            filename: `${slug(cut.title) || cut.id}_stems_${target.id}.csv`,
+            assemblySource,
+            content: buildStemSheet({ title: cut.title, clips, target }),
+          };
+        }
+
+        case "shots":
+          return {
+            filename: `${slug(cut.title) || cut.id}_shots.json`,
+            assemblySource,
+            content: buildShotPackage({
+              title: cut.title,
+              clips,
+              fps,
+              colorSpace: "ACEScct",
+              board: await shotsForCut(cut.id),
+            }),
+          };
+
+        case "paths":
+          return {
+            filename: `${slug(cut.title) || cut.id}_paths.json`,
+            content: buildPathContract({ cutId: cut.id, title: cut.title }),
+          };
+
+        default:
+          return { error: "kind must be one of edl, stems, shots, paths" };
       }
     },
   },

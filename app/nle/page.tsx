@@ -10,6 +10,7 @@ export default function Page() {
         title: "NLE bridge",
         description:
           "Handoff to the edit suite. EditForge tracks the cut and its status; the binary timeline lives in the NLE.",
+        artifacts: ["edl"],
         engines: ["DaVinci Resolve", "Premiere Pro", "Final Cut Pro"],
         handoff: [
           { label: "Out", detail: "EDL / AAF / XML conform list plus the cut ID and preset lane." },

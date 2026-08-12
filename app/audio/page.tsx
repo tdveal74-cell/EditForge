@@ -2,15 +2,14 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/ui/section";
 import { Waveform } from "@/components/media/Viewer";
+import { AUDIO_HIERARCHY } from "@/lib/audio";
 
 export const metadata: Metadata = { title: "Audio hierarchy" };
 
-const hierarchy = [
-  { level: 1, name: "VO / dialogue", rule: "Always intelligible. Never buried.", weight: "w-full" },
-  { level: 2, name: "Primary SFX / tactile", rule: "Story-critical hits only.", weight: "w-3/4" },
-  { level: 3, name: "Music bed", rule: "Support, don't compete. Restraint score.", weight: "w-1/2" },
-  { level: 4, name: "Ambience", rule: "Presence, not noise floor war.", weight: "w-1/4" },
-];
+// The ladder lives in lib/audio.ts because /mix generates the stem sheet from
+// it. A second copy here could drift, and the mix would receive a rule the
+// operator never read.
+const hierarchy = AUDIO_HIERARCHY;
 
 export default function AudioPage() {
   return (
@@ -50,7 +49,8 @@ export default function AudioPage() {
 
       <p className="mt-8 text-xs text-navy/45">
         Stem split and loudness targets cross to the mix stage at{" "}
-        <code className="rounded bg-surface-muted px-1 py-0.5">/mix</code>.
+        <code className="rounded bg-surface-muted px-1 py-0.5">/mix</code>, where this ladder is generated
+        into the stem sheet a mixer works from.
       </p>
     </main>
   );

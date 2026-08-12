@@ -10,6 +10,7 @@ export default function Page() {
         title: "MAM bridge",
         description:
           "Where the media actually lives. /assets is the catalog surface; this bridge is the storage contract behind it.",
+        artifacts: ["paths"],
         engines: ["Google Drive", "Amazon S3", "Frame.io"],
         handoff: [
           { label: "Out", detail: "Canonical paths per asset — online, nearline, and archive tiers named separately." },

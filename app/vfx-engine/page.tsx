@@ -10,6 +10,7 @@ export default function Page() {
         title: "VFX engine bridge",
         description:
           "Shot packages out to comp and 3D. The tracking board stays on /vfx — this bridge only moves the work.",
+        artifacts: ["shots"],
         engines: ["Fusion", "After Effects", "Houdini / Blender"],
         handoff: [
           { label: "Out", detail: "Shot package: plates, camera data, frame range, and the shot ID from the board." },

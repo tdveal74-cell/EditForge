@@ -2,6 +2,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/ui/section";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { HandoffArtifacts, type ArtifactKind } from "@/components/HandoffArtifacts";
 
 export type BridgeSpec = {
   title: string;
@@ -10,6 +11,12 @@ export type BridgeSpec = {
   handoff: { label: string; detail: string }[];
   /** Named engines this bridge targets. */
   engines: string[];
+  /**
+   * The files this bridge actually produces. A bridge that describes an "Out"
+   * and hands over nothing is a caption, so this is where the description stops
+   * being a promise and starts being a download.
+   */
+  artifacts?: ArtifactKind[];
 };
 
 /**
@@ -37,6 +44,8 @@ export function BridgePanel({ spec }: { spec: BridgeSpec }) {
           ))}
         </div>
       </Section>
+
+      {spec.artifacts && spec.artifacts.length > 0 && <HandoffArtifacts kinds={spec.artifacts} />}
 
       <Section title="Handoff">
         <dl className="grid gap-3 sm:grid-cols-2">

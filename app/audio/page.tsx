@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/ui/section";
 import { Waveform } from "@/components/media/Viewer";
 import { AUDIO_HIERARCHY } from "@/lib/audio";
+import { PRIMARY_CLIP } from "@/lib/mediaLibrary";
 
 export const metadata: Metadata = { title: "Audio hierarchy" };
 
@@ -24,7 +25,7 @@ export default function AudioPage() {
           from nothing — a picture of sound the operator does not have would
           teach them to distrust the screen. */}
       <Section title="Waveform">
-        <Waveform />
+        <Waveform src={PRIMARY_CLIP.src} />
       </Section>
 
       <ol className="mt-10 space-y-2">

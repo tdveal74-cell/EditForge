@@ -22,6 +22,11 @@ function seedAssets(): Asset[] {
     { id: "a2", name: "auren_vo_take3.wav", type: "audio", tags: ["vo", "auren"], addedAt: now },
     { id: "a3", name: "restraint_score_bed.wav", type: "audio", tags: ["music"], addedAt: now },
     { id: "a4", name: "still_hold_frame.png", type: "image", tags: ["still", "ending"], addedAt: now },
+    // The three files that actually ship in public/media. An index whose first
+    // rows are imaginary teaches people not to trust the rest.
+    { id: "a-rain-a", name: "rain_street_night_a.mp4", type: "video", tags: ["rain", "night", "vertical", "master"], location: "/media/rain_street_night_a.mp4", addedAt: now },
+    { id: "a-rain-b", name: "rain_street_night_b.mp4", type: "video", tags: ["rain", "night", "vertical", "alt"], location: "/media/rain_street_night_b.mp4", addedAt: now },
+    { id: "a-rain-still", name: "rain_street_still.png", type: "image", tags: ["rain", "night", "reference", "grade"], location: "/media/rain_street_still.png", addedAt: now },
   ];
 }
 

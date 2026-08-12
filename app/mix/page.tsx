@@ -10,6 +10,7 @@ export default function Page() {
         title: "Mix bridge",
         description:
           "Stem sheet and loudness targets for the mix stage. The hierarchy set on /audio is law — the mix realises it, it does not renegotiate it.",
+        artifacts: ["stems"],
         engines: ["Fairlight", "Pro Tools", "Atmos renderer"],
         handoff: [
           { label: "Out", detail: "Stem sheet: VO, primary SFX, music bed, ambience — split at the hierarchy boundaries." },

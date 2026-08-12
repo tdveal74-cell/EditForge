@@ -1,4 +1,5 @@
 import { durableCollection } from "./durable";
+import type { TimelineClip } from "./timeline";
 
 export type CutStatus = "ingest" | "grade" | "review" | "shipped" | "archived";
 
@@ -9,6 +10,12 @@ export type Cut = {
   presetId?: string;
   rubricPass?: boolean;
   notes?: string;
+  /**
+   * The cut's own assembly. Absent until something writes one, in which case
+   * handoff artifacts fall back to the sample assembly and say so — an EDL that
+   * silently described a different cut would be worse than none.
+   */
+  clips?: TimelineClip[];
   createdAt: string;
   updatedAt: string;
 };

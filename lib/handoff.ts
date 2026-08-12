@@ -1,0 +1,252 @@
+import type { TimelineClip } from "./timeline";
+import { AUDIO_HIERARCHY } from "./audio";
+
+/**
+ * What actually crosses a bridge.
+ *
+ * Every bridge page described an "Out" contract and then produced nothing, so
+ * the contract was a caption. These builders are that contract in the format the
+ * engine on the far side reads: an EDL a conform tool will load, a stem sheet a
+ * mixer can work from, a shot package a compositor can open.
+ *
+ * All of them are pure — string in, string out. A handoff artifact that can only
+ * be judged by opening Resolve is a handoff artifact nobody checks.
+ */
+
+/**
+ * Whole-number timebases only.
+ *
+ * 23.976 and 29.97 need drop-frame arithmetic to stay locked to wall clock over
+ * a long programme, and a non-drop timecode silently labelled as one of those
+ * rates drifts ~3.6s per hour — the kind of error that surfaces at the deliverable
+ * stage. Offering only the rates we compute correctly is the honest option.
+ */
+export type Timebase = 24 | 25 | 30;
+
+export const TIMEBASES: Timebase[] = [24, 25, 30];
+
+/** SMPTE non-drop timecode. Wraps at 24h, as timecode does. */
+export function toTimecode(seconds: number, fps: Timebase): string {
+  const frames = toFrames(seconds, fps);
+  const ff = frames % fps;
+  const totalSeconds = Math.floor(frames / fps);
+  const ss = totalSeconds % 60;
+  const mm = Math.floor(totalSeconds / 60) % 60;
+  const hh = Math.floor(totalSeconds / 3600) % 24;
+  return [hh, mm, ss, ff].map((n) => String(n).padStart(2, "0")).join(":");
+}
+
+/**
+ * The frame a moment falls on.
+ *
+ * Floor, not round: at 25fps, frame 38 spans 1.52s–1.56s, so rounding 1.5s up to
+ * frame 38 names a frame that does not contain the moment asked about. Every
+ * clip boundary would land one frame late, which is a black flash at a cut.
+ *
+ * The epsilon absorbs binary float error — a duration meant as 3.0 that arrives
+ * as 2.9999999999999996 must still be 75 frames at 25fps, not 74.
+ */
+export function toFrames(seconds: number, fps: Timebase): number {
+  if (!Number.isFinite(seconds) || seconds <= 0) return 0;
+  return Math.max(0, Math.floor(seconds * fps + 1e-6));
+}
+
+/**
+ * A CMX3600 EDL for the picture cut.
+ *
+ * Picture only, on purpose. Audio leaves as stems from /mix — that is how a post
+ * chain actually splits, and it is what the mix bridge already claims. Writing
+ * four audio tracks into an EDL would mean claiming CMX channel assignments the
+ * format only partly supports, and the mixer would ignore the result anyway.
+ *
+ * Source timecode is zero-based per clip: this timeline holds file-based media
+ * with no camera timecode, so the conform is by clip name, and saying otherwise
+ * would send an assistant hunting for reels that do not exist.
+ */
+export function buildEDL(opts: { title: string; clips: TimelineClip[]; fps: Timebase }): string {
+  const { title, clips, fps } = opts;
+
+  const video = clips
+    .filter((c) => c.track === "video" && c.durationSec > 0)
+    .sort((a, b) => a.startSec - b.startSec);
+
+  const lines = [
+    `TITLE: ${sanitizeTitle(title)}`,
+    "FCM: NON-DROP FRAME",
+    `* TIMEBASE: ${fps} FPS`,
+    // ASCII only in the lines we generate: EDL parsers are decades old and some
+    // read the file as plain ASCII. Clip names are left exactly as they are —
+    // they are the conform key, and transliterating one would break the match.
+    "* PICTURE ONLY - AUDIO CONFORMS FROM THE STEM SHEET",
+    "* SOURCE TIMECODE IS ZERO-BASED; CONFORM BY CLIP NAME",
+  ];
+
+  video.forEach((clip, i) => {
+    const event = String(i + 1).padStart(3, "0");
+    const srcIn = toTimecode(0, fps);
+    const srcOut = toTimecode(clip.durationSec, fps);
+    const recIn = toTimecode(clip.startSec, fps);
+    const recOut = toTimecode(clip.startSec + clip.durationSec, fps);
+    // CMX3600 column layout: event, reel (8), channel (4), transition (9).
+    // AX is the standard reel name for an auxiliary/unknown source.
+    lines.push(`${event}  ${"AX".padEnd(8)} ${"V".padEnd(4)} ${"C".padEnd(8)} ${srcIn} ${srcOut} ${recIn} ${recOut}`);
+    lines.push(`* FROM CLIP NAME: ${sanitizeComment(clip.label)}`);
+  });
+
+  if (video.length === 0) lines.push("* NO PICTURE EVENTS");
+
+  return lines.join("\n") + "\n";
+}
+
+/**
+ * The stem sheet, derived from the hierarchy on /audio rather than restated.
+ *
+ * The mix bridge says that hierarchy "is law — the mix realises it, it does not
+ * renegotiate it". That is only true if the sheet the mixer receives is generated
+ * from it, so a change on /audio reaches the mix and a second copy cannot drift.
+ */
+export function buildStemSheet(opts: {
+  title: string;
+  clips: TimelineClip[];
+  target: LoudnessTarget;
+}): string {
+  const { title, clips, target } = opts;
+  const rows = [
+    ["stem", "priority", "rule", "timeline_track", "clips", "duration_sec", "integrated_lufs", "true_peak_dbtp"],
+  ];
+
+  for (const level of AUDIO_HIERARCHY) {
+    const own = clips.filter((c) => c.track === level.track);
+    const seconds = own.reduce((sum, c) => sum + c.durationSec, 0);
+    rows.push([
+      level.name,
+      String(level.level),
+      level.rule,
+      level.track,
+      String(own.length),
+      seconds.toFixed(2),
+      // Only the dialogue anchor carries the programme target; a music bed
+      // printed at the anchor would be competing with the voice by definition.
+      level.level === 1 ? String(target.integratedLufs) : "stem — no independent target",
+      String(target.truePeakDbtp),
+    ]);
+  }
+
+  return [`# STEM SHEET — ${sanitizeComment(title)}`, `# DELIVERY: ${target.label}`, ...rows.map(toCsvRow)].join("\n") + "\n";
+}
+
+export type LoudnessTarget = {
+  id: string;
+  label: string;
+  integratedLufs: number;
+  truePeakDbtp: number;
+};
+
+/** Anchors from docs/HARDWARE.md's mix law — one source, not a retyped pair. */
+export const LOUDNESS_TARGETS: LoudnessTarget[] = [
+  { id: "shortform", label: "Short-form / social", integratedLufs: -16, truePeakDbtp: -1 },
+  { id: "broadcast", label: "Broadcast deliverable", integratedLufs: -23, truePeakDbtp: -1 },
+];
+
+/**
+ * A shot package manifest for comp and 3D.
+ *
+ * Frame ranges, not seconds: a compositor works in frames, and asking them to
+ * convert is how an off-by-one at the head of a shot gets introduced. Ranges are
+ * inclusive of the first frame and exclusive of the last, stated explicitly in
+ * the manifest so nobody has to guess which convention was meant.
+ */
+export function buildShotPackage(opts: {
+  title: string;
+  clips: TimelineClip[];
+  fps: Timebase;
+  colorSpace: string;
+}): string {
+  const { title, clips, fps, colorSpace } = opts;
+  const shots = clips
+    .filter((c) => c.track === "video" && c.durationSec > 0)
+    .sort((a, b) => a.startSec - b.startSec)
+    .map((c, i) => ({
+      shotId: `${slug(title)}_${String((i + 1) * 10).padStart(4, "0")}`,
+      plate: c.label,
+      clipId: c.id,
+      firstFrame: toFrames(c.startSec, fps),
+      lastFrameExclusive: toFrames(c.startSec + c.durationSec, fps),
+      frameCount: toFrames(c.startSec + c.durationSec, fps) - toFrames(c.startSec, fps),
+      recordIn: toTimecode(c.startSec, fps),
+      colorSpace,
+    }));
+
+  return (
+    JSON.stringify(
+      {
+        title,
+        fps,
+        frameRangeConvention: "firstFrame inclusive, lastFrameExclusive exclusive",
+        colorSpace,
+        deliverBack: "EXR sequence or pre-comp, conformed to the plate colour space",
+        shots,
+      },
+      null,
+      2
+    ) + "\n"
+  );
+}
+
+/**
+ * The storage path contract.
+ *
+ * Three tiers named separately, because "where is the master" is the question a
+ * MAM exists to answer and a single path cannot answer it. Deterministic from the
+ * cut id, so the same cut resolves to the same paths from any surface.
+ */
+export function buildPathContract(opts: { cutId: string; title: string }): string {
+  const { cutId, title } = opts;
+  const key = slug(title) || slug(cutId) || "untitled";
+  const base = `${cutId}/${key}`;
+  return (
+    JSON.stringify(
+      {
+        cutId,
+        title,
+        tiers: {
+          online: { path: `online/${base}/`, role: "Working media on shared storage — edit and grade read from here" },
+          nearline: { path: `nearline/${base}/`, role: "Completed masters, retrievable in minutes" },
+          archive: { path: `archive/${base}/`, role: "Cold copy — 3-2-1: two media types, one geo-separated" },
+        },
+        rules: [
+          "Paths are canonical: the NLE links to them, it does not copy media",
+          "Nothing reaches archive without the /archive checklist complete",
+          "Checksums are written by the mover and read back before the online copy is released",
+        ],
+      },
+      null,
+      2
+    ) + "\n"
+  );
+}
+
+function toCsvRow(cells: string[]): string {
+  return cells.map(csvCell).join(",");
+}
+
+/** Quote anything that would otherwise break the row apart. */
+function csvCell(value: string): string {
+  return /[",\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** EDL titles are a single line; a newline would start a bogus record. */
+function sanitizeTitle(title: string): string {
+  return title.replace(/[\r\n]+/g, " ").trim().slice(0, 70) || "UNTITLED";
+}
+
+function sanitizeComment(text: string): string {
+  return text.replace(/[\r\n]+/g, " ").trim();
+}
+
+export function slug(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}

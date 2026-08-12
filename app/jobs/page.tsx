@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { JOB_STUBS, type StudioJob } from "@/lib/jobs";
+import type { Cut } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label, Select, Output } from "@/components/ui/field";
@@ -11,7 +12,8 @@ import { PageHeader } from "@/components/PageHeader";
 
 export default function JobsPage() {
   const [kind, setKind] = useState<"proxy" | "export">("proxy");
-  const [rubricPass, setRubricPass] = useState(false);
+  const [cuts, setCuts] = useState<Cut[] | null>(null);
+  const [cutId, setCutId] = useState("");
   const [result, setResult] = useState<string | null>(null);
   const [live, setLive] = useState<StudioJob[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -34,6 +36,19 @@ export default function JobsPage() {
     void load();
   }, [load]);
 
+  // The cut carries the rubric decision. This page used to ask the operator
+  // whether they had passed and send the answer as the gate's input.
+  useEffect(() => {
+    fetch("/api/cuts", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Cut[] = d.cuts ?? [];
+        setCuts(list);
+        setCutId((prev) => prev || list[0]?.id || "");
+      })
+      .catch(() => setCuts([]));
+  }, []);
+
   async function plan() {
     setResult(null);
     const res = await fetch("/api/ffmpeg/plan", {
@@ -41,7 +56,7 @@ export default function JobsPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind,
-        rubricPass,
+        cutId,
         inputPath: "input.mp4",
         outputPath: kind === "export" ? "master.mp4" : "proxy.mp4",
       }),
@@ -69,19 +84,33 @@ export default function JobsPage() {
             </Select>
           </Label>
         </div>
-        <label className="flex items-center gap-2 pb-2 text-sm text-navy/70">
-          <input
-            type="checkbox"
-            className="size-4 cursor-pointer accent-amber"
-            checked={rubricPass}
-            onChange={(e) => setRubricPass(e.target.checked)}
-          />
-          Rubric pass
-        </label>
-        <Button type="button" onClick={plan} className="mb-0.5">
+        <div className="w-64">
+          <Label text="Cut">
+            <Select
+              value={cutId}
+              onChange={(e) => setCutId(e.target.value)}
+              disabled={kind === "proxy"}
+            >
+              {cuts === null && <option>Loading…</option>}
+              {cuts?.length === 0 && <option value="">No cuts in the store</option>}
+              {cuts?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title} — {c.rubricPass ? "rubric passed" : "no rubric pass"}
+                </option>
+              ))}
+            </Select>
+          </Label>
+        </div>
+        <Button type="button" onClick={plan} className="mb-0.5" disabled={kind === "export" && !cutId}>
           Build plan
         </Button>
       </div>
+
+      <p className="mt-2 text-xs text-navy/45">
+        {kind === "proxy"
+          ? "Proxy — ungated by design."
+          : "Authorisation comes from the rubric decision recorded on the cut, not from this page."}
+      </p>
 
       {result && <Output>{result}</Output>}
 

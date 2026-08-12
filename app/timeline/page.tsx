@@ -1,24 +1,29 @@
 "use client";
 
-import { SAMPLE_TIMELINE, totalDuration } from "@/lib/timeline";
+import { SAMPLE_TIMELINE, TRACK_ORDER, totalDuration } from "@/lib/timeline";
 import { PageHeader } from "@/components/PageHeader";
 
-const tracks = ["video", "vo", "music", "sfx"] as const;
+// Rows follow the audio ladder top-down. They used to run video/vo/music/sfx,
+// which drew music above the SFX that outranks it — the screen contradicting the
+// rule /audio calls law.
+const tracks = TRACK_ORDER;
 
-// Track fills follow the audio hierarchy: VO is the one amber accent, everything
-// else steps down the navy ramp so no track shouts over the one that matters.
+// Fills follow the same ladder: VO is the one amber accent, everything else
+// steps down the navy ramp so no track shouts over the one that matters.
 const fill: Record<string, string> = {
   video: "bg-navy",
   vo: "bg-amber",
-  music: "bg-navy/45",
-  sfx: "bg-navy/25",
+  sfx: "bg-navy/45",
+  music: "bg-navy/30",
+  ambience: "bg-navy/15",
 };
 
 const ink: Record<string, string> = {
   video: "text-surface",
   vo: "text-navy",
-  music: "text-surface",
-  sfx: "text-navy/80",
+  sfx: "text-surface",
+  music: "text-navy/80",
+  ambience: "text-navy/70",
 };
 
 export default function TimelinePage() {

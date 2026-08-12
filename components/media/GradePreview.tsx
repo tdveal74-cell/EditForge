@@ -91,8 +91,9 @@ export function GradePreview({ grade, src }: { grade: GradeParams; src?: string 
 /** The thing being graded: real footage when there is any, the chart when not. */
 function Frame({ src }: { src?: string }) {
   if (src) {
-    // eslint-disable-next-line @next/next/no-img-element -- arbitrary runtime
-    // URLs from provider renders; the optimiser cannot pre-register these hosts.
+    // Arbitrary runtime URLs from provider renders — the optimiser cannot
+    // pre-register hosts it will not see until a job returns.
+    // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt="" className="absolute inset-0 size-full object-cover" />;
   }
   return <ReferenceChart />;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { formatTimecode, frameTimesFor, isPlayableVideo, peaksFrom } from "@/lib/media";
 
 /**
@@ -92,7 +92,10 @@ export function VideoPlayer({
  */
 export function Filmstrip({ src, durationSec, count = 8 }: { src?: string; durationSec?: number; count?: number }) {
   const [frames, setFrames] = useState<string[]>([]);
-  const times = frameTimesFor(durationSec ?? 0, count);
+  // Memoised so the effect below can depend on it honestly. Unmemoised this is
+  // a fresh array every render, and listing it would re-seek and re-paint every
+  // frame on each render — which is why it used to be suppressed instead.
+  const times = useMemo(() => frameTimesFor(durationSec ?? 0, count), [durationSec, count]);
 
   useEffect(() => {
     if (!src || !isPlayableVideo(src) || times.length === 0) return;
@@ -135,10 +138,7 @@ export function Filmstrip({ src, durationSec, count = 8 }: { src?: string; durat
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- times is derived
-    // from the two values already listed; including the array would re-run
-    // extraction on every render.
-  }, [src, durationSec, count]);
+  }, [src, times]);
 
   if (!src) {
     return (
@@ -156,8 +156,9 @@ export function Filmstrip({ src, durationSec, count = 8 }: { src?: string; durat
           <div key={t} className="shrink-0">
             <div className="h-16 w-28 overflow-hidden rounded-sm border border-border bg-navy/10">
               {frames[i] ? (
-                // eslint-disable-next-line @next/next/no-img-element -- a data:
-                // URL painted from the loaded video; there is no remote to optimise.
+                // A data: URL painted from the loaded video — there is no remote
+                // host for next/image to optimise.
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={frames[i]} alt="" className="size-full object-cover" />
               ) : (
                 <div className="size-full animate-pulse bg-surface-muted" />
@@ -256,8 +257,9 @@ export function ThumbnailGrid({ shots }: { shots: Shot[] }) {
         <figure key={s.id} className="m-0">
           <div className="aspect-video overflow-hidden rounded-card border border-border bg-surface-muted">
             {s.poster ? (
-              // eslint-disable-next-line @next/next/no-img-element -- runtime
-              // provider URLs; hosts are not known at build time.
+              // Runtime provider URLs — the hosts are not known at build time,
+              // so next/image has nothing to pre-register.
+              // eslint-disable-next-line @next/next/no-img-element
               <img src={s.poster} alt="" className="size-full object-cover" />
             ) : (
               <div className="flex size-full items-center justify-center">

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   findProvider,
   hasCredentials,
+  isLiveWired,
   normalizeState,
   pollProvider,
   providerChoicesFor,
@@ -74,12 +75,33 @@ describe("provider boundary", () => {
     expect(res).not.toHaveProperty("externalId");
   });
 
-  it("refuses a credentialled provider that has no wired endpoint yet", async () => {
+  it("refuses a credentialled provider whose API shape is not implemented", async () => {
     clearKeys();
     process.env.KLING_API_KEY = "tok";
     const res = await submitToProvider({ provider: "kling", kind: "gen-video", prompt: "x", idempotencyKey: "k3" });
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/no wired endpoint/i);
+    if (!res.ok) expect(res.error).toMatch(/not implemented/i);
+  });
+
+  it("refuses ElevenLabs, which has an endpoint but no implemented shape", async () => {
+    // It used to be submitted as POST /v1/tasks, a route ElevenLabs does not
+    // have — text-to-speech answers with audio bytes synchronously and there is
+    // no task to poll. Refusing beats issuing a request that 404s.
+    clearKeys();
+    process.env.ELEVENLABS_API_KEY = "tok";
+    const res = await submitToProvider({ provider: "elevenlabs", kind: "voice", prompt: "x", idempotencyKey: "k4" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/not implemented/i);
+  });
+
+  it("reports live-wired only where a shape is actually implemented", () => {
+    // The old check was `Boolean(endpoint)`, which called Runway and ElevenLabs
+    // live while every submit to either was malformed.
+    expect(isLiveWired("runway")).toBe(true);
+    expect(isLiveWired("mock")).toBe(true);
+    expect(isLiveWired("elevenlabs")).toBe(false);
+    expect(isLiveWired("kling")).toBe(false);
+    expect(isLiveWired("nope")).toBe(false);
   });
 
   it("submits live with auth and an idempotency header, returning the provider id", async () => {
@@ -104,10 +126,39 @@ describe("provider boundary", () => {
       expect(res.externalId).toBe("task_789");
       expect(res.mode).toBe("live");
     }
-    const init = fetchMock.mock.calls[0][1];
+    const [url, init] = fetchMock.mock.calls[0];
     const headers = init?.headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer secret-key");
     expect(headers["Idempotency-Key"]).toBe("key-abc");
+
+    // This test used to stop at the two headers above, and that gap is the
+    // whole reason a malformed submit shipped: the URL and the body were never
+    // asserted, so posting `{prompt}` at a route Runway does not have looked
+    // exactly like success in CI.
+    expect(String(url)).toBe("https://api.dev.runwayml.com/v1/text_to_video");
+    expect(headers["X-Runway-Version"]).toBe("2024-11-06");
+
+    const body = JSON.parse(String(init?.body));
+    expect(body.promptText).toBe("locked wide");
+    expect(body.model).toBe("gen4.5");
+    // Post-2024-11-06 this carries a resolution, not an aspect name.
+    expect(body.ratio).toMatch(/^\d+:\d+$/);
+    expect(body).not.toHaveProperty("prompt");
+  });
+
+  it("carries the version header on polls too, not just submits", async () => {
+    clearKeys();
+    process.env.RUNWAY_API_KEY = "tok";
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        ({ ok: true, json: async () => ({ status: "RUNNING" }) }) as unknown as Response
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await pollProvider("runway", "task_789");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("https://api.dev.runwayml.com/v1/tasks/task_789");
+    expect((init?.headers as Record<string, string>)["X-Runway-Version"]).toBe("2024-11-06");
   });
 
   it("surfaces a provider HTTP error instead of a fabricated success", async () => {
@@ -115,9 +166,31 @@ describe("provider boundary", () => {
     process.env.RUNWAY_API_KEY = "tok";
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 429 }) as unknown as Response));
 
-    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k4" });
+    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k5" });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("429");
+  });
+
+  it("carries the provider's own explanation into the error, not just the status", async () => {
+    // A bare "HTTP 400" cost a source read to diagnose. What the provider says
+    // about the refusal is the part that makes it actionable.
+    clearKeys();
+    process.env.RUNWAY_API_KEY = "tok";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        text: async () => '{"error":"Invalid value for ratio"}',
+      }) as unknown as Response)
+    );
+
+    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k6" });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toContain("400");
+      expect(res.error).toContain("Invalid value for ratio");
+    }
   });
 
   it("maps each provider's status vocabulary onto the four states", () => {

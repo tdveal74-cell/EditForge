@@ -1,17 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DELIVERABLES } from "@/lib/pipeline";
+import type { Cut } from "@/lib/store";
 import { Button } from "@/components/ui/button";
-import { Output } from "@/components/ui/field";
+import { Label, Select, Output } from "@/components/ui/field";
 import { PageHeader } from "@/components/PageHeader";
 
 export default function ExportPage() {
-  const [rubricPass, setRubricPass] = useState(false);
   const [format, setFormat] = useState(DELIVERABLES[0].id);
+  const [cuts, setCuts] = useState<Cut[] | null>(null);
+  const [cutId, setCutId] = useState("");
   const [out, setOut] = useState<string | null>(null);
   const isProxy = format === "proxy";
-  const blocked = !isProxy && !rubricPass;
+
+  useEffect(() => {
+    fetch("/api/cuts")
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Cut[] = d.cuts ?? [];
+        setCuts(list);
+        setCutId((prev) => prev || list[0]?.id || "");
+      })
+      .catch(() => setCuts([]));
+  }, []);
+
+  const cut = cuts?.find((c) => c.id === cutId);
+  // Read from the store, never asserted here. The server re-reads it anyway —
+  // this only decides what the operator is told before they press the button.
+  const blocked = !isProxy && !cut?.rubricPass;
 
   async function plan() {
     const res = await fetch("/api/ffmpeg/plan", {
@@ -19,7 +36,7 @@ export default function ExportPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         kind: isProxy ? "proxy" : "export",
-        rubricPass: isProxy ? true : rubricPass,
+        cutId,
         inputPath: "master_src.mp4",
         outputPath: `${format}.mp4`,
       }),
@@ -69,23 +86,37 @@ export default function ExportPage() {
         })}
       </ul>
 
-      <label className="mt-6 flex items-center gap-2 text-sm text-navy/70">
-        <input
-          type="checkbox"
-          className="size-4 cursor-pointer accent-amber"
-          checked={rubricPass}
-          onChange={(e) => setRubricPass(e.target.checked)}
-          disabled={isProxy}
-        />
-        Rubric pass recorded {isProxy && <span className="text-navy/40">(not required for proxy)</span>}
-      </label>
+      {/* The cut carries the authority, not this page. There is no checkbox:
+          asking the person exporting whether they passed the rubric is not a
+          gate, and the server does not accept the answer either way. */}
+      <div className="mt-6">
+        <Label text="Cut to export">
+          <Select value={cutId} onChange={(e) => setCutId(e.target.value)} disabled={isProxy}>
+            {cuts === null && <option>Loading…</option>}
+            {cuts?.length === 0 && <option value="">No cuts in the store</option>}
+            {cuts?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title} — {c.rubricPass ? "rubric passed" : "no rubric pass"}
+              </option>
+            ))}
+          </Select>
+        </Label>
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={plan}>
+        <Button type="button" onClick={plan} disabled={!isProxy && !cutId}>
           Build export plan
         </Button>
-        {blocked && (
-          <span className="text-xs text-amber-700">Master export will be blocked until the rubric passes</span>
+        {isProxy ? (
+          <span className="text-xs text-navy/50">Proxy — ungated by design.</span>
+        ) : blocked ? (
+          <span className="text-xs text-amber-700">
+            {cut ? `"${cut.title}" has no recorded rubric pass — record one on /rubric.` : "Select a cut."}
+          </span>
+        ) : (
+          <span className="text-xs text-navy/50">
+            Authorised by the rubric pass recorded on “{cut?.title}”.
+          </span>
         )}
       </div>
 

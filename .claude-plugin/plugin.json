@@ -1,0 +1,10 @@
+{
+  "name": "editforge",
+  "version": "1.0.0",
+  "description": "Post-production finishing to the EditForge house standard — premium restraint. Bundles the finishing skill, the studio MCP connector, and slash commands for the rubric gate and provider jobs.",
+  "author": {
+    "name": "EditForge"
+  },
+  "homepage": "https://editforge.vercel.app",
+  "keywords": ["video", "post-production", "editing", "color-grade", "finishing"]
+}

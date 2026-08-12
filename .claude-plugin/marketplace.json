@@ -1,0 +1,13 @@
+{
+  "name": "editforge",
+  "owner": {
+    "name": "EditForge"
+  },
+  "plugins": [
+    {
+      "name": "editforge",
+      "source": "./",
+      "description": "Premium restraint finishing for video post-production, plus a connector to a deployed EditForge studio."
+    }
+  ]
+}

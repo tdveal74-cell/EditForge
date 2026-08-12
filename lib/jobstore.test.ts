@@ -14,8 +14,11 @@ import {
 import type { RubricDecision } from "./jobs";
 
 // No KV in tests: the file backend is exercised, which is the same code path
-// with a different sink. Start from a clean store each time.
-const JOBS_FILE = path.join(process.cwd(), ".data", "jobs.json");
+// with a different sink. Start from a clean store each time, in this file's own
+// data dir — test files run in parallel and would otherwise share one store.
+const DATA_DIR = path.join(process.cwd(), ".data-test-jobstore");
+process.env.EDITFORGE_DATA_DIR = DATA_DIR;
+const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
 
 const PASS: RubricDecision = {
   cutHash: "abc123",

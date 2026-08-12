@@ -6,9 +6,17 @@ const base =
   "transition-colors duration-flagship placeholder:text-navy/35 hover:border-border-strong";
 
 /** Label wrapper so every form control in the studio sits the same way. */
-export function Label({ children, text }: { children: React.ReactNode; text: string }) {
+export function Label({
+  children,
+  text,
+  className,
+}: {
+  children: React.ReactNode;
+  text: string;
+  className?: string;
+}) {
   return (
-    <label className="block text-sm text-navy/70">
+    <label className={clsx("block text-sm text-navy/70", className)}>
       <span className="text-xs font-medium uppercase tracking-wide text-navy/45">{text}</span>
       <span className="mt-1 block">{children}</span>
     </label>

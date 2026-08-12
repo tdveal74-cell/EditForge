@@ -1,4 +1,5 @@
 import { clsx } from "clsx";
+import type { JobStatus } from "@/lib/jobs";
 
 /**
  * Semantic run-state, encoded without a colour riot: solid navy for settled,
@@ -26,6 +27,26 @@ export function StatusLabel({ tone, children }: { tone: Tone; children: React.Re
       {children}
     </span>
   );
+}
+
+/**
+ * Job statuses are a closed set, so they get an exact mapping rather than the
+ * free-text matcher below — `validating` in particular is genuinely in flight
+ * and would otherwise fall through to `pending` and read as "not started".
+ */
+const JOB_TONES: Record<JobStatus, Tone> = {
+  planned: "pending",
+  authorized: "pending",
+  queued: "pending",
+  running: "active",
+  validating: "active",
+  completed: "done",
+  failed: "blocked",
+  cancelled: "blocked",
+};
+
+export function toneForJob(status: JobStatus): Tone {
+  return JOB_TONES[status];
 }
 
 /** Map free-text statuses used across the studio onto a tone. */

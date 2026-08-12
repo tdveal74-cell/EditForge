@@ -7,17 +7,36 @@ function clearKvEnv() {
   for (const k of KV_ENV) delete process.env[k];
 }
 
-// In-memory fake of the Upstash REST endpoint: accepts ["GET"|"SET", key, value?].
-function mockKvFetch(db: Map<string, string>) {
+function useKvEnv() {
+  process.env.KV_REST_API_URL = "https://kv.example.test";
+  process.env.KV_REST_API_TOKEN = "secret-token";
+}
+
+// In-memory fake of the Upstash REST endpoint. Supports the commands the
+// store issues: GET, SET (with NX), and the CAS EVAL script.
+function mockKvFetch(db: Map<string, string>, hooks?: { beforeEval?: () => void }) {
   return vi.fn(async (_url: unknown, init?: RequestInit) => {
-    const [op, key, value] = JSON.parse(String(init?.body)) as string[];
-    let result: string | null = "OK";
-    if (op === "GET") result = db.get(key) ?? null;
-    if (op === "SET") db.set(key, value);
-    return {
-      ok: true,
-      json: async () => ({ result }),
-    } as Response;
+    const cmd = JSON.parse(String(init?.body)) as string[];
+    const [op] = cmd;
+    let result: unknown = "OK";
+    if (op === "GET") {
+      result = db.get(cmd[1]) ?? null;
+    } else if (op === "SET") {
+      const [, key, value, flag] = cmd;
+      if (flag === "NX" && db.has(key)) result = null;
+      else db.set(key, value);
+    } else if (op === "EVAL") {
+      hooks?.beforeEval?.();
+      const [, , , key, expected, next] = cmd;
+      const cur = db.get(key) ?? "";
+      if (cur === expected) {
+        db.set(key, next);
+        result = 1;
+      } else {
+        result = 0;
+      }
+    }
+    return { ok: true, json: async () => ({ result }) } as Response;
   });
 }
 
@@ -32,7 +51,7 @@ describe("cuts store", () => {
     expect(storeBackend()).toBe("file");
   });
 
-  it("selects the KV backend for either credential naming scheme", () => {
+  it("selects KV only for a complete credential pair — schemes never mix", () => {
     clearKvEnv();
     process.env.KV_REST_API_URL = "https://kv.example.test";
     process.env.KV_REST_API_TOKEN = "tok";
@@ -42,14 +61,18 @@ describe("cuts store", () => {
     process.env.UPSTASH_REDIS_REST_URL = "https://redis.example.test";
     process.env.UPSTASH_REDIS_REST_TOKEN = "tok";
     expect(storeBackend()).toBe("kv");
+
+    // Incomplete legacy pair + partial upstash pair must NOT count as configured.
+    clearKvEnv();
+    process.env.KV_REST_API_URL = "https://kv.example.test";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "tok";
+    expect(storeBackend()).toBe("file");
   });
 
-  it("seeds KV on first read and persists writes through it", async () => {
-    process.env.KV_REST_API_URL = "https://kv.example.test";
-    process.env.KV_REST_API_TOKEN = "tok";
+  it("seeds KV atomically on first read and persists writes through it", async () => {
+    useKvEnv();
     const db = new Map<string, string>();
-    const fetchMock = mockKvFetch(db);
-    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("fetch", mockKvFetch(db));
 
     const cuts = await listCuts();
     expect(cuts.length).toBe(3);
@@ -68,13 +91,42 @@ describe("cuts store", () => {
     expect(stored.some((c) => c.id === "cut-test")).toBe(true);
   });
 
+  it("retries on CAS conflict so a concurrent write is never lost", async () => {
+    useKvEnv();
+    const db = new Map<string, string>();
+    const now = new Date().toISOString();
+    db.set("editforge:cuts", JSON.stringify([]));
+
+    // Simulate another instance writing between our GET and EVAL — once.
+    let interfered = false;
+    const fetchMock = mockKvFetch(db, {
+      beforeEval: () => {
+        if (interfered) return;
+        interfered = true;
+        db.set(
+          "editforge:cuts",
+          JSON.stringify([{ id: "cut-concurrent", title: "Other writer", status: "ingest", createdAt: now, updatedAt: now }])
+        );
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await upsertCut({ id: "cut-mine", title: "My write", status: "ingest", createdAt: now, updatedAt: now });
+
+    const stored = JSON.parse(db.get("editforge:cuts")!) as { id: string }[];
+    const ids = stored.map((c) => c.id);
+    // Both writes survive: the conflicting one and ours, via retry.
+    expect(ids).toContain("cut-concurrent");
+    expect(ids).toContain("cut-mine");
+  });
+
   it("sends the bearer token on every KV command", async () => {
-    process.env.KV_REST_API_URL = "https://kv.example.test";
-    process.env.KV_REST_API_TOKEN = "secret-token";
+    useKvEnv();
     const fetchMock = mockKvFetch(new Map());
     vi.stubGlobal("fetch", fetchMock);
 
     await listCuts();
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
     for (const call of fetchMock.mock.calls) {
       const init = call[1] as RequestInit;
       expect((init.headers as Record<string, string>).Authorization).toBe("Bearer secret-token");

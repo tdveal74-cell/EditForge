@@ -15,6 +15,14 @@ export type Cut = {
 };
 
 const KV_KEY = "editforge:cuts";
+const MAX_CAS_RETRIES = 5;
+
+// Compare-and-set: only write if the value is unchanged since our read
+// (ARGV[1] = expected current value, '' when the key was absent).
+const CAS_SCRIPT =
+  "local cur = redis.call('GET', KEYS[1]) " +
+  "if (cur == ARGV[1]) or (cur == false and ARGV[1] == '') then " +
+  "redis.call('SET', KEYS[1], ARGV[2]) return 1 end return 0";
 
 // Vercel serverless has a read-only project dir; /tmp is the only writable path (ephemeral per instance).
 const DATA_DIR = process.env.VERCEL
@@ -23,11 +31,16 @@ const DATA_DIR = process.env.VERCEL
 const CUTS_FILE = path.join(DATA_DIR, "cuts.json");
 
 // Vercel KV / Upstash Redis REST credentials. Marketplace stores attach either
-// KV_REST_API_* (Vercel KV naming) or UPSTASH_REDIS_REST_* — accept both.
+// KV_REST_API_* (Vercel KV naming) or UPSTASH_REDIS_REST_* — accept either,
+// but only as a complete url+token pair so schemes never mix.
 function kvCreds(): { url: string; token: string } | null {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
-  return url && token ? { url, token } : null;
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    return { url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN };
+  }
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    return { url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN };
+  }
+  return null;
 }
 
 export function storeBackend(): "kv" | "file" {
@@ -63,34 +76,62 @@ function seedCuts(): Cut[] {
   ];
 }
 
+async function writeFileStore(cuts: Cut[]): Promise<void> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  const tmp = `${CUTS_FILE}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify(cuts, null, 2));
+  await fs.rename(tmp, CUTS_FILE);
+}
+
+async function readFileStore(): Promise<Cut[]> {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  let raw: string;
+  try {
+    raw = await fs.readFile(CUTS_FILE, "utf8");
+  } catch (err) {
+    // Seed only when the file genuinely doesn't exist; a malformed or
+    // unreadable store must surface, never be silently overwritten.
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+    const seed = seedCuts();
+    await writeFileStore(seed);
+    return seed;
+  }
+  return JSON.parse(raw) as Cut[];
+}
+
 async function readAll(): Promise<Cut[]> {
   if (kvCreds()) {
     const raw = (await kvCommand(["GET", KV_KEY])) as string | null;
-    if (raw == null) {
-      const seed = seedCuts();
-      await kvCommand(["SET", KV_KEY, JSON.stringify(seed)]);
-      return seed;
-    }
-    return JSON.parse(raw) as Cut[];
+    if (raw != null) return JSON.parse(raw) as Cut[];
+    // Atomic first-writer-wins seed, then re-read the canonical value.
+    await kvCommand(["SET", KV_KEY, JSON.stringify(seedCuts()), "NX"]);
+    const seeded = (await kvCommand(["GET", KV_KEY])) as string;
+    return JSON.parse(seeded) as Cut[];
   }
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    const raw = await fs.readFile(CUTS_FILE, "utf8");
-    return JSON.parse(raw) as Cut[];
-  } catch {
-    const seed = seedCuts();
-    await fs.writeFile(CUTS_FILE, JSON.stringify(seed, null, 2));
-    return seed;
-  }
+  return readFileStore();
 }
 
-async function writeAll(cuts: Cut[]): Promise<void> {
+/**
+ * Atomically apply a mutation to the cuts list.
+ * KV backend: optimistic concurrency — read, mutate, compare-and-set, retry
+ * on conflict so overlapping serverless requests never lose each other's writes.
+ */
+async function mutate(fn: (cuts: Cut[]) => void): Promise<Cut[]> {
   if (kvCreds()) {
-    await kvCommand(["SET", KV_KEY, JSON.stringify(cuts)]);
-    return;
+    for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
+      const raw = (await kvCommand(["GET", KV_KEY])) as string | null;
+      const cuts = raw == null ? seedCuts() : (JSON.parse(raw) as Cut[]);
+      fn(cuts);
+      const next = JSON.stringify(cuts);
+      const ok = await kvCommand(["EVAL", CAS_SCRIPT, "1", KV_KEY, raw ?? "", next]);
+      if (ok === 1) return cuts;
+    }
+    throw new Error("KV update failed: concurrent-write retries exhausted");
   }
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(CUTS_FILE, JSON.stringify(cuts, null, 2));
+  const cuts = await readFileStore();
+  fn(cuts);
+  await writeFileStore(cuts);
+  return cuts;
 }
 
 export async function listCuts(): Promise<Cut[]> {
@@ -103,19 +144,23 @@ export async function getCut(id: string): Promise<Cut | null> {
 }
 
 export async function upsertCut(cut: Cut): Promise<Cut> {
-  const cuts = await readAll();
-  const i = cuts.findIndex((c) => c.id === cut.id);
-  if (i >= 0) cuts[i] = cut;
-  else cuts.unshift(cut);
-  await writeAll(cuts);
+  await mutate((cuts) => {
+    const i = cuts.findIndex((c) => c.id === cut.id);
+    if (i >= 0) cuts[i] = cut;
+    else cuts.unshift(cut);
+  });
   return cut;
 }
 
 export async function setRubricPass(id: string, pass: boolean): Promise<Cut | null> {
-  const cut = await getCut(id);
-  if (!cut) return null;
-  cut.rubricPass = pass;
-  cut.status = pass ? "review" : "grade";
-  cut.updatedAt = new Date().toISOString();
-  return upsertCut(cut);
+  let updated: Cut | null = null;
+  await mutate((cuts) => {
+    const cut = cuts.find((c) => c.id === id);
+    if (!cut) return;
+    cut.rubricPass = pass;
+    cut.status = pass ? "review" : "grade";
+    cut.updatedAt = new Date().toISOString();
+    updated = cut;
+  });
+  return updated;
 }

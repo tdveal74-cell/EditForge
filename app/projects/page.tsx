@@ -47,7 +47,7 @@ export default function ProjectsPage() {
       <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">Projects</p>
       <h1 className="mt-2 text-3xl font-semibold text-navy">Cuts</h1>
       <p className="mt-2 text-sm text-navy/65">
-        Local JSON store. Rubric pass required before export jobs.
+        Durable store when Redis is configured; otherwise local JSON. Rubric pass required before export jobs.
       </p>
 
       <form onSubmit={addCut} className="mt-8 flex flex-col gap-3 sm:flex-row">

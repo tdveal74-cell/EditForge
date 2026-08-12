@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 import { GradePreview } from "@/components/media/GradePreview";
+import { REFERENCE_STILL } from "@/lib/mediaLibrary";
 
 // Mirrors lib/grade.ts isRestraintGrade: the four signed params share one bound,
 // vignette gets its own. Kept beside the sliders so the two cannot disagree.
@@ -74,7 +75,7 @@ export default function ColorPage() {
       {/* The grade is shown before it is described. A number that claims to be
           subtle and an image that is not would otherwise never meet. */}
       <div className="mt-10">
-        <GradePreview grade={g} />
+        <GradePreview grade={g} src={REFERENCE_STILL.src} />
       </div>
 
       <Card className="mt-6 space-y-5 p-5">

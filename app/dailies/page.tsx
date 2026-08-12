@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusLabel, toneFor } from "@/components/ui/status-dot";
 import { Section } from "@/components/ui/section";
 import { ThumbnailGrid } from "@/components/media/Viewer";
+import { REFERENCE_STILL } from "@/lib/mediaLibrary";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/field";
 
@@ -69,10 +70,14 @@ export default function DailiesPage() {
           appear per roll as media lands; until then each slot says so. */}
       <Section title="Contact sheet" count={rolls?.length}>
         <ThumbnailGrid
+          // The seeded A-cam rolls are the ones this footage came off, so they
+          // get the real frame; anything ingested later shows its labelled slug
+          // until a poster exists for it.
           shots={(rolls ?? []).map((r) => ({
             id: r.id,
             label: `${r.camera} · ${r.scenes}`,
             status: r.status,
+            poster: r.camera === "A-cam" ? REFERENCE_STILL.src : undefined,
           }))}
         />
       </Section>

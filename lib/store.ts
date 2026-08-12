@@ -14,7 +14,10 @@ export type Cut = {
   updatedAt: string;
 };
 
-const DATA_DIR = path.join(process.cwd(), ".data");
+// Vercel serverless has a read-only project dir; /tmp is the only writable path (ephemeral per instance).
+const DATA_DIR = process.env.VERCEL
+  ? path.join("/tmp", "editforge-data")
+  : path.join(process.cwd(), ".data");
 const CUTS_FILE = path.join(DATA_DIR, "cuts.json");
 
 async function ensure() {

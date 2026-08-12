@@ -40,18 +40,23 @@ export default function TimelinePage() {
       />
 
       <div className="mt-10 overflow-x-auto pb-2">
-        <div style={{ width: dur * scale + 8 }}>
-          {/* Ruler */}
-          <div className="relative mb-1 h-4" style={{ width: dur * scale }}>
-            {ticks.map((t) => (
-              <span
-                key={t}
-                className="absolute top-0 font-mono text-[10px] tabular-nums text-navy/35"
-                style={{ left: t * scale }}
-              >
-                {t}s
-              </span>
-            ))}
+        {/* w-max so the row sizes to label gutter + track, whatever the scale. */}
+        <div className="w-max pr-2">
+          {/* Ruler — sits in the same flex row as the tracks so its ticks line
+              up with the gridlines instead of floating a label-width to the left. */}
+          <div className="mb-1 flex items-center gap-3">
+            <span aria-hidden className="w-12 shrink-0" />
+            <div className="relative h-4" style={{ width: dur * scale }}>
+              {ticks.map((t) => (
+                <span
+                  key={t}
+                  className="absolute top-0 font-mono text-[10px] tabular-nums text-navy/35"
+                  style={{ left: t * scale }}
+                >
+                  {t}s
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="space-y-2">

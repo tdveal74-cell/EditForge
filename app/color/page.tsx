@@ -6,12 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/PageHeader";
 
+// Mirrors lib/grade.ts isRestraintGrade: the four signed params share one bound,
+// vignette gets its own. Kept beside the sliders so the two cannot disagree.
+const SIGNED_LIMIT = 0.25;
+const VIGNETTE_LIMIT = 0.35;
+
 function Slider({
   label,
   value,
   min,
   max,
   step,
+  limit,
   onChange,
 }: {
   label: string;
@@ -19,10 +25,12 @@ function Slider({
   min: number;
   max: number;
   step: number;
+  /** This parameter's own envelope bound — vignette is allowed further than the rest. */
+  limit: number;
   onChange: (n: number) => void;
 }) {
-  // Envelope is ±0.25 on the signed params; show how much headroom is left.
-  const hot = Math.abs(value) > 0.25;
+  // Must match isRestraintGrade per parameter, or the readout contradicts the summary.
+  const hot = Math.abs(value) > limit;
   return (
     <label className="block">
       <span className="flex items-baseline justify-between text-sm">
@@ -63,11 +71,11 @@ export default function ColorPage() {
       />
 
       <Card className="mt-10 space-y-5 p-5">
-        <Slider label="Exposure" value={g.exposure} min={-0.5} max={0.5} step={0.01} onChange={(v) => set("exposure", v)} />
-        <Slider label="Contrast" value={g.contrast} min={-0.5} max={0.5} step={0.01} onChange={(v) => set("contrast", v)} />
-        <Slider label="Saturation" value={g.saturation} min={-0.5} max={0.5} step={0.01} onChange={(v) => set("saturation", v)} />
-        <Slider label="Temperature" value={g.temperature} min={-0.5} max={0.5} step={0.01} onChange={(v) => set("temperature", v)} />
-        <Slider label="Vignette" value={g.vignette} min={0} max={0.5} step={0.01} onChange={(v) => set("vignette", v)} />
+        <Slider label="Exposure" value={g.exposure} min={-0.5} max={0.5} step={0.01} limit={SIGNED_LIMIT} onChange={(v) => set("exposure", v)} />
+        <Slider label="Contrast" value={g.contrast} min={-0.5} max={0.5} step={0.01} limit={SIGNED_LIMIT} onChange={(v) => set("contrast", v)} />
+        <Slider label="Saturation" value={g.saturation} min={-0.5} max={0.5} step={0.01} limit={SIGNED_LIMIT} onChange={(v) => set("saturation", v)} />
+        <Slider label="Temperature" value={g.temperature} min={-0.5} max={0.5} step={0.01} limit={SIGNED_LIMIT} onChange={(v) => set("temperature", v)} />
+        <Slider label="Vignette" value={g.vignette} min={0} max={0.5} step={0.01} limit={VIGNETTE_LIMIT} onChange={(v) => set("vignette", v)} />
       </Card>
 
       <div

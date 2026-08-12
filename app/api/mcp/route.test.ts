@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
 import { GET, POST } from "./route";
+// Safe as a static import despite the data dir being set below: the durable
+// layer resolves its path per call, not at module load.
+import { setRubricPass, upsertCut } from "@/lib/store";
 
 const TOKEN = "test-token-value";
 
@@ -176,22 +179,72 @@ describe("MCP tools", () => {
     expect(partial.parsed.missing.length).toBeGreaterThan(0);
   });
 
-  it("refuses a master export plan without a rubric pass", async () => {
+  it("refuses a master export plan that names no cut", async () => {
     const blocked = await callTool("plan_transcode", {
       kind: "export",
       inputPath: "in.mp4",
       outputPath: "master.mp4",
     });
     expect(blocked.parsed.allowed).toBe(false);
-    expect(blocked.parsed.reason).toMatch(/rubric/i);
+    expect(blocked.parsed.reason).toMatch(/must name the cut/i);
+  });
 
-    const allowed = await callTool("plan_transcode", {
+  it("IGNORES a rubricPass sent by the assistant", async () => {
+    // This tool used to take `rubricPass` and hand it to the gate, so an
+    // assistant could authorise its own master export by asserting the cut had
+    // passed. Same hole the HTTP route had, on the surface an assistant drives.
+    await upsertCut({
+      id: "mcp-unapproved",
+      title: "Unapproved",
+      status: "review",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    const res = await callTool("plan_transcode", {
       kind: "export",
       inputPath: "in.mp4",
       outputPath: "master.mp4",
+      cutId: "mcp-unapproved",
       rubricPass: true,
     });
-    expect(allowed.parsed.allowed).toBe(true);
+    expect(res.parsed.allowed).toBe(false);
+    expect(res.parsed.reason).toMatch(/no recorded rubric pass/i);
+  });
+
+  it("allows the export once the pass is recorded on that cut", async () => {
+    const now = new Date().toISOString();
+    await upsertCut({ id: "mcp-approved", title: "Approved", status: "review", createdAt: now, updatedAt: now });
+    await setRubricPass("mcp-approved", true);
+
+    const res = await callTool("plan_transcode", {
+      kind: "export",
+      inputPath: "in.mp4",
+      outputPath: "master.mp4",
+      cutId: "mcp-approved",
+    });
+    expect(res.parsed.allowed).toBe(true);
+    expect(res.parsed.cut.rubricPass).toBe(true);
+  });
+
+  it("404s a cut that is not in the store rather than defaulting to permitted", async () => {
+    const res = await callTool("plan_transcode", {
+      kind: "export",
+      inputPath: "in.mp4",
+      outputPath: "master.mp4",
+      cutId: "ghost",
+    });
+    expect(res.parsed.allowed).toBe(false);
+    expect(res.parsed.reason).toMatch(/no cut/i);
+  });
+
+  it("leaves proxies ungated", async () => {
+    const res = await callTool("plan_transcode", {
+      kind: "proxy",
+      inputPath: "in.mp4",
+      outputPath: "proxy.mp4",
+    });
+    expect(res.parsed.allowed).toBe(true);
   });
 
   it("runs a job through the mock provider and dedupes a repeated brief", async () => {

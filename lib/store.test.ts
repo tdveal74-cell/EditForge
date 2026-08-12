@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCut, listCuts, setRubricPass, storeBackend, upsertCut } from "./store";
+import { getCut, listCuts, probeStore, setRubricPass, storeBackend, upsertCut } from "./store";
 
 const KV_ENV = ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
 
@@ -25,6 +25,8 @@ function mockKvFetch(db: Map<string, string>, hooks?: { beforeEval?: () => void 
       const [, key, value, flag] = cmd;
       if (flag === "NX" && db.has(key)) result = null;
       else db.set(key, value);
+    } else if (op === "PING") {
+      result = "PONG";
     } else if (op === "EVAL") {
       hooks?.beforeEval?.();
       const [, , , key, expected, next] = cmd;
@@ -118,6 +120,24 @@ describe("cuts store", () => {
     // Both writes survive: the conflicting one and ours, via retry.
     expect(ids).toContain("cut-concurrent");
     expect(ids).toContain("cut-mine");
+  });
+
+  it("probes the live backend rather than trusting env presence", async () => {
+    useKvEnv();
+    vi.stubGlobal("fetch", mockKvFetch(new Map()));
+    await expect(probeStore()).resolves.toEqual({ backend: "kv", reachable: true });
+
+    // Complete but rejected credentials must report unreachable, not "configured".
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 401, json: async () => ({}) }) as Response)
+    );
+    const bad = await probeStore();
+    expect(bad.backend).toBe("kv");
+    expect(bad.reachable).toBe(false);
+    expect(bad.error).toContain("401");
+    // The failure message must not leak the credential.
+    expect(bad.error).not.toContain("secret-token");
   });
 
   it("sends the bearer token on every KV command", async () => {

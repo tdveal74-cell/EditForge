@@ -66,23 +66,24 @@ redeploy of the existing build.
 curl -s https://editforge.vercel.app/api/health
 ```
 
-The `store` field is the source of truth:
+Two fields, and both matter:
 
 ```json
-{ "status": "healthy", "service": "editforge", "store": "kv" }
+{ "status": "healthy", "store": "kv", "storeReachable": true }
 ```
 
-`"store": "file"` means the credentials are not reaching the function — check that the
-resource is connected to the **Production** environment and that a redeploy has happened
-since.
+- `store` — which backend the env vars **select**. `"file"` means the credentials aren't
+  reaching the function: check the resource is connected to the **Production**
+  environment and that a redeploy has happened since.
+- `storeReachable` — whether that backend actually **answered**. The endpoint issues a
+  live `PING` (Redis) or a directory check (file), so a complete-but-invalid, expired, or
+  unreachable credential pair reports `"store": "kv"` with `storeReachable: false`,
+  `status: "degraded"`, HTTP 503, and a `storeError` string. Setup is only done when both
+  `store` is `kv` and `storeReachable` is `true`.
 
-Round-trip the real path once the store reads `kv`:
-
-```bash
-curl -s -X POST https://editforge.vercel.app/api/cuts \
-  -H 'Content-Type: application/json' -d '{"title":"durability check"}'
-curl -s https://editforge.vercel.app/api/cuts   # the cut is still listed later, from any instance
-```
+The probe is read-only and writes nothing, so it is safe to run against production as
+often as needed. Avoid `POST /api/cuts` as a smoke test — there is no delete endpoint, so
+every test cut persists in the shared store forever.
 
 ## Secrets
 

@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
-import { storeBackend } from "@/lib/store";
+import { probeStore } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 
-export function GET() {
-  return NextResponse.json({
-    status: "healthy",
-    service: "editforge",
-    version: "0.1.0",
-    standard: "ultra-meta-supreme-flagship-aaa",
-    store: storeBackend(),
-  });
+export async function GET() {
+  const store = await probeStore();
+  return NextResponse.json(
+    {
+      status: store.reachable ? "healthy" : "degraded",
+      service: "editforge",
+      version: "0.1.0",
+      standard: "ultra-meta-supreme-flagship-aaa",
+      store: store.backend,
+      storeReachable: store.reachable,
+      ...(store.error ? { storeError: store.error } : {}),
+    },
+    { status: store.reachable ? 200 : 503 }
+  );
 }

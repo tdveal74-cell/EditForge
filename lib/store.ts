@@ -51,11 +51,13 @@ export function storeBackend(): "kv" | "file" {
  * Credential variables a Redis/KV provider might attach. Only this fixed list is
  * ever inspected, and only for presence — values are never read out or returned.
  */
+const REST_PAIRS = [
+  { url: "KV_REST_API_URL", token: "KV_REST_API_TOKEN" },
+  { url: "UPSTASH_REDIS_REST_URL", token: "UPSTASH_REDIS_REST_TOKEN" },
+] as const;
+
 const KNOWN_STORE_ENV = [
-  "KV_REST_API_URL",
-  "KV_REST_API_TOKEN",
-  "UPSTASH_REDIS_REST_URL",
-  "UPSTASH_REDIS_REST_TOKEN",
+  ...REST_PAIRS.flatMap((p) => [p.url, p.token]),
   "REDIS_URL",
   "KV_URL",
 ] as const;
@@ -71,12 +73,17 @@ export function storeEnvPresent(): string[] {
  */
 export function storeFallbackReason(): string | null {
   if (kvCreds()) return null;
-  const present = storeEnvPresent();
-  if (present.length === 0) return null;
-  const hasRestUrl = present.some((k) => k.endsWith("_REST_API_URL") || k.endsWith("_REST_URL"));
-  const hasRestToken = present.some((k) => k.endsWith("_REST_API_TOKEN") || k.endsWith("_REST_TOKEN"));
-  if (hasRestUrl && !hasRestToken) return "REST URL present without its token — attach the matching token";
-  if (hasRestToken && !hasRestUrl) return "REST token present without its URL — attach the matching URL";
+  const present = new Set(storeEnvPresent());
+  if (present.size === 0) return null;
+
+  // Evaluate each scheme's pair on its own. Checking "any URL" against "any
+  // token" would call a crossed pair (one variable from each scheme) complete
+  // and then blame the wrong thing.
+  const partial = REST_PAIRS.filter((p) => present.has(p.url) !== present.has(p.token));
+  if (partial.length > 0) {
+    const missing = partial.map((p) => (present.has(p.url) ? p.token : p.url));
+    return `Incomplete REST credentials — missing ${missing.join(" and ")}`;
+  }
   return "A Redis connection string is attached but no HTTP REST credentials; this app speaks the Upstash-compatible REST API";
 }
 

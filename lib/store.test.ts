@@ -179,11 +179,25 @@ describe("cuts store", () => {
     // A half pair names the missing half.
     clearKvEnv();
     process.env.KV_REST_API_URL = "https://kv.example.test";
-    expect(storeFallbackReason()).toContain("token");
+    expect(storeFallbackReason()).toContain("KV_REST_API_TOKEN");
 
     // Fully configured: no fallback to explain.
     process.env.KV_REST_API_TOKEN = "tok";
     expect(storeFallbackReason()).toBeNull();
+  });
+
+  it("names both gaps when credentials are crossed between schemes", () => {
+    clearKvEnv();
+    // One variable from each scheme: neither pair is complete, and blaming
+    // "no REST credentials" would be wrong — both halves exist, just mismatched.
+    process.env.KV_REST_API_URL = "https://kv.example.test";
+    process.env.UPSTASH_REDIS_REST_TOKEN = "tok";
+
+    expect(storeBackend()).toBe("file");
+    const reason = storeFallbackReason()!;
+    expect(reason).toContain("KV_REST_API_TOKEN");
+    expect(reason).toContain("UPSTASH_REDIS_REST_URL");
+    expect(reason).not.toContain("connection string");
   });
 
   it("sends the bearer token on every KV command", async () => {

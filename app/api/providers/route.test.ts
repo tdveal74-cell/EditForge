@@ -1,0 +1,53 @@
+import { afterEach, describe, expect, it } from "vitest";
+import { GET } from "./route";
+
+const SECRET = "sk-super-secret-value-9999";
+
+afterEach(() => {
+  delete process.env.RUNWAY_API_KEY;
+});
+
+describe("provider readiness endpoint", () => {
+  it("reports the credential name and whether it is set, never the value", async () => {
+    process.env.RUNWAY_API_KEY = SECRET;
+
+    const res = await GET();
+    const body = await res.json();
+    const raw = JSON.stringify(body);
+
+    // The whole point of this endpoint is that it is safe to call from a browser.
+    expect(raw).not.toContain(SECRET);
+    expect(raw).toContain("RUNWAY_API_KEY");
+
+    const runway = body.providers.find((p: { id: string }) => p.id === "runway");
+    expect(runway.credentialSet).toBe(true);
+    expect(runway.billable).toBe(true);
+  });
+
+  it("marks a provider without its credential as not billable", async () => {
+    delete process.env.RUNWAY_API_KEY;
+
+    const body = await (await GET()).json();
+    const runway = body.providers.find((p: { id: string }) => p.id === "runway");
+    expect(runway.credentialSet).toBe(false);
+    expect(runway.billable).toBe(false);
+    // The live path exists; it is the key that is missing.
+    expect(runway.wired).toBe(true);
+  });
+
+  it("marks a credentialled provider with no live path as wired-false, not billable", async () => {
+    process.env.KLING_API_KEY = "tok";
+    const body = await (await GET()).json();
+    const kling = body.providers.find((p: { id: string }) => p.id === "kling");
+    expect(kling.wired).toBe(false);
+    expect(kling.billable).toBe(false);
+    delete process.env.KLING_API_KEY;
+  });
+
+  it("never marks the offline provider billable", async () => {
+    const body = await (await GET()).json();
+    const mock = body.providers.find((p: { id: string }) => p.id === "mock");
+    expect(mock.billable).toBe(false);
+    expect(mock.wired).toBe(true);
+  });
+});

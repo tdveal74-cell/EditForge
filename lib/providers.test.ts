@@ -4,6 +4,7 @@ import {
   hasCredentials,
   normalizeState,
   pollProvider,
+  providerChoicesFor,
   providersFor,
   submitToProvider,
 } from "./providers";
@@ -141,5 +142,21 @@ describe("provider boundary", () => {
 
   it("knows nothing about an unknown provider", () => {
     expect(findProvider("nope")).toBeUndefined();
+  });
+
+  it("offers the offline path for every kind a picker can be built for", async () => {
+    for (const kind of ["gen-video", "voice", "avatar"] as const) {
+      const ids = providerChoicesFor(kind).map((p) => p.id);
+      expect(ids).toContain("mock");
+      // Listed once, and last — the real providers lead.
+      expect(ids.filter((i) => i === "mock")).toHaveLength(1);
+      expect(ids[ids.length - 1]).toBe("mock");
+
+      // Anything a picker offers must be something the boundary will accept.
+      for (const id of ids) {
+        const res = await submitToProvider({ provider: id, kind, prompt: "x", idempotencyKey: `pick-${kind}-${id}` });
+        if (!res.ok) expect(res.error).not.toContain("does not serve");
+      }
+    }
   });
 });

@@ -51,6 +51,18 @@ export function providersFor(kind: JobKind): ProviderSpec[] {
   return PROVIDERS.filter((p) => p.kind === kind);
 }
 
+/**
+ * Choices for a UI picker: the providers that serve this kind, then the offline
+ * path, which serves every kind. Built from the same registry the boundary
+ * dispatches on, so a picker cannot offer a provider that would be refused.
+ */
+export function providerChoicesFor(kind: JobKind): ProviderSpec[] {
+  return [
+    ...PROVIDERS.filter((p) => p.kind === kind && p.id !== "mock"),
+    ...PROVIDERS.filter((p) => p.id === "mock"),
+  ];
+}
+
 /** True when this provider could actually run live right now. */
 export function hasCredentials(id: string): boolean {
   const p = findProvider(id);

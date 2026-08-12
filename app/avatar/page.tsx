@@ -7,8 +7,11 @@ import { Label, Select, Textarea, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { StatusLabel, toneFor } from "@/components/ui/status-dot";
 import { PageHeader } from "@/components/PageHeader";
+import { JobRunner } from "@/components/JobRunner";
+import { providerChoicesFor } from "@/lib/providers";
 
 const DESIGN_SOURCES = ["signal", "monochrome", "claude", "mat", "blockframe"];
+const AVATAR_PROVIDERS = providerChoicesFor("avatar").map((p) => ({ id: p.id, label: p.label }));
 
 export default function AvatarPage() {
   const [prompt, setPrompt] = useState(
@@ -54,12 +57,21 @@ export default function AvatarPage() {
       </div>
 
       <div className="mt-4">
-        <Button type="button" onClick={plan}>
+        <Button type="button" variant="secondary" onClick={plan}>
           Build HyperFrames plan
         </Button>
       </div>
 
       {out && <Output>{out}</Output>}
+
+      <JobRunner
+        kind="avatar"
+        label={`Avatar — ${design}`}
+        prompt={prompt}
+        brief={{ prompt, designSource: design }}
+        options={{ designSource: design }}
+        providers={AVATAR_PROVIDERS}
+      />
 
       <Section title="Provider flow">
         <ol className="space-y-1.5">

@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Label, Select, Input, Textarea, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { PageHeader } from "@/components/PageHeader";
+import { JobRunner } from "@/components/JobRunner";
+import { providerChoicesFor } from "@/lib/providers";
+
+const GEN_JOB_PROVIDERS = providerChoicesFor("gen-video").map((p) => ({ id: p.id, label: p.label }));
 
 export default function GenVideoPage() {
   const [provider, setProvider] = useState("runway");
@@ -86,12 +90,28 @@ export default function GenVideoPage() {
       </div>
 
       <div className="mt-4">
-        <Button type="button" onClick={plan}>
+        <Button type="button" variant="secondary" onClick={plan}>
           Build gen plan
         </Button>
       </div>
 
       {out && <Output>{out}</Output>}
+
+      <JobRunner
+        kind="gen-video"
+        label={`Gen video — ${aspect} ${quality}`}
+        prompt={prompt}
+        brief={{ prompt, aspect, quality, durationSec }}
+        options={{ aspect, quality, durationSec, mode: "text-to-video" }}
+        providers={GEN_JOB_PROVIDERS}
+        // Broadcast-intent output goes to master, so it inherits the rubric gate.
+        requiresRubricPass={quality === "broadcast-intent"}
+        blockedReason={
+          quality === "broadcast-intent"
+            ? "Broadcast-intent is master-class work — record a rubric pass first, then run."
+            : undefined
+        }
+      />
 
       <Section title="Quality bar" count={GEN_QUALITY_BAR.length}>
         <ul className="space-y-1.5">

@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Label, Select, Textarea, Output } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import { JobRunner } from "@/components/JobRunner";
+import { providerChoicesFor } from "@/lib/providers";
+
+const VOICE_PROVIDERS = providerChoicesFor("voice").map((p) => ({ id: p.id, label: p.label }));
 
 export default function VoicePage() {
   const [voiceId, setVoiceId] = useState(SAMPLE_VOICES[0].id);
@@ -58,12 +62,26 @@ export default function VoicePage() {
       </div>
 
       <div className="mt-4">
-        <Button type="button" onClick={plan}>
+        <Button type="button" variant="secondary" onClick={plan}>
           Build voice plan
         </Button>
       </div>
 
       {out && <Output>{out}</Output>}
+
+      <JobRunner
+        kind="voice"
+        label={`VO — ${voice.name}`}
+        prompt={text}
+        brief={{ voiceId, text }}
+        options={{ voiceId }}
+        providers={VOICE_PROVIDERS}
+        blockedReason={
+          voice.kind === "cloned"
+            ? "Cloned voice: attach the consent record and licence before running. The gate is the point."
+            : undefined
+        }
+      />
     </main>
   );
 }

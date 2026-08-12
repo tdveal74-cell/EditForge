@@ -2,14 +2,14 @@
 
 Production runs on Vercel at **https://editforge.vercel.app**.
 
-Two setup steps require dashboard/CLI access with an authenticated Vercel account — they
-cannot be done from a headless agent session. Both are recorded here so the state of the
-deployment is never only in chat history.
+**Both setup steps below are done** (2026-08-12): the project is git-connected and a
+Redis store is live. They are kept here as the record of how the deployment is wired,
+and as the runbook for rebuilding it elsewhere.
 
-## 1. Connect the project to GitHub (push-to-deploy)
+## 1. Connect the project to GitHub (push-to-deploy) — done
 
-Until this is done, deployments are **file-uploaded**, not git-triggered: pushing to
-`main` does not redeploy.
+Without this, deployments are **file-uploaded**, not git-triggered: pushing to `main`
+does not redeploy.
 
 **Dashboard:** Vercel → project `editforge` → Settings → Git → *Connect Git Repository* →
 GitHub → `tdveal74-cell/EditForge`. Production branch: `main`.
@@ -23,7 +23,7 @@ vercel git connect
 Once connected: pushes to `main` deploy to production, and pull requests get preview
 deployments automatically.
 
-## 2. Provision the durable store (Redis / KV)
+## 2. Provision the durable store (Redis / KV) — done
 
 `lib/store.ts` speaks the Upstash-compatible Redis REST API. It needs **one complete
 credential pair**, either naming scheme:
@@ -35,6 +35,13 @@ credential pair**, either naming scheme:
 
 A half-set pair is ignored on purpose — mixing a URL from one scheme with a token from
 the other would authenticate against the wrong host.
+
+**A connection string is not enough.** A store that only attaches `REDIS_URL` (a TCP
+`rediss://` string, which is what Vercel's native Redis and several marketplace options
+provide by default) will *not* activate this backend — the client speaks HTTP REST, not
+the Redis wire protocol. `/api/health` names this case explicitly in
+`storeFallbackReason`. Pick a store that exposes REST credentials, or attach them
+alongside the connection string.
 
 **Dashboard:** Vercel → Storage → *Create Database* → Redis (Upstash, via Marketplace) →
 create, then **Connect Project** → `editforge`, environments: Production (+ Preview and

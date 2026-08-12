@@ -10,4 +10,6 @@ pnpm install && pnpm test && pnpm dev
 
 Start at **`/studio`**.
 
-Docs: `docs/STUDIO_OS.md` · `docs/FLAGSHIP_SPEC.md` · `docs/HARDWARE.md` · `docs/LONGFORM.md` · `docs/GEN_VIDEO.md` · `docs/AI_MEDIA.md` · `COMPLETION.md`
+Live: **https://editforge.vercel.app** — see `docs/DEPLOY.md` for git-connect + durable store setup.
+
+Docs: `docs/STUDIO_OS.md` · `docs/FLAGSHIP_SPEC.md` · `docs/HARDWARE.md` · `docs/DEPLOY.md` · `docs/LONGFORM.md` · `docs/GEN_VIDEO.md` · `docs/AI_MEDIA.md` · `COMPLETION.md`

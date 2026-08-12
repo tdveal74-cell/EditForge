@@ -54,6 +54,26 @@ Until that variable is set, the write tools are not listed and not callable **by
 anyone**. It fails closed on purpose: no token configured means no write access,
 rather than open write access.
 
+### When the client cannot send a header
+
+Some MCP clients only accept a URL — there is no field to put an
+`Authorization` header in. For those, the same token works as a query
+parameter:
+
+```
+https://editforge.vercel.app/api/mcp?key=YOUR_TOKEN
+```
+
+Paste that as the whole connector URL and it authenticates exactly as the
+header does.
+
+This is deliberately the weaker option. URLs are recorded in server and proxy
+logs where headers usually are not, so a token sent this way should be treated
+as more exposed and rotated more readily. Prefer the header wherever the client
+offers one. The URL token authenticates **only** `/api/mcp` — it will not
+unlock the rest of the app, so it cannot become a shareable link to a private
+studio.
+
 ### Interaction with the access gate
 
 `EDITFORGE_ACCESS_PASSWORD` makes the whole deployment private, and that

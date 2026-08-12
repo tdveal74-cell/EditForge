@@ -48,6 +48,39 @@ export function storeBackend(): "kv" | "file" {
 }
 
 /**
+ * Credential variables a Redis/KV provider might attach. Only this fixed list is
+ * ever inspected, and only for presence — values are never read out or returned.
+ */
+const KNOWN_STORE_ENV = [
+  "KV_REST_API_URL",
+  "KV_REST_API_TOKEN",
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
+  "REDIS_URL",
+  "KV_URL",
+] as const;
+
+/** Names (never values) of known store credentials present in the environment. */
+export function storeEnvPresent(): string[] {
+  return KNOWN_STORE_ENV.filter((k) => Boolean(process.env[k]));
+}
+
+/**
+ * Human-readable reason the file backend is in use despite a store being attached.
+ * Returns null when Redis is active or nothing store-related is configured at all.
+ */
+export function storeFallbackReason(): string | null {
+  if (kvCreds()) return null;
+  const present = storeEnvPresent();
+  if (present.length === 0) return null;
+  const hasRestUrl = present.some((k) => k.endsWith("_REST_API_URL") || k.endsWith("_REST_URL"));
+  const hasRestToken = present.some((k) => k.endsWith("_REST_API_TOKEN") || k.endsWith("_REST_TOKEN"));
+  if (hasRestUrl && !hasRestToken) return "REST URL present without its token — attach the matching token";
+  if (hasRestToken && !hasRestUrl) return "REST token present without its URL — attach the matching URL";
+  return "A Redis connection string is attached but no HTTP REST credentials; this app speaks the Upstash-compatible REST API";
+}
+
+/**
  * Liveness probe for the configured backend.
  * `storeBackend()` only reports which backend is *selected* from env; this
  * actually reaches it, so invalid, expired, or unreachable credentials are

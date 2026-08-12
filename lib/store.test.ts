@@ -1,7 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getCut, listCuts, probeStore, setRubricPass, storeBackend, upsertCut } from "./store";
+import {
+  getCut,
+  listCuts,
+  probeStore,
+  setRubricPass,
+  storeBackend,
+  storeEnvPresent,
+  storeFallbackReason,
+  upsertCut,
+} from "./store";
 
-const KV_ENV = ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
+const KV_ENV = [
+  "KV_REST_API_URL",
+  "KV_REST_API_TOKEN",
+  "UPSTASH_REDIS_REST_URL",
+  "UPSTASH_REDIS_REST_TOKEN",
+  "REDIS_URL",
+  "KV_URL",
+];
 
 function clearKvEnv() {
   for (const k of KV_ENV) delete process.env[k];
@@ -138,6 +154,36 @@ describe("cuts store", () => {
     expect(bad.error).toContain("401");
     // The failure message must not leak the credential.
     expect(bad.error).not.toContain("secret-token");
+  });
+
+  it("reports which credential names are present, never their values", () => {
+    clearKvEnv();
+    expect(storeEnvPresent()).toEqual([]);
+
+    process.env.REDIS_URL = "rediss://user:hunter2@example.test:6379";
+    const present = storeEnvPresent();
+    expect(present).toEqual(["REDIS_URL"]);
+    expect(present.join(" ")).not.toContain("hunter2");
+  });
+
+  it("explains why a connection-string-only Redis does not activate the KV backend", () => {
+    clearKvEnv();
+    // Nothing attached at all: no store, so nothing to explain.
+    expect(storeFallbackReason()).toBeNull();
+
+    // TCP connection string only — the common Vercel Redis / non-REST case.
+    process.env.REDIS_URL = "rediss://example.test:6379";
+    expect(storeBackend()).toBe("file");
+    expect(storeFallbackReason()).toContain("REST API");
+
+    // A half pair names the missing half.
+    clearKvEnv();
+    process.env.KV_REST_API_URL = "https://kv.example.test";
+    expect(storeFallbackReason()).toContain("token");
+
+    // Fully configured: no fallback to explain.
+    process.env.KV_REST_API_TOKEN = "tok";
+    expect(storeFallbackReason()).toBeNull();
   });
 
   it("sends the bearer token on every KV command", async () => {

@@ -1,6 +1,6 @@
 # REPOSITORY_STATUS — EditForge
 
-**Updated:** 2026-08-11
+**Updated:** 2026-08-12
 
 | Field | Value |
 |-------|--------|
@@ -13,3 +13,5 @@
 | Required checks | `.github/workflows/ci.yml` |
 | Entry points | `npm install && npm test && npm run build && npm run dev` · `/studio` |
 | Quality gate | Master export blocked without rubric pass |
+| Design system | AAA flagship tokens + primitives (`docs/FLAGSHIP_SPEC.md`, `components/ui/`) — Button/Card/Badge/PageHeader, a11y floor WCAG 2.2 AA |
+| Hardware spec | `lib/hardware.ts` + `/hardware` + `docs/HARDWARE.md` — suite classes, storage 3-2-1, farm; reference classes, not SKUs |

@@ -11,6 +11,9 @@ Studio OS code is **complete** for local run + plan APIs.
 - [x] Export, jobs, presets, archive, collab
 - [x] Long-form chapters + stitch plan
 - [x] Flagship tokens + Nav
+- [x] AAA design system: full token ramps, elevation, motion, a11y floor (2026-08-12)
+- [x] Shared primitives: Button · Card · Badge · PageHeader
+- [x] Hardware reference tier: `lib/hardware.ts` · `/hardware` · `docs/HARDWARE.md`
 
 ### AI media (plan + keys)
 - [x] Voice (ElevenLabs-class)
@@ -22,7 +25,7 @@ Studio OS code is **complete** for local run + plan APIs.
 - [x] NLE · mix · VFX engine · MAM · render farm
 
 ### Tests authored
-- [x] restraint · ffmpeg · grade · longform
+- [x] restraint · ffmpeg · grade · longform · jobs · genvideo · hardware
 
 ### Governance (2026-08-11)
 - [x] `REPOSITORY_STATUS.md`

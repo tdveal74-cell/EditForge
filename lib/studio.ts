@@ -38,6 +38,7 @@ export const STUDIO_MODULES: StudioModule[] = [
   { id: "presets", dept: "Brand", label: "Lane presets", href: "/presets", status: "operational", studioRole: "TSWS lanes" },
   { id: "archive", dept: "Archive", label: "Archive", href: "/archive", status: "operational", studioRole: "Cold checklist" },
   { id: "collab", dept: "Studio", label: "Collaboration", href: "/collab", status: "operational", studioRole: "Roles" },
+  { id: "hardware", dept: "Infrastructure", label: "Hardware reference", href: "/hardware", status: "operational", studioRole: "Suite specs · storage · farm" },
 ];
 
 export function modulesByDept(): Record<string, StudioModule[]> {

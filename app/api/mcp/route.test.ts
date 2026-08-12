@@ -51,6 +51,15 @@ describe("MCP transport", () => {
     expect(body.result.capabilities.tools).toBeTruthy();
   });
 
+  it("answers in the client's protocol revision when it can speak it", async () => {
+    const older = await (await POST(rpc("initialize", { protocolVersion: "2024-11-05" }))).json();
+    expect(older.result.protocolVersion).toBe("2024-11-05");
+
+    // An unknown revision gets ours, rather than an echo of something we cannot speak.
+    const unknown = await (await POST(rpc("initialize", { protocolVersion: "1999-01-01" }))).json();
+    expect(unknown.result.protocolVersion).toBe("2025-06-18");
+  });
+
   it("answers ping and acknowledges notifications without a body", async () => {
     expect((await (await POST(rpc("ping"))).json()).result).toEqual({});
     const notified = await POST(rpc("notifications/initialized"));

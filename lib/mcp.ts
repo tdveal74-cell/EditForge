@@ -20,6 +20,19 @@ import type { JobKind } from "./jobs";
 export const PROTOCOL_VERSION = "2025-06-18";
 export const SERVER_INFO = { name: "editforge", version: "1.0.0" };
 
+/**
+ * Revisions this server can speak. Nothing here uses a feature that differs
+ * between them — it is plain tool listing and calling — so a client pinned to
+ * an older revision is answered in its own version rather than being handed a
+ * newer one it may refuse.
+ */
+const SUPPORTED_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+export function negotiateVersion(requested?: unknown): string {
+  const asked = typeof requested === "string" ? requested : "";
+  return SUPPORTED_VERSIONS.includes(asked) ? asked : PROTOCOL_VERSION;
+}
+
 export type Tool = {
   name: string;
   description: string;

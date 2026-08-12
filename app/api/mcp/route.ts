@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PROTOCOL_VERSION, SERVER_INFO, findTool, toolsFor } from "@/lib/mcp";
+import { SERVER_INFO, findTool, negotiateVersion, toolsFor } from "@/lib/mcp";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +61,9 @@ export async function POST(req: Request) {
   switch (method) {
     case "initialize":
       return ok(id, {
-        protocolVersion: PROTOCOL_VERSION,
+        // Answer in the client's revision when we can speak it, so a client
+        // pinned to an older one is not handed a newer version it may refuse.
+        protocolVersion: negotiateVersion(params?.protocolVersion),
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
         instructions:

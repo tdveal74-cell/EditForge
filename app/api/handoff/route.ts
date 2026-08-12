@@ -1,6 +1,8 @@
 import { buildEDL, buildPathContract, buildShotPackage, buildStemSheet, LOUDNESS_TARGETS, slug, TIMEBASES, type Timebase } from "@/lib/handoff";
 import { getCut } from "@/lib/store";
+import { shotsForCut } from "@/lib/vfxboard";
 import { SAMPLE_TIMELINE } from "@/lib/timeline";
+import type { VfxShot } from "@/lib/vfxShot";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +57,19 @@ export async function GET(req: Request) {
   const assemblySource = cut.clips ? "cut assembly" : "sample assembly";
   const name = slug(cut.title) || cut.id;
 
-  const built = build(kind, { cut, clips, fps, name, assemblySource, targetId: url.searchParams.get("target") });
+  // Only the shot package consults the board; reading it for an EDL would be a
+  // store round-trip that changes nothing in the file.
+  const board = kind === "shots" ? await shotsForCut(cut.id) : undefined;
+
+  const built = build(kind, {
+    cut,
+    clips,
+    fps,
+    name,
+    assemblySource,
+    board,
+    targetId: url.searchParams.get("target"),
+  });
   if ("error" in built) return json({ error: built.error }, 400);
 
   return new Response(built.body, {
@@ -78,6 +92,7 @@ function build(
     fps: Timebase;
     name: string;
     assemblySource: string;
+    board?: VfxShot[];
     targetId: string | null;
   }
 ): { body: string; contentType: string; filename: string } | { error: string } {
@@ -106,7 +121,7 @@ function build(
 
     case "shots":
       return {
-        body: buildShotPackage({ title: cut.title, clips, fps, colorSpace: "ACEScct" }),
+        body: buildShotPackage({ title: cut.title, clips, fps, colorSpace: "ACEScct", board: ctx.board }),
         contentType: "application/json; charset=utf-8",
         filename: `${name}_shots.json`,
       };

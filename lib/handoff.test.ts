@@ -198,6 +198,30 @@ describe("shot package", () => {
     expect(pkg.colorSpace).toBe("ACEScct");
     expect(pkg.shots[0].colorSpace).toBe("ACEScct");
   });
+
+  it("carries the VFX board so a compositor sees what is already someone's work", () => {
+    const withBoard = JSON.parse(
+      buildShotPackage({
+        title: "Cold open",
+        clips,
+        fps: 25,
+        colorSpace: "ACEScct",
+        board: [{ id: "VFX_020", desc: "Particulate", status: "wip", engine: "Fusion" }],
+      })
+    );
+    expect(withBoard.board).toHaveLength(1);
+    expect(withBoard.board[0].status).toBe("wip");
+  });
+
+  it("omits the board rather than sending an empty one", () => {
+    // An empty array reads as "the board is clear", which is a different claim
+    // from "no board was consulted".
+    expect(pkg.board).toBeUndefined();
+    const empty = JSON.parse(
+      buildShotPackage({ title: "T", clips, fps: 25, colorSpace: "ACEScct", board: [] })
+    );
+    expect(empty.board).toBeUndefined();
+  });
 });
 
 describe("path contract", () => {

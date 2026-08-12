@@ -1,16 +1,23 @@
+import type { Metadata } from "next";
+import { BridgePanel } from "@/components/BridgePanel";
+
+export const metadata: Metadata = { title: "Render farm" };
+
 export default function Page() {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">Bridge</p>
-      <h1 className="mt-2 text-3xl font-semibold text-navy">Render farm</h1>
-      <p className="mt-2 text-sm text-navy/65">
-        Worker encode queue. ffmpeg plans from /jobs + /export + /longform; farm executes after human confirm.
-      </p>
-      <ul className="mt-8 list-inside list-disc space-y-2 text-sm text-navy/70">
-        <li>EditForge owns project ID, rubric, and ship decision</li>
-        <li>Engine owns pixels, GPU, and realtime playback</li>
-        <li>No silent auto-ship from this bridge</li>
-      </ul>
-    </main>
+    <BridgePanel
+      spec={{
+        title: "Render farm",
+        description:
+          "The worker encode queue. Plans are built on /jobs, /export, and /longform — the farm executes them after a human confirms.",
+        engines: ["GPU encode nodes", "Hardware AV1 / HEVC", "Queue manager"],
+        handoff: [
+          { label: "Out", detail: "An ffmpeg plan with an idempotency key, never a command run on the spot." },
+          { label: "Back", detail: "Encoded deliverable plus the job's terminal state — completed or failed with cause." },
+          { label: "Scheduling", detail: "Long encodes belong here, not on a grading box. Suites iterate; the farm renders." },
+          { label: "Gate", detail: "Export-class jobs require a recorded rubric pass before they are authorized." },
+        ],
+      }}
+    />
   );
 }

@@ -1,16 +1,23 @@
+import type { Metadata } from "next";
+import { BridgePanel } from "@/components/BridgePanel";
+
+export const metadata: Metadata = { title: "NLE bridge" };
+
 export default function Page() {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">Bridge</p>
-      <h1 className="mt-2 text-3xl font-semibold text-navy">NLE bridge</h1>
-      <p className="mt-2 text-sm text-navy/65">
-        Handoff for Resolve, Premiere, Final Cut. EditForge tracks cut + status; binary timeline lives in the NLE.
-      </p>
-      <ul className="mt-8 list-inside list-disc space-y-2 text-sm text-navy/70">
-        <li>EditForge owns project ID, rubric, and ship decision</li>
-        <li>Engine owns pixels, GPU, and realtime playback</li>
-        <li>No silent auto-ship from this bridge</li>
-      </ul>
-    </main>
+    <BridgePanel
+      spec={{
+        title: "NLE bridge",
+        description:
+          "Handoff to the edit suite. EditForge tracks the cut and its status; the binary timeline lives in the NLE.",
+        engines: ["DaVinci Resolve", "Premiere Pro", "Final Cut Pro"],
+        handoff: [
+          { label: "Out", detail: "EDL / AAF / XML conform list plus the cut ID and preset lane." },
+          { label: "Back", detail: "Locked timeline reference and a render path for the deliverable matrix." },
+          { label: "Media", detail: "Shared-storage paths, never copies — proxies generated for remote review only." },
+          { label: "Gate", detail: "Rubric decision stays in EditForge; the NLE cannot mark a cut shipped." },
+        ],
+      }}
+    />
   );
 }

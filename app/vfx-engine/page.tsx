@@ -1,16 +1,23 @@
+import type { Metadata } from "next";
+import { BridgePanel } from "@/components/BridgePanel";
+
+export const metadata: Metadata = { title: "VFX engine bridge" };
+
 export default function Page() {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">Bridge</p>
-      <h1 className="mt-2 text-3xl font-semibold text-navy">VFX engine bridge</h1>
-      <p className="mt-2 text-sm text-navy/65">
-        Shot packages for Fusion, After Effects, 3D. Board stays on /vfx.
-      </p>
-      <ul className="mt-8 list-inside list-disc space-y-2 text-sm text-navy/70">
-        <li>EditForge owns project ID, rubric, and ship decision</li>
-        <li>Engine owns pixels, GPU, and realtime playback</li>
-        <li>No silent auto-ship from this bridge</li>
-      </ul>
-    </main>
+    <BridgePanel
+      spec={{
+        title: "VFX engine bridge",
+        description:
+          "Shot packages out to comp and 3D. The tracking board stays on /vfx — this bridge only moves the work.",
+        engines: ["Fusion", "After Effects", "Houdini / Blender"],
+        handoff: [
+          { label: "Out", detail: "Shot package: plates, camera data, frame range, and the shot ID from the board." },
+          { label: "Back", detail: "Rendered EXR sequence or pre-comp, conformed to the plate's colour space." },
+          { label: "Farm", detail: "Heavy sims and final renders queue to the farm; the artist box is for lookdev." },
+          { label: "Gate", detail: "Comp lands inside the restraint envelope — no hero look introduced downstream." },
+        ],
+      }}
+    />
   );
 }

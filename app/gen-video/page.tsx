@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { GEN_PROVIDERS, GEN_QUALITY_BAR } from "@/lib/genvideo";
 import { Button } from "@/components/ui/button";
+import { Label, Select, Input, Textarea, Output } from "@/components/ui/field";
+import { Section } from "@/components/ui/section";
+import { PageHeader } from "@/components/PageHeader";
 
 export default function GenVideoPage() {
   const [provider, setProvider] = useState("runway");
@@ -13,6 +16,7 @@ export default function GenVideoPage() {
   const [quality, setQuality] = useState("social");
   const [durationSec, setDurationSec] = useState(5);
   const [out, setOut] = useState<string | null>(null);
+  const meta = GEN_PROVIDERS.find((p) => p.id === provider);
 
   async function plan() {
     const res = await fetch("/api/gen-video/plan", {
@@ -25,44 +29,80 @@ export default function GenVideoPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">AI Media</p>
-      <h1 className="mt-2 text-3xl font-semibold text-navy">Generative video</h1>
-      <p className="mt-2 text-sm text-navy/65">
-        Kling · Veo · Runway · Seedream–class quality. EditForge holds the brief and
-        quality bar; providers render pixels. Always pass restraint rubric before master.
-      </p>
-      <label className="mt-6 block text-sm text-navy/70">
-        Provider
-        <select className="mt-1 w-full rounded-control border border-border bg-surface-elevated px-3 py-2 text-sm" value={provider} onChange={(e) => setProvider(e.target.value)}>
-          {GEN_PROVIDERS.map((p) => (
-            <option key={p.id} value={p.id}>{p.label} — {p.strengths}</option>
-          ))}
-        </select>
-      </label>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <label className="text-sm text-navy/70">Aspect
-          <select className="mt-1 w-full rounded-control border border-border bg-surface-elevated px-3 py-2 text-sm" value={aspect} onChange={(e) => setAspect(e.target.value)}>
-            <option value="16:9">16:9</option><option value="9:16">9:16</option><option value="1:1">1:1</option>
-          </select>
-        </label>
-        <label className="text-sm text-navy/70">Quality
-          <select className="mt-1 w-full rounded-control border border-border bg-surface-elevated px-3 py-2 text-sm" value={quality} onChange={(e) => setQuality(e.target.value)}>
-            <option value="draft">draft</option><option value="social">social</option><option value="broadcast-intent">broadcast-intent</option>
-          </select>
-        </label>
-        <label className="text-sm text-navy/70">Seconds
-          <input type="number" min={2} max={30} className="mt-1 w-full rounded-control border border-border bg-surface-elevated px-3 py-2 text-sm" value={durationSec} onChange={(e) => setDurationSec(Number(e.target.value))} />
-        </label>
+      <PageHeader
+        eyebrow="AI Media"
+        title="Generative video"
+        description="Kling · Veo · Runway · Seedream–class output. EditForge holds the brief and the quality bar; providers render pixels. Rubric before master, always."
+      />
+
+      <div className="mt-10 space-y-4">
+        <Label text="Provider">
+          <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+            {GEN_PROVIDERS.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </Select>
+        </Label>
+        {meta && (
+          <p className="rounded-card border border-border-faint bg-surface-elevated/60 px-4 py-2.5 text-xs text-navy/60">
+            {meta.strengths}
+            {meta.envKey && (
+              <span className="ml-2 font-mono text-navy/35">needs {meta.envKey}</span>
+            )}
+          </p>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Label text="Aspect">
+            <Select value={aspect} onChange={(e) => setAspect(e.target.value)}>
+              <option value="16:9">16:9</option>
+              <option value="9:16">9:16</option>
+              <option value="1:1">1:1</option>
+            </Select>
+          </Label>
+          <Label text="Quality">
+            <Select value={quality} onChange={(e) => setQuality(e.target.value)}>
+              <option value="draft">draft</option>
+              <option value="social">social</option>
+              <option value="broadcast-intent">broadcast-intent</option>
+            </Select>
+          </Label>
+          <Label text="Seconds">
+            <Input
+              type="number"
+              min={2}
+              max={30}
+              value={durationSec}
+              onChange={(e) => setDurationSec(Number(e.target.value))}
+            />
+          </Label>
+        </div>
+
+        <Label text="Prompt">
+          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+        </Label>
       </div>
-      <label className="mt-4 block text-sm text-navy/70">Prompt
-        <textarea className="mt-1 min-h-[120px] w-full rounded-control border border-border bg-surface-elevated px-3 py-2 text-sm" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-      </label>
-      <div className="mt-4"><Button type="button" onClick={plan}>Build gen plan</Button></div>
-      {out && <pre className="mt-6 overflow-x-auto rounded-card border border-border bg-navy p-4 text-xs text-surface">{out}</pre>}
-      <h2 className="mt-10 text-sm font-semibold text-navy">Quality bar</h2>
-      <ul className="mt-3 list-inside list-disc space-y-1 text-sm text-navy/70">
-        {GEN_QUALITY_BAR.map((q) => <li key={q}>{q}</li>)}
-      </ul>
+
+      <div className="mt-4">
+        <Button type="button" onClick={plan}>
+          Build gen plan
+        </Button>
+      </div>
+
+      {out && <Output>{out}</Output>}
+
+      <Section title="Quality bar" count={GEN_QUALITY_BAR.length}>
+        <ul className="space-y-1.5">
+          {GEN_QUALITY_BAR.map((q) => (
+            <li key={q} className="flex gap-2.5 text-sm text-navy/70">
+              <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-navy/30" />
+              {q}
+            </li>
+          ))}
+        </ul>
+      </Section>
     </main>
   );
 }

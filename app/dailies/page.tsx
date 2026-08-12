@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusLabel, toneFor } from "@/components/ui/status-dot";
+import { Section } from "@/components/ui/section";
+import { ThumbnailGrid } from "@/components/media/Viewer";
 
 export const metadata: Metadata = { title: "Dailies" };
 
@@ -18,6 +20,18 @@ export default function DailiesPage() {
         title="Day rolls"
         description="Production review queue — select, note, approve before assembly. Nothing enters the cut unreviewed."
       />
+
+      {/* Dailies are reviewed by looking, not by reading a table. Posters
+          appear per roll as media lands; until then each slot says so. */}
+      <Section title="Contact sheet" count={rolls.length}>
+        <ThumbnailGrid
+          shots={rolls.map((r) => ({
+            id: r.id,
+            label: `${r.camera} · ${r.scenes}`,
+            status: r.status,
+          }))}
+        />
+      </Section>
 
       <ul className="mt-10 space-y-2">
         {rolls.map((r) => (

@@ -23,11 +23,21 @@ jobs:
           node-version: "22"
           cache: npm
 
+      # `npm ci` and nothing else. This used to read `npm ci || npm install`,
+      # which meant a lockfile that had drifted out of sync with package.json
+      # was repaired in place and the run went green — so the one failure the
+      # lockfile exists to catch was the one failure CI could not report.
       - name: Install
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Typecheck
         run: npx tsc --noEmit
+
+      # Blocking, like every other step here. There was a `lint` script pointing
+      # at `next lint` with no ESLint installed and no config, so it fell into an
+      # interactive setup prompt; nothing in CI called it, so nobody found out.
+      - name: Lint
+        run: npm run lint
 
       - name: Test
         run: npm test

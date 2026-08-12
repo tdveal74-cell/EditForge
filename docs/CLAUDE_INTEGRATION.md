@@ -54,6 +54,34 @@ Until that variable is set, the write tools are not listed and not callable **by
 anyone**. It fails closed on purpose: no token configured means no write access,
 rather than open write access.
 
+### Interaction with the access gate
+
+`EDITFORGE_ACCESS_PASSWORD` makes the whole deployment private, and that
+includes `/api/mcp`. The two variables are independent, but the combination
+matters:
+
+| `ACCESS_PASSWORD` | `MCP_TOKEN` | What the connector can do |
+|---|---|---|
+| unset | unset | Read tools only; no billable work by anyone |
+| unset | set | Everything, with the bearer token |
+| set | unset | **Nothing — not even reads.** The gate needs a credential and there is none for MCP |
+| set | set | Everything, with the bearer token |
+
+The third row is the one that surprises: turning on the access password without
+also setting an MCP token takes the connector offline entirely. Set both if you
+want a private studio that Claude can still reach.
+
+### What the gate does not do
+
+The login route is not rate-limited, so a weak access password is brute-forcible
+by anyone who can reach the deployment. Use a generated value
+(`openssl rand -hex 32`), not something memorable — you type it once per browser.
+
+When the access gate is off, the non-billable write routes (`POST /api/cuts`,
+and the poll/complete/retry/cancel actions on `/api/jobs/[id]`) remain open.
+They cannot spend money, but anyone reaching the deployment could disturb job
+and cut state. Turning on the access password closes them too.
+
 ### Tools
 
 | Tool | Reads or writes | What it does |

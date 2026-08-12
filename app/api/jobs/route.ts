@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { createAndQueue, listJobs, submitJob } from "@/lib/jobstore";
-import { hasCredentials } from "@/lib/providers";
+import { findProvider, hasCredentials } from "@/lib/providers";
+import { cookies } from "next/headers";
+import { SESSION_COOKIE, isAuthenticated } from "@/lib/auth";
 import type { JobKind } from "@/lib/jobs";
 
 export const dynamic = "force-dynamic";
 
 const MEDIA_KINDS: JobKind[] = ["gen-video", "voice", "avatar"];
+
+/** Would a submit to this provider reach a real, paid service? */
+function willBill(provider: string): boolean {
+  const spec = findProvider(provider);
+  if (!spec || spec.id === "mock") return false;
+  return hasCredentials(spec.id) && Boolean(spec.endpoint);
+}
 
 export async function GET() {
   const jobs = await listJobs();
@@ -44,6 +53,25 @@ export async function POST(req: Request) {
   }
 
   const provider = String(body.provider ?? "mock");
+
+  // Spending money requires credentials, independently of the access gate.
+  // Without this, live keys on a deployment that is reachable by anyone would
+  // be spendable by anyone; with it, an unauthenticated caller can only ever
+  // reach the offline path. Fails closed: when nothing is configured to
+  // authenticate against, no billable provider can be reached at all.
+  const authed = await isAuthenticated({
+    authorization: req.headers.get("authorization"),
+    sessionCookie: (await cookies()).get(SESSION_COOKIE)?.value,
+  });
+  if (willBill(provider) && !authed) {
+    return NextResponse.json(
+      {
+        error:
+          "This provider bills real work, so it requires authentication. Sign in, or send the MCP bearer token. Provider 'mock' is always available.",
+      },
+      { status: 401 }
+    );
+  }
 
   try {
     const job = await createAndQueue({

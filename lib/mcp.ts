@@ -3,7 +3,7 @@ import { RESTRAINT_RUBRIC, allRequiredPass } from "./restraint";
 import { buildExportCommand, buildProxyCommand, canRun } from "./ffmpeg";
 import { getCut, listCuts, probeStore } from "./store";
 import { cancelJob, completeJob, createAndQueue, getJob, listJobs, pollJob, retryJob, submitJob } from "./jobstore";
-import { PROVIDERS, hasCredentials } from "./providers";
+import { PROVIDERS, hasCredentials, isLiveWired } from "./providers";
 import { idempotencyKeyFor } from "./idempotency";
 import { listRolls, reviewRoll, selectForCut } from "./dailies";
 import { addShot, listShots, setShotStatus, shotsForCut } from "./vfxboard";
@@ -87,7 +87,12 @@ export const TOOLS: Tool[] = [
           // Names and booleans only — never a credential value.
           credentialVar: p.envKey || undefined,
           credentialSet: p.envKey ? hasCredentials(p.id) : undefined,
-          liveWired: p.id === "mock" || Boolean(p.endpoint),
+          // Asks whether the provider's API shape is actually implemented, not
+          // merely whether a base URL string was filled in. The old check read
+          // `Boolean(p.endpoint)` and so reported Runway and ElevenLabs as live
+          // while every submit to either was malformed — the status was the
+          // last place you would have learned the live path did not work.
+          liveWired: isLiveWired(p.id),
         })),
       };
     },

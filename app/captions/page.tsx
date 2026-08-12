@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { SAMPLE_CUES, formatSrt, type CaptionCue } from "@/lib/captions";
 import { Button } from "@/components/ui/button";
+import { Output } from "@/components/ui/field";
+import { Section } from "@/components/ui/section";
+import { PageHeader } from "@/components/PageHeader";
 
 export default function CaptionsPage() {
   const [cues] = useState<CaptionCue[]>(SAMPLE_CUES);
@@ -20,21 +23,36 @@ export default function CaptionsPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">Captions</p>
-      <h1 className="mt-2 text-3xl font-semibold text-navy">Text lane</h1>
-      <p className="mt-2 text-sm text-navy/65">
-        CapCut / Descript-inspired cues. Minimal chrome — readable, not template spam.
-      </p>
-      <ul className="mt-8 space-y-2">
-        {cues.map((c) => (
-          <li key={c.id} className="rounded-card border border-border bg-surface-elevated px-4 py-3 text-sm">
-            <span className="text-xs text-navy/45">{c.startSec.toFixed(1)}s – {c.endSec.toFixed(1)}s</span>
-            <p className="text-navy">{c.text}</p>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-6"><Button type="button" onClick={download}>Download SRT</Button></div>
-      <pre className="mt-6 overflow-x-auto rounded-card border border-border bg-navy p-4 text-xs text-surface">{srt}</pre>
+      <PageHeader
+        eyebrow="Captions"
+        title="Text lane"
+        description="CapCut / Descript-inspired cues. Minimal chrome — readable at a glance, not template spam."
+        actions={
+          <Button type="button" onClick={download}>
+            Download SRT
+          </Button>
+        }
+      />
+
+      <Section title="Cues" count={cues.length}>
+        <ul className="space-y-2">
+          {cues.map((c) => (
+            <li
+              key={c.id}
+              className="flex gap-4 rounded-card border border-border bg-surface-elevated px-4 py-3 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
+            >
+              <span className="shrink-0 font-mono text-[11px] tabular-nums leading-6 text-navy/40">
+                {c.startSec.toFixed(1)}–{c.endSec.toFixed(1)}
+              </span>
+              <p className="text-sm leading-6 text-navy">{c.text}</p>
+            </li>
+          ))}
+        </ul>
+      </Section>
+
+      <Section title="SRT output">
+        <Output>{srt}</Output>
+      </Section>
     </main>
   );
 }

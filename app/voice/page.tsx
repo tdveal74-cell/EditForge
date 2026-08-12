@@ -1,13 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { SAMPLE_VOICES } from "@/lib/voice";
+import { SAMPLE_VOICES, estimateTtsSeconds } from "@/lib/voice";
 import { Button } from "@/components/ui/button";
+import { Label, Select, Textarea, Output } from "@/components/ui/field";
+import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/PageHeader";
 
 export default function VoicePage() {
   const [voiceId, setVoiceId] = useState(SAMPLE_VOICES[0].id);
   const [text, setText] = useState("Where are we today? Inside the question we keep avoiding.");
   const [out, setOut] = useState<string | null>(null);
+  const voice = SAMPLE_VOICES.find((v) => v.id === voiceId) ?? SAMPLE_VOICES[0];
+  const seconds = estimateTtsSeconds(text);
 
   async function plan() {
     const res = await fetch("/api/voice/plan", {
@@ -20,23 +25,45 @@ export default function VoicePage() {
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">AI Media</p>
-      <h1 className="mt-2 text-3xl font-semibold text-navy">Voice clone / TTS</h1>
-      <p className="mt-2 text-sm text-navy/65">
-        ElevenLabs-class VO. Cloned voices require consent + license. Live synthesize needs ELEVENLABS_API_KEY.
-      </p>
-      <label className="mt-6 block text-sm text-navy/70">Voice
-        <select className="mt-1 w-full rounded-control border border-border bg-surface-elevated px-3 py-2 text-sm" value={voiceId} onChange={(e) => setVoiceId(e.target.value)}>
-          {SAMPLE_VOICES.map((v) => (
-            <option key={v.id} value={v.id}>{v.name} ({v.kind})</option>
-          ))}
-        </select>
-      </label>
-      <label className="mt-4 block text-sm text-navy/70">Script
-        <textarea className="mt-1 min-h-[120px] w-full rounded-control border border-border bg-surface-elevated px-3 py-2 text-sm text-navy" value={text} onChange={(e) => setText(e.target.value)} />
-      </label>
-      <div className="mt-4"><Button type="button" onClick={plan}>Build voice plan</Button></div>
-      {out && <pre className="mt-6 overflow-x-auto rounded-card border border-border bg-navy p-4 text-xs text-surface">{out}</pre>}
+      <PageHeader
+        eyebrow="AI Media"
+        title="Voice clone / TTS"
+        description="ElevenLabs-class VO. Cloned voices require a consent record and a license — that gate is part of the plan, not an afterthought."
+        actions={
+          <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
+            ≈{seconds}s
+          </span>
+        }
+      />
+
+      <div className="mt-10 space-y-4">
+        <Label text="Voice">
+          <Select value={voiceId} onChange={(e) => setVoiceId(e.target.value)}>
+            {SAMPLE_VOICES.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name} ({v.kind})
+              </option>
+            ))}
+          </Select>
+        </Label>
+
+        <div className="flex flex-wrap items-center gap-2 rounded-card border border-border-faint bg-surface-elevated/60 px-4 py-3">
+          <Badge tone={voice.kind === "cloned" ? "accent" : "neutral"}>{voice.kind}</Badge>
+          <p className="text-xs text-navy/60">{voice.notes}</p>
+        </div>
+
+        <Label text="Script">
+          <Textarea value={text} onChange={(e) => setText(e.target.value)} />
+        </Label>
+      </div>
+
+      <div className="mt-4">
+        <Button type="button" onClick={plan}>
+          Build voice plan
+        </Button>
+      </div>
+
+      {out && <Output>{out}</Output>}
     </main>
   );
 }

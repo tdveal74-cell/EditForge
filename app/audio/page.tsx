@@ -1,24 +1,48 @@
+import type { Metadata } from "next";
+import { PageHeader } from "@/components/PageHeader";
+
+export const metadata: Metadata = { title: "Audio hierarchy" };
+
 const hierarchy = [
-  { level: 1, name: "VO / dialogue", rule: "Always intelligible. Never buried." },
-  { level: 2, name: "Primary SFX / tactile", rule: "Story-critical hits only." },
-  { level: 3, name: "Music bed", rule: "Support, don't compete. Restraint score." },
-  { level: 4, name: "Ambience", rule: "Presence, not noise floor war." },
+  { level: 1, name: "VO / dialogue", rule: "Always intelligible. Never buried.", weight: "w-full" },
+  { level: 2, name: "Primary SFX / tactile", rule: "Story-critical hits only.", weight: "w-3/4" },
+  { level: 3, name: "Music bed", rule: "Support, don't compete. Restraint score.", weight: "w-1/2" },
+  { level: 4, name: "Ambience", rule: "Presence, not noise floor war.", weight: "w-1/4" },
 ];
 
 export default function AudioPage() {
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
-      <p className="text-xs font-medium uppercase tracking-[0.2em] text-amber">Sound</p>
-      <h1 className="mt-2 text-3xl font-semibold text-navy">Audio hierarchy</h1>
-      <p className="mt-2 text-sm text-navy/65">Fairlight / Essential Sound discipline — tactile, not loud.</p>
-      <ol className="mt-8 space-y-3">
+    <main className="mx-auto max-w-3xl px-6 py-12">
+      <PageHeader
+        eyebrow="Sound"
+        title="Audio hierarchy"
+        description="Fairlight / Essential Sound discipline — tactile, not loud. The ladder is the law: anything lower never competes with anything above it."
+      />
+
+      <ol className="mt-10 space-y-2">
         {hierarchy.map((h) => (
-          <li key={h.level} className="rounded-card border border-border bg-surface-elevated p-4">
-            <p className="text-sm font-semibold text-navy">{h.level}. {h.name}</p>
-            <p className="mt-1 text-sm text-navy/65">{h.rule}</p>
+          <li
+            key={h.level}
+            className="group relative overflow-hidden rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
+          >
+            {/* Bar length encodes priority — loudest claim at the top. */}
+            <span
+              aria-hidden
+              className={`absolute inset-y-0 left-0 ${h.weight} bg-surface-muted/70`}
+            />
+            <div className="relative flex items-baseline gap-3">
+              <span className="text-xs font-semibold tabular-nums text-navy/35">{h.level}</span>
+              <h2 className="text-sm font-semibold text-navy">{h.name}</h2>
+            </div>
+            <p className="relative mt-1 pl-7 text-sm text-navy/65">{h.rule}</p>
           </li>
         ))}
       </ol>
+
+      <p className="mt-8 text-xs text-navy/45">
+        Stem split and loudness targets cross to the mix stage at{" "}
+        <code className="rounded bg-surface-muted px-1 py-0.5">/mix</code>.
+      </p>
     </main>
   );
 }

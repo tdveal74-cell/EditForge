@@ -59,20 +59,16 @@ export default function DailiesPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
         eyebrow="Dailies"
         title="Day rolls"
-        description="Production review queue — select, note, approve before assembly. A roll enters a cut only once an approval is recorded against it."
+        description="Production review queue — look, note, approve before assembly. A roll enters a cut only once an approval is recorded against it."
       />
 
-      {/* Dailies are reviewed by looking, not by reading a table. Posters
-          appear per roll as media lands; until then each slot says so. */}
+      {/* Contact sheet first — dailies are reviewed by looking */}
       <Section title="Contact sheet" count={rolls?.length}>
         <ThumbnailGrid
-          // The seeded A-cam rolls are the ones this footage came off, so they
-          // get the real frame; anything ingested later shows its labelled slug
-          // until a poster exists for it.
           shots={(rolls ?? []).map((r) => ({
             id: r.id,
             label: `${r.camera} · ${r.scenes}`,
@@ -82,7 +78,8 @@ export default function DailiesPage() {
         />
       </Section>
 
-      <div className="mt-8 w-64">
+      {/* Cut target — always visible before the queue */}
+      <div className="mt-8 max-w-xs">
         <Label text="Select into cut">
           <Select value={cutId} onChange={(e) => setCutId(e.target.value)}>
             {cuts.length === 0 && <option value="">No cuts in the store</option>}
@@ -104,18 +101,21 @@ export default function DailiesPage() {
       {rolls === null && (
         <div className="mt-8 space-y-2" aria-hidden>
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-28 animate-pulse rounded-card border border-border bg-surface-muted/50" />
+            <div
+              key={i}
+              className="h-28 animate-pulse rounded-card border border-border bg-surface-muted/50"
+            />
           ))}
         </div>
       )}
 
-      <ul className="mt-4 space-y-2">
+      <ul className="mt-6 space-y-3">
         {(rolls ?? []).map((r) => {
           const reviewed = r.status === "approved" || r.status === "rejected";
           return (
             <li
               key={r.id}
-              className="rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
+              className="rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted sm:p-5"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="font-mono text-sm font-medium text-navy">{r.id}</p>
@@ -124,7 +124,7 @@ export default function DailiesPage() {
               <p className="mt-1 text-xs tabular-nums text-navy/45">
                 {r.day} · {r.camera} · scenes {r.scenes}
               </p>
-              <p className="mt-2 text-sm text-navy/70">{r.notes}</p>
+              <p className="mt-2 text-sm leading-relaxed text-navy/70">{r.notes}</p>
 
               {r.reviewNote && (
                 <p className="mt-2 border-l-2 border-border-strong pl-3 text-sm italic text-navy/60">
@@ -138,39 +138,46 @@ export default function DailiesPage() {
                 </p>
               )}
 
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border-faint pt-3">
+              {/* Mobile-first actions: stacked full-width on small screens */}
+              <div className="mt-4 space-y-2 border-t border-border-faint pt-4">
                 <Input
-                  className="h-9 min-w-[12rem] flex-1"
+                  className="h-11 w-full"
                   placeholder={reviewed ? "Change the reason…" : "Reason (optional)"}
                   value={notes[r.id] ?? ""}
                   onChange={(e) => setNotes((n) => ({ ...n, [r.id]: e.target.value }))}
                 />
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={busy === r.id}
-                  onClick={() => act(r.id, { action: "review", decision: "approve", note: notes[r.id] })}
-                >
-                  Approve
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy === r.id}
-                  onClick={() => act(r.id, { action: "review", decision: "reject", note: notes[r.id] })}
-                >
-                  Reject
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  disabled={busy === r.id || !cutId}
-                  onClick={() => act(r.id, { action: "select", cutId })}
-                >
-                  Select into cut
-                </Button>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <Button
+                    type="button"
+                    className="min-h-11 w-full"
+                    disabled={busy === r.id}
+                    onClick={() =>
+                      act(r.id, { action: "review", decision: "approve", note: notes[r.id] })
+                    }
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="min-h-11 w-full"
+                    disabled={busy === r.id}
+                    onClick={() =>
+                      act(r.id, { action: "review", decision: "reject", note: notes[r.id] })
+                    }
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="min-h-11 w-full"
+                    disabled={busy === r.id || !cutId}
+                    onClick={() => act(r.id, { action: "select", cutId })}
+                  >
+                    Select into cut
+                  </Button>
+                </div>
               </div>
             </li>
           );
@@ -178,8 +185,8 @@ export default function DailiesPage() {
       </ul>
 
       <p className="mt-8 text-xs text-navy/45">
-        Selecting is gated on the server, not here — an unreviewed or rejected roll is refused whatever
-        this page sends.
+        Selecting is gated on the server — an unreviewed or rejected roll is refused whatever this
+        page sends.
       </p>
     </main>
   );

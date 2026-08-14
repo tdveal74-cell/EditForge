@@ -33,7 +33,7 @@
 - [ ] Media (if any) is primary visual language
 - [ ] Mobile: priority actions reachable without desktop assumptions
 - [ ] Chromebook-first fluid layout; no blur; no wasted screen
-- [ ] Reading/decision flow answers the operator’s job in &lt; 30s
+- [ ] Reading/decision flow answers the operator’s job in under 30s
 - [ ] Empty and error states are calm and specific
 - [ ] Reduced motion honored
 
@@ -47,11 +47,13 @@ If no → continue the loop.
 
 | Surface | Score | Note |
 |---------|-------|------|
-| Landing | ~90 | Media hero + proof strip shipped |
+| Landing | ~90 | Media hero + proof strip |
 | Studio hub | ~88 | In-motion + create lanes + map |
-| Gen video | elevating | Media-first split layout |
-| Dailies | ~85 | Contact sheet already media-led |
-| Mobile nav | elevating | Priority strip |
-| Overall product | ~82 → climbing | Toward 99 |
+| Gen video | ~86 | Media-first split |
+| Voice | ~86 | Listen stage + consent gate visible |
+| Review | ~88 | Player + seekable notes, wider stage |
+| Dailies | ~85 | Contact sheet media-led |
+| Mobile nav | ~84 | Priority strip |
+| **Overall** | **~86** | Climbing toward 99 |
 
 Update this table as surfaces clear higher bars.

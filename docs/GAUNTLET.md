@@ -50,10 +50,12 @@ If no → continue the loop.
 | Landing | ~90 | Media hero + proof strip |
 | Studio hub | ~88 | In-motion + create lanes + map |
 | Gen video | ~86 | Media-first split |
-| Voice | ~86 | Listen stage + consent gate visible |
-| Review | ~88 | Player + seekable notes, wider stage |
+| Voice | ~86 | Listen stage + consent gate |
+| Avatar | ~86 | Stage + projects + brief |
+| Stock | ~87 | Library grid first, license hard-required |
+| Review | ~88 | Player + seekable notes |
 | Dailies | ~85 | Contact sheet media-led |
 | Mobile nav | ~84 | Priority strip |
-| **Overall** | **~86** | Climbing toward 99 |
+| **Overall** | **~87** | Climbing toward 99 |
 
 Update this table as surfaces clear higher bars.

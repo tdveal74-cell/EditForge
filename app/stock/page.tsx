@@ -6,7 +6,6 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/field";
-import { Section } from "@/components/ui/section";
 
 const KINDS = ["music", "sfx", "footage"] as const;
 
@@ -68,15 +67,69 @@ export default function StockPage() {
   }
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
         eyebrow="Library"
         title="Stock · Artlist-class"
         description="Music, SFX, and footage index. License terms travel with the asset — an entry cannot be filed without them."
       />
 
-      <Section title="File a licensed asset">
-        <div className="flex flex-wrap items-end gap-3">
+      {/* Library grid first — media product language */}
+      <section className="mt-10">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Cleared library</p>
+            <h2 className="mt-1 text-lg font-semibold text-navy">What you can actually use</h2>
+          </div>
+          <p className="text-xs tabular-nums text-navy/40">{(items ?? []).length} filed</p>
+        </div>
+
+        {items === null ? (
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-36 animate-pulse rounded-card border border-border bg-surface-muted/50"
+              />
+            ))}
+          </div>
+        ) : items.length === 0 ? (
+          <div className="mt-4 rounded-card border border-border-faint bg-surface-muted/40 px-5 py-10 text-center">
+            <p className="text-sm text-navy/70">No cleared assets yet.</p>
+            <p className="mt-1 text-xs text-navy/50">
+              File a licensed entry below. Provider search activates when keys are present.
+            </p>
+          </div>
+        ) : (
+          <ul className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {items.map((s) => (
+              <li
+                key={s.id}
+                className="flex flex-col rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:-translate-y-0.5 hover:border-border-strong hover:shadow-lifted"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-navy">{s.title}</p>
+                  <Badge tone="outline">{s.kind}</Badge>
+                </div>
+                <p className="mt-1 text-xs text-navy/50">{s.mood || "—"}</p>
+                {duration(s.durationSec) && (
+                  <p className="mt-2 font-mono text-[11px] tabular-nums text-navy/40">
+                    {duration(s.durationSec)}
+                  </p>
+                )}
+                <p className="mt-auto border-t border-border-faint pt-3 text-xs leading-relaxed text-navy/65">
+                  {s.licenseNote}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* File form — secondary to the library */}
+      <section className="mt-12 rounded-card border border-border bg-surface-elevated p-5 shadow-card">
+        <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">File a licensed asset</p>
+        <div className="mt-4 flex flex-wrap items-end gap-3">
           <div className="w-32">
             <Label text="Kind">
               <Select value={kind} onChange={(e) => setKind(e.target.value)}>
@@ -130,11 +183,11 @@ export default function StockPage() {
           </Button>
         </div>
 
-        <p className="mt-2 text-xs text-navy/45">
-          The licence term is required because it has to reach archive with the asset. A blank field here is
-          the licence being remembered instead of filed.
+        <p className="mt-3 text-xs text-navy/45">
+          Licence term is required so it reaches archive with the asset. A blank field here is the
+          licence being remembered instead of filed.
         </p>
-      </Section>
+      </section>
 
       {error && (
         <p className="mt-4 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -142,34 +195,9 @@ export default function StockPage() {
         </p>
       )}
 
-      <ul className="mt-8 space-y-2">
-        {(items ?? []).map((s) => (
-          <li
-            key={s.id}
-            className="rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm font-medium text-navy">{s.title}</p>
-              <div className="flex items-center gap-2">
-                {duration(s.durationSec) && (
-                  <span className="font-mono text-[11px] tabular-nums text-navy/40">
-                    {duration(s.durationSec)}
-                  </span>
-                )}
-                <Badge tone="outline">{s.kind}</Badge>
-              </div>
-            </div>
-            <p className="mt-1 text-xs text-navy/50">{s.mood}</p>
-            <p className="mt-2 border-t border-border-faint pt-2 text-xs leading-relaxed text-navy/65">
-              {s.licenseNote}
-            </p>
-          </li>
-        ))}
-      </ul>
-
       <p className="mt-8 text-xs text-navy/45">
-        Provider search and licence pull activate when Artlist or Epidemic keys are set on the worker. Until
-        then this is the index of what has already been cleared.
+        Provider search and licence pull activate when Artlist or Epidemic keys are set on the worker.
+        Until then this is the index of what has already been cleared.
       </p>
     </main>
   );

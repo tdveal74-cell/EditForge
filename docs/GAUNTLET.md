@@ -54,8 +54,9 @@ If no → continue the loop.
 | Avatar | ~86 | Stage + projects + brief |
 | Stock | ~87 | Library grid first, license hard-required |
 | Review | ~88 | Player + seekable notes |
-| Dailies | ~85 | Contact sheet media-led |
+| Dailies | ~89 | Contact sheet + mobile-first approve/reject |
+| JobRunner | ~90 | Result stage + mobile actions + honesty |
 | Mobile nav | ~84 | Priority strip |
-| **Overall** | **~87** | Climbing toward 99 |
+| **Overall** | **~89** | Climbing toward 99 |
 
 Update this table as surfaces clear higher bars.

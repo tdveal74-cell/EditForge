@@ -44,7 +44,7 @@ export default function RubricPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
+    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
         eyebrow="QC"
         title="Restraint rubric"
@@ -56,7 +56,7 @@ export default function RubricPage() {
         }
       />
 
-      <div className="mt-8">
+      <div className="mt-8 max-w-xs">
         <Label text="Cut">
           <Select value={cutId} onChange={(e) => setCutId(e.target.value)}>
             {cuts.map((c) => (
@@ -74,8 +74,10 @@ export default function RubricPage() {
           return (
             <li key={c.id}>
               <label
-                className={`flex cursor-pointer items-start gap-3 rounded-card border p-4 shadow-card transition-all duration-flagship ease-flagship hover:shadow-lifted ${
-                  on ? "border-border-strong bg-surface-elevated" : "border-border bg-surface-elevated/70"
+                className={`flex min-h-[3.25rem] cursor-pointer items-start gap-3 rounded-card border p-4 shadow-card transition-all duration-flagship ease-flagship hover:shadow-lifted ${
+                  on
+                    ? "border-border-strong bg-surface-elevated"
+                    : "border-border bg-surface-elevated/70"
                 }`}
               >
                 <input
@@ -85,9 +87,13 @@ export default function RubricPage() {
                   onChange={(e) => setResults((r) => ({ ...r, [c.id]: e.target.checked }))}
                 />
                 <div>
-                  <p className={`text-sm ${on ? "font-medium text-navy" : "text-navy/75"}`}>{c.label}</p>
+                  <p className={`text-sm ${on ? "font-medium text-navy" : "text-navy/75"}`}>
+                    {c.label}
+                  </p>
                   {c.required && (
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wide text-navy/40">Required</p>
+                    <p className="mt-0.5 text-[11px] uppercase tracking-wide text-navy/40">
+                      Required
+                    </p>
                   )}
                 </div>
               </label>
@@ -96,12 +102,19 @@ export default function RubricPage() {
         })}
       </ul>
 
-      <div className="mt-8 flex flex-wrap items-center gap-3">
-        <Button disabled={!pass || !cutId} type="button" onClick={savePass}>
+      <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <Button
+          disabled={!pass || !cutId}
+          type="button"
+          className="min-h-11 w-full sm:w-auto"
+          onClick={savePass}
+        >
           {pass ? "Save rubric pass" : "Incomplete"}
         </Button>
         <span className="text-sm text-navy/60">
-          {pass ? "Ready for human ship decision" : `${RESTRAINT_RUBRIC.length - checked} check(s) remaining`}
+          {pass
+            ? "Ready for human ship decision"
+            : `${RESTRAINT_RUBRIC.length - checked} check(s) remaining`}
         </span>
       </div>
 

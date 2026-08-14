@@ -26,8 +26,6 @@ export default function ExportPage() {
   }, []);
 
   const cut = cuts?.find((c) => c.id === cutId);
-  // Read from the store, never asserted here. The server re-reads it anyway —
-  // this only decides what the operator is told before they press the button.
   const blocked = !isProxy && !cut?.rubricPass;
 
   async function plan() {
@@ -45,11 +43,11 @@ export default function ExportPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
+    <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
         eyebrow="Deliverables"
         title="Export"
-        description="Resolve deliver + CapCut format matrix. Anything that isn't a proxy needs a recorded rubric pass first."
+        description="Resolve deliver + CapCut format matrix. Anything that isn't a proxy needs a recorded rubric pass first — that gate lives on the cut, not on this page."
       />
 
       <ul className="mt-10 space-y-2">
@@ -59,19 +57,23 @@ export default function ExportPage() {
             <li key={d.id}>
               <label
                 className={`flex cursor-pointer items-start gap-3 rounded-card border p-4 shadow-card transition-all duration-flagship ease-flagship hover:shadow-lifted ${
-                  on ? "border-border-strong bg-surface-elevated" : "border-border bg-surface-elevated/70"
+                  on
+                    ? "border-border-strong bg-surface-elevated"
+                    : "border-border bg-surface-elevated/70"
                 }`}
               >
                 <input
                   type="radio"
                   name="fmt"
-                  className="mt-0.5 shrink-0 cursor-pointer accent-amber"
+                  className="mt-1 size-4 shrink-0 cursor-pointer accent-amber"
                   checked={on}
                   onChange={() => setFormat(d.id)}
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className={`text-sm ${on ? "font-semibold text-navy" : "font-medium text-navy/80"}`}>
+                    <p
+                      className={`text-sm ${on ? "font-semibold text-navy" : "font-medium text-navy/80"}`}
+                    >
                       {d.label}
                     </p>
                     <span className="font-mono text-[11px] tabular-nums text-navy/40">
@@ -86,9 +88,6 @@ export default function ExportPage() {
         })}
       </ul>
 
-      {/* The cut carries the authority, not this page. There is no checkbox:
-          asking the person exporting whether they passed the rubric is not a
-          gate, and the server does not accept the answer either way. */}
       <div className="mt-6">
         <Label text="Cut to export">
           <Select value={cutId} onChange={(e) => setCutId(e.target.value)} disabled={isProxy}>
@@ -103,15 +102,22 @@ export default function ExportPage() {
         </Label>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={plan} disabled={!isProxy && !cutId}>
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <Button
+          type="button"
+          className="min-h-11 w-full sm:w-auto"
+          onClick={plan}
+          disabled={!isProxy && !cutId}
+        >
           Build export plan
         </Button>
         {isProxy ? (
           <span className="text-xs text-navy/50">Proxy — ungated by design.</span>
         ) : blocked ? (
           <span className="text-xs text-amber-700">
-            {cut ? `"${cut.title}" has no recorded rubric pass — record one on /rubric.` : "Select a cut."}
+            {cut
+              ? `“${cut.title}” has no recorded rubric pass — record one on /rubric.`
+              : "Select a cut."}
           </span>
         ) : (
           <span className="text-xs text-navy/50">

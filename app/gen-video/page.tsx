@@ -8,6 +8,7 @@ import { Section } from "@/components/ui/section";
 import { PageHeader } from "@/components/PageHeader";
 import { JobRunner } from "@/components/JobRunner";
 import { providerChoicesFor } from "@/lib/providers";
+import { PRIMARY_CLIP, REFERENCE_STILL } from "@/lib/mediaLibrary";
 
 const GEN_JOB_PROVIDERS = providerChoicesFor("gen-video").map((p) => ({ id: p.id, label: p.label }));
 
@@ -32,97 +33,133 @@ export default function GenVideoPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-12">
+    <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
         eyebrow="AI Media"
         title="Generative video"
-        description="Kling · Veo · Runway · Seedream–class output. EditForge holds the brief and the quality bar; providers render pixels. Rubric before master, always."
+        description="Kling · Veo · Runway · Seedream-class output. EditForge holds the brief and the quality bar; providers render pixels. Rubric before master."
       />
 
-      <div className="mt-10 space-y-4">
-        <Label text="Provider">
-          <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
-            {GEN_PROVIDERS.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
-              </option>
-            ))}
-          </Select>
-        </Label>
-        {meta && (
-          <p className="rounded-card border border-border-faint bg-surface-elevated/60 px-4 py-2.5 text-xs text-navy/60">
-            {meta.strengths}
-            {meta.envKey && (
-              <span className="ml-2 font-mono text-navy/35">needs {meta.envKey}</span>
+      {/* Media-first split: preview language on the left, controls on the right */}
+      <div className="mt-10 grid gap-8 lg:grid-cols-5">
+        {/* Preview / result column */}
+        <section className="lg:col-span-3">
+          <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Preview language</p>
+          <div className="mt-3 overflow-hidden rounded-card border border-border bg-surface-elevated shadow-card">
+            <div className="relative aspect-video bg-navy/5">
+              <video
+                className="h-full w-full object-cover"
+                controls
+                playsInline
+                preload="metadata"
+                poster={REFERENCE_STILL.src}
+              >
+                <source src={PRIMARY_CLIP.src} type="video/mp4" />
+              </video>
+            </div>
+            <div className="border-t border-border-faint px-4 py-3">
+              <p className="text-sm font-medium text-navy">Studio reference</p>
+              <p className="mt-0.5 text-xs text-navy/50">
+                Live generations appear here when a provider returns media. Mock runs stay labeled.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-card border border-border-faint bg-surface-muted/50 px-4 py-3">
+            <p className="text-xs leading-relaxed text-navy/60">
+              <span className="font-medium text-navy/80">Honesty mark:</span> until a live provider
+              key is present and a job completes, this surface shows studio reference media only.
+              Simulated output is never presented as live pixels.
+            </p>
+          </div>
+
+          <Section title="Quality bar" count={GEN_QUALITY_BAR.length}>
+            <ul className="space-y-1.5">
+              {GEN_QUALITY_BAR.map((q) => (
+                <li key={q} className="flex gap-2.5 text-sm text-navy/70">
+                  <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-navy/30" />
+                  {q}
+                </li>
+              ))}
+            </ul>
+          </Section>
+        </section>
+
+        {/* Controls column */}
+        <section className="lg:col-span-2">
+          <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Brief</p>
+          <div className="mt-3 space-y-4">
+            <Label text="Provider">
+              <Select value={provider} onChange={(e) => setProvider(e.target.value)}>
+                {GEN_PROVIDERS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </Select>
+            </Label>
+            {meta && (
+              <p className="rounded-card border border-border-faint bg-surface-elevated/60 px-4 py-2.5 text-xs text-navy/60">
+                {meta.strengths}
+                {meta.envKey && (
+                  <span className="ml-2 font-mono text-navy/35">needs {meta.envKey}</span>
+                )}
+              </p>
             )}
-          </p>
-        )}
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Label text="Aspect">
-            <Select value={aspect} onChange={(e) => setAspect(e.target.value)}>
-              <option value="16:9">16:9</option>
-              <option value="9:16">9:16</option>
-              <option value="1:1">1:1</option>
-            </Select>
-          </Label>
-          <Label text="Quality">
-            <Select value={quality} onChange={(e) => setQuality(e.target.value)}>
-              <option value="draft">draft</option>
-              <option value="social">social</option>
-              <option value="broadcast-intent">broadcast-intent</option>
-            </Select>
-          </Label>
-          <Label text="Seconds">
-            <Input
-              type="number"
-              min={2}
-              max={30}
-              value={durationSec}
-              onChange={(e) => setDurationSec(Number(e.target.value))}
+            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+              <Label text="Aspect">
+                <Select value={aspect} onChange={(e) => setAspect(e.target.value)}>
+                  <option value="16:9">16:9</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                </Select>
+              </Label>
+              <Label text="Quality">
+                <Select value={quality} onChange={(e) => setQuality(e.target.value)}>
+                  <option value="draft">draft</option>
+                  <option value="social">social</option>
+                  <option value="broadcast-intent">broadcast-intent</option>
+                </Select>
+              </Label>
+              <Label text="Seconds">
+                <Input
+                  type="number"
+                  min={2}
+                  max={30}
+                  value={durationSec}
+                  onChange={(e) => setDurationSec(Number(e.target.value))}
+                />
+              </Label>
+            </div>
+
+            <Label text="Prompt">
+              <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={5} />
+            </Label>
+
+            <Button type="button" variant="secondary" onClick={plan}>
+              Build gen plan
+            </Button>
+
+            {out && <Output>{out}</Output>}
+
+            <JobRunner
+              kind="gen-video"
+              label={`Gen video — ${aspect} ${quality}`}
+              prompt={prompt}
+              brief={{ prompt, aspect, quality, durationSec }}
+              options={{ aspect, quality, durationSec, mode: "text-to-video" }}
+              providers={GEN_JOB_PROVIDERS}
+              requiresRubricPass={quality === "broadcast-intent"}
+              blockedReason={
+                quality === "broadcast-intent"
+                  ? "Broadcast-intent is master-class work — record a rubric pass first, then run."
+                  : undefined
+              }
             />
-          </Label>
-        </div>
-
-        <Label text="Prompt">
-          <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-        </Label>
+          </div>
+        </section>
       </div>
-
-      <div className="mt-4">
-        <Button type="button" variant="secondary" onClick={plan}>
-          Build gen plan
-        </Button>
-      </div>
-
-      {out && <Output>{out}</Output>}
-
-      <JobRunner
-        kind="gen-video"
-        label={`Gen video — ${aspect} ${quality}`}
-        prompt={prompt}
-        brief={{ prompt, aspect, quality, durationSec }}
-        options={{ aspect, quality, durationSec, mode: "text-to-video" }}
-        providers={GEN_JOB_PROVIDERS}
-        // Broadcast-intent output goes to master, so it inherits the rubric gate.
-        requiresRubricPass={quality === "broadcast-intent"}
-        blockedReason={
-          quality === "broadcast-intent"
-            ? "Broadcast-intent is master-class work — record a rubric pass first, then run."
-            : undefined
-        }
-      />
-
-      <Section title="Quality bar" count={GEN_QUALITY_BAR.length}>
-        <ul className="space-y-1.5">
-          {GEN_QUALITY_BAR.map((q) => (
-            <li key={q} className="flex gap-2.5 text-sm text-navy/70">
-              <span aria-hidden className="mt-2 size-1 shrink-0 rounded-full bg-navy/30" />
-              {q}
-            </li>
-          ))}
-        </ul>
-      </Section>
     </main>
   );
 }

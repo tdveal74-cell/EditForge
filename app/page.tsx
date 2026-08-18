@@ -61,7 +61,7 @@ export default function HomePage() {
             <span className="mt-1 block text-navy/75">Ship only what earns the rubric.</span>
           </h1>
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-navy/70 sm:text-base">
-            Post-production OS for commercials, faceless, Shorts, Reels, and long-form.
+            Post-production OS for commercials, Shorts, Reels, and long-form.
             Generative lanes, dailies, grade, and delivery — with restraint as house law
             and a human gate before master.
           </p>

@@ -93,7 +93,8 @@ describe("cuts store", () => {
     vi.stubGlobal("fetch", mockKvFetch(db));
 
     const cuts = await listCuts();
-    expect(cuts.length).toBe(3);
+    expect(cuts.length).toBe(1);
+    expect(cuts[0]?.id).toBe("cut-01");
     expect(db.has("editforge:cuts")).toBe(true);
 
     const now = new Date().toISOString();

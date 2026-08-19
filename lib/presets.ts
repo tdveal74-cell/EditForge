@@ -28,9 +28,9 @@ export const TSWS_PRESETS: LanePreset[] = [
     ],
   },
   {
-    id: "faceless-teach",
-    name: "Faceless authentic teach",
-    description: "Teaching niche — clarity over spectacle.",
+    id: "tqo-teach",
+    name: "TQO presenter teach",
+    description: "Teaching niche. Clarity over spectacle.",
     restraintNotes: [
       "Protect existing quality",
       "Intentional ending",

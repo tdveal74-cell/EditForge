@@ -33,8 +33,6 @@ function seedCuts(): Cut[] {
   const now = new Date().toISOString();
   return [
     { id: "cut-01", title: "TSWS E01 cold open", status: "review", presetId: "tsws-feature", createdAt: now, updatedAt: now },
-    { id: "cut-02", title: "Faceless — Authentic Human Teaching", status: "grade", presetId: "faceless-teach", createdAt: now, updatedAt: now },
-    { id: "cut-03", title: "Shorts pack — week 32", status: "ingest", presetId: "tsws-short", createdAt: now, updatedAt: now },
   ];
 }
 

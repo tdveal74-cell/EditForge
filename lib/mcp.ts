@@ -4,6 +4,7 @@ import { buildExportCommand, buildProxyCommand, canRun } from "./ffmpeg";
 import { getCut, listCuts, probeStore } from "./store";
 import { cancelJob, completeJob, createAndQueue, getJob, listJobs, pollJob, retryJob, submitJob } from "./jobstore";
 import { PROVIDERS, hasCredentials, isLiveWired } from "./providers";
+import { spendPolicyFromEnv } from "./spend-policy";
 import { idempotencyKeyFor } from "./idempotency";
 import { listRolls, reviewRoll, selectForCut } from "./dailies";
 import { addShot, listShots, setShotStatus, shotsForCut } from "./vfxboard";
@@ -77,10 +78,22 @@ export const TOOLS: Tool[] = [
     inputSchema: obj({}),
     run: async () => {
       const probe = await probeStore();
+      const policy = spendPolicyFromEnv();
+      const spendEnabled =
+        policy.mode === "controlled" &&
+        policy.billingEnabled &&
+        policy.totalBudgetUsd > policy.spentUsd &&
+        policy.perJobLimitUsd > 0;
       return {
         store: probe.backend,
         storeReachable: probe.reachable,
         storeError: probe.error,
+        spendPolicy: {
+          mode: policy.mode,
+          billingEnabled: policy.billingEnabled,
+          remainingBudgetUsd: Math.max(0, policy.totalBudgetUsd - policy.spentUsd),
+          perJobLimitUsd: policy.perJobLimitUsd,
+        },
         providers: PROVIDERS.map((p) => ({
           id: p.id,
           kind: p.kind,
@@ -93,6 +106,15 @@ export const TOOLS: Tool[] = [
           // while every submit to either was malformed — the status was the
           // last place you would have learned the live path did not work.
           liveWired: isLiveWired(p.id),
+          spendEligible:
+            p.id !== "mock" &&
+            spendEnabled &&
+            isLiveWired(p.id) &&
+            hasCredentials(p.id) &&
+            (p.rateEnvKey
+              ? Number.isFinite(Number(process.env[p.rateEnvKey])) &&
+                Number(process.env[p.rateEnvKey]) > 0
+              : true),
         })),
       };
     },

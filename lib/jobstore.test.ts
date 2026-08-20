@@ -20,6 +20,24 @@ const DATA_DIR = path.join(process.cwd(), ".data-test-jobstore");
 process.env.EDITFORGE_DATA_DIR = DATA_DIR;
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
 
+const SPEND_KEYS = [
+  "RUNWAY_COST_PER_SECOND_USD",
+  "EDITFORGE_SPEND_MODE",
+  "EDITFORGE_BILLING_ENABLED",
+  "EDITFORGE_TOTAL_BUDGET_USD",
+  "EDITFORGE_SPENT_USD",
+  "EDITFORGE_PER_JOB_LIMIT_USD",
+];
+
+function enableRunwaySpend() {
+  process.env.RUNWAY_COST_PER_SECOND_USD = "0.05";
+  process.env.EDITFORGE_SPEND_MODE = "controlled";
+  process.env.EDITFORGE_BILLING_ENABLED = "true";
+  process.env.EDITFORGE_TOTAL_BUDGET_USD = "10";
+  process.env.EDITFORGE_SPENT_USD = "0";
+  process.env.EDITFORGE_PER_JOB_LIMIT_USD = "1";
+}
+
 const PASS: RubricDecision = {
   cutHash: "abc123",
   rubricVersion: "restraint-1.0",
@@ -30,11 +48,13 @@ const PASS: RubricDecision = {
 
 beforeEach(async () => {
   await fs.rm(JOBS_FILE, { force: true });
+  for (const key of SPEND_KEYS) delete process.env[key];
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.RUNWAY_API_KEY;
+  for (const key of SPEND_KEYS) delete process.env[key];
 });
 
 describe("durable job lifecycle", () => {
@@ -131,6 +151,7 @@ describe("durable job lifecycle", () => {
 
   it("carries a provider failure onto the job with its reason", async () => {
     process.env.RUNWAY_API_KEY = "tok";
+    enableRunwaySpend();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: unknown) =>
@@ -150,6 +171,7 @@ describe("durable job lifecycle", () => {
 
   it("keeps a still-running job in place rather than guessing", async () => {
     process.env.RUNWAY_API_KEY = "tok";
+    enableRunwaySpend();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: unknown) =>
@@ -167,6 +189,7 @@ describe("durable job lifecycle", () => {
 
   it("stores the output url when the provider succeeds", async () => {
     process.env.RUNWAY_API_KEY = "tok";
+    enableRunwaySpend();
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: unknown) =>

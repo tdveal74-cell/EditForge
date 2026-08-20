@@ -15,6 +15,24 @@ vi.mock("next/headers", () => ({
 
 const { POST } = await import("./route");
 
+const SPEND_KEYS = [
+  "RUNWAY_COST_PER_SECOND_USD",
+  "EDITFORGE_SPEND_MODE",
+  "EDITFORGE_BILLING_ENABLED",
+  "EDITFORGE_TOTAL_BUDGET_USD",
+  "EDITFORGE_SPENT_USD",
+  "EDITFORGE_PER_JOB_LIMIT_USD",
+];
+
+function enableRunwaySpend() {
+  process.env.RUNWAY_COST_PER_SECOND_USD = "0.05";
+  process.env.EDITFORGE_SPEND_MODE = "controlled";
+  process.env.EDITFORGE_BILLING_ENABLED = "true";
+  process.env.EDITFORGE_TOTAL_BUDGET_USD = "10";
+  process.env.EDITFORGE_SPENT_USD = "0";
+  process.env.EDITFORGE_PER_JOB_LIMIT_USD = "1";
+}
+
 function submit(body: Record<string, unknown>, token?: string) {
   return new Request("http://localhost/api/jobs", {
     method: "POST",
@@ -31,11 +49,13 @@ beforeEach(async () => {
   cookieJar.value = "";
   delete process.env.EDITFORGE_MCP_TOKEN;
   delete process.env.RUNWAY_API_KEY;
+  for (const key of SPEND_KEYS) delete process.env[key];
 });
 
 afterEach(() => {
   delete process.env.EDITFORGE_MCP_TOKEN;
   delete process.env.RUNWAY_API_KEY;
+  for (const key of SPEND_KEYS) delete process.env[key];
 });
 
 describe("spend gate on POST /api/jobs", () => {
@@ -60,6 +80,7 @@ describe("spend gate on POST /api/jobs", () => {
   it("allows a billable provider once the MCP bearer token matches", async () => {
     process.env.RUNWAY_API_KEY = "live-key";
     process.env.EDITFORGE_MCP_TOKEN = "tok-abcdef";
+    enableRunwaySpend();
 
     // Never actually reach Runway from a test.
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "task_1" }) }) as unknown as Response));

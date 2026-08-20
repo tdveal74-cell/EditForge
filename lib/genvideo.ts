@@ -1,5 +1,16 @@
+import { evaluateSpend, spendPolicyFromEnv } from "./spend-policy";
+
 export type GenProvider = "runway" | "kling" | "veo" | "seedream" | "mock";
-export type GenMode = "text-to-video" | "image-to-video" | "extend" | "restyle";
+export type GenMode =
+  | "text-to-video"
+  | "image-to-video"
+  | "video-to-video"
+  | "extend"
+  | "restyle"
+  | "motion-control"
+  | "keyframes"
+  | "performance-capture"
+  | "multi-reference";
 export type QualityTier = "draft" | "social" | "broadcast-intent";
 
 export const GEN_PROVIDERS: {
@@ -8,11 +19,11 @@ export const GEN_PROVIDERS: {
   strengths: string;
   envKey: string;
 }[] = [
-  { id: "runway", label: "Runway", strengths: "Gen-3 / motion brush · restyle · extend", envKey: "RUNWAY_API_KEY" },
-  { id: "kling", label: "Kling", strengths: "Longer takes · strong motion coherence", envKey: "KLING_API_KEY" },
+  { id: "mock", label: "Mock (offline)", strengths: "Plan + QA only — no cloud spend", envKey: "" },
+  { id: "runway", label: "Runway", strengths: "Gen-4.5 · Act-Two performance · Aleph generative editing", envKey: "RUNWAY_API_KEY" },
+  { id: "kling", label: "Kling", strengths: "Multi-reference · motion control · shot extension · native audio", envKey: "KLING_API_KEY" },
   { id: "veo", label: "Veo", strengths: "High fidelity · cinematic intent", envKey: "VEO_API_KEY" },
   { id: "seedream", label: "Seedream", strengths: "Stylized · concept-heavy looks", envKey: "SEEDREAM_API_KEY" },
-  { id: "mock", label: "Mock (offline)", strengths: "Plan + QA only — no cloud spend", envKey: "" },
 ];
 
 export const GEN_QUALITY_BAR = [
@@ -81,6 +92,17 @@ export function submitGenVideo(req: GenSubmitRequest): GenSubmitResult {
       mode: "live",
       error: `${meta.envKey} not configured — use mock or set the key for live path`,
     };
+  }
+
+  const spend = evaluateSpend(spendPolicyFromEnv(), {
+    provider,
+    executionClass: "paid-remote",
+    // This legacy planner has no server-owned rate calculation. Failing the
+    // estimate closed is safer than trusting a browser-provided number.
+    estimatedCostUsd: undefined,
+  });
+  if (!spend.allowed) {
+    return { ok: false, provider, mode: "live", error: spend.reason };
   }
 
   // Live path is intentionally a boundary stub: auth exists, worker/polling is next increment.

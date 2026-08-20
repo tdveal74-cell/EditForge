@@ -4,7 +4,16 @@ import { GET } from "./route";
 const SECRET = "sk-super-secret-value-9999";
 
 afterEach(() => {
-  delete process.env.RUNWAY_API_KEY;
+  for (const key of [
+    "RUNWAY_API_KEY",
+    "RUNWAY_COST_PER_SECOND_USD",
+    "KLING_API_KEY",
+    "EDITFORGE_SPEND_MODE",
+    "EDITFORGE_BILLING_ENABLED",
+    "EDITFORGE_TOTAL_BUDGET_USD",
+    "EDITFORGE_SPENT_USD",
+    "EDITFORGE_PER_JOB_LIMIT_USD",
+  ]) delete process.env[key];
 });
 
 describe("provider readiness endpoint", () => {
@@ -21,7 +30,24 @@ describe("provider readiness endpoint", () => {
 
     const runway = body.providers.find((p: { id: string }) => p.id === "runway");
     expect(runway.credentialSet).toBe(true);
+    expect(runway.billable).toBe(false);
+    expect(runway.blockedReason).toMatch(/zero-cost/i);
+    expect(body.spendPolicy.totalBudgetUsd).toBe(0);
+  });
+
+  it("marks Runway eligible only after every controlled-spend control is explicit", async () => {
+    process.env.RUNWAY_API_KEY = "live-key";
+    process.env.RUNWAY_COST_PER_SECOND_USD = "0.05";
+    process.env.EDITFORGE_SPEND_MODE = "controlled";
+    process.env.EDITFORGE_BILLING_ENABLED = "true";
+    process.env.EDITFORGE_TOTAL_BUDGET_USD = "10";
+    process.env.EDITFORGE_SPENT_USD = "0";
+    process.env.EDITFORGE_PER_JOB_LIMIT_USD = "1";
+
+    const body = await (await GET()).json();
+    const runway = body.providers.find((p: { id: string }) => p.id === "runway");
     expect(runway.billable).toBe(true);
+    expect(runway.rateConfigured).toBe(true);
   });
 
   it("marks a provider without its credential as not billable", async () => {

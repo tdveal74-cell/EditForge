@@ -1,4 +1,5 @@
 import type { JobKind } from "./jobs";
+import { evaluateSpend, spendPolicyFromEnv, type ExecutionClass } from "./spend-policy";
 
 /**
  * The one execution boundary for AI media work.
@@ -44,8 +45,12 @@ export type ProviderSpec = {
   id: string;
   kind: JobKind;
   label: string;
+  executionClass: ExecutionClass;
   /** Env var holding the credential; empty means the provider needs none. */
   envKey: string;
+  /** Server-owned rate input. A browser estimate never authorizes spend. */
+  rateEnvKey?: string;
+  estimateCostUsd?: (req: SubmitRequest) => number | undefined;
   /** Base endpoint for the live path. Absent means live is not wired yet. */
   endpoint?: string;
   /** Absent means the shape is not implemented — the boundary refuses. */
@@ -59,44 +64,72 @@ export type ProviderSpec = {
  */
 const RUNWAY_API_VERSION = "2024-11-06";
 
+function positiveEnvNumber(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function durationSeconds(req: SubmitRequest): number {
+  const raw = req.options?.durationSec ?? req.options?.duration ?? 5;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 5;
+}
+
 export const PROVIDERS: ProviderSpec[] = [
   // Gen video
   {
     id: "runway",
     kind: "gen-video",
     label: "Runway",
+    executionClass: "paid-remote",
     envKey: "RUNWAY_API_KEY",
+    rateEnvKey: "RUNWAY_COST_PER_SECOND_USD",
+    estimateCostUsd: (req) => {
+      const rate = positiveEnvNumber("RUNWAY_COST_PER_SECOND_USD");
+      return rate === undefined ? undefined : rate * durationSeconds(req);
+    },
     endpoint: "https://api.dev.runwayml.com/v1",
     wire: {
       headers: { "X-Runway-Version": RUNWAY_API_VERSION },
       // Creation is per-modality; there is no generic task-creation route.
       submitPath: "/text_to_video",
-      buildBody: (req) => ({
-        model: "gen4.5",
-        promptText: req.prompt,
-        // Since 2024-11-06 `ratio` carries the output resolution itself rather
-        // than an aspect name — "16:9" is refused.
-        ratio: "1280:720",
-        duration: 5,
-        ...(req.options ?? {}),
-      }),
+      buildBody: (req) => {
+        // Studio-only controls must never leak into a provider request. A
+        // provider override belongs in the remaining object and is deliberate.
+        const providerOptions = { ...(req.options ?? {}) };
+        delete providerOptions.aspect;
+        delete providerOptions.quality;
+        delete providerOptions.mode;
+        delete providerOptions.durationSec;
+        return {
+          model: "gen4.5",
+          promptText: req.prompt,
+          // Since 2024-11-06 `ratio` carries the output resolution itself rather
+          // than an aspect name — "16:9" is refused.
+          ratio: "1280:720",
+          duration: 5,
+          ...providerOptions,
+        };
+      },
       pollPath: (id) => `/tasks/${encodeURIComponent(id)}`,
     },
   },
-  { id: "kling", kind: "gen-video", label: "Kling", envKey: "KLING_API_KEY" },
-  { id: "veo", kind: "gen-video", label: "Veo", envKey: "VEO_API_KEY" },
-  { id: "seedream", kind: "gen-video", label: "Seedream", envKey: "SEEDREAM_API_KEY" },
+  { id: "kling", kind: "gen-video", label: "Kling", executionClass: "paid-remote", envKey: "KLING_API_KEY" },
+  { id: "veo", kind: "gen-video", label: "Veo", executionClass: "paid-remote", envKey: "VEO_API_KEY" },
+  { id: "seedream", kind: "gen-video", label: "Seedream", executionClass: "paid-remote", envKey: "SEEDREAM_API_KEY" },
   // Voice. Deliberately no wire: ElevenLabs text-to-speech answers a POST with
   // the audio bytes themselves, synchronously. There is no task to poll and
   // nowhere here to put a binary body, so it does not fit this submit-and-poll
   // boundary without somewhere to store the blob. Leaving the endpoint recorded
   // and the wire absent is the honest state — it refuses instead of issuing a
   // request that would 404.
-  { id: "elevenlabs", kind: "voice", label: "ElevenLabs", envKey: "ELEVENLABS_API_KEY", endpoint: "https://api.elevenlabs.io/v1" },
+  { id: "elevenlabs", kind: "voice", label: "ElevenLabs", executionClass: "paid-remote", envKey: "ELEVENLABS_API_KEY", endpoint: "https://api.elevenlabs.io/v1" },
   // Avatar — driven through the connected HyperFrames tools, not an API key here.
-  { id: "hyperframes", kind: "avatar", label: "HyperFrames / HeyGen", envKey: "" },
+  { id: "hyperframes", kind: "avatar", label: "HyperFrames / HeyGen", executionClass: "paid-remote", envKey: "" },
   // Always available, never charges, never pretends.
-  { id: "mock", kind: "gen-video", label: "Mock (offline)", envKey: "" },
+  { id: "mock", kind: "gen-video", label: "Mock (offline)", executionClass: "offline-plan", envKey: "" },
 ];
 
 /** True when this provider has both a base endpoint and an implemented shape. */
@@ -122,8 +155,8 @@ export function providersFor(kind: JobKind): ProviderSpec[] {
  */
 export function providerChoicesFor(kind: JobKind): ProviderSpec[] {
   return [
-    ...PROVIDERS.filter((p) => p.kind === kind && p.id !== "mock"),
     ...PROVIDERS.filter((p) => p.id === "mock"),
+    ...PROVIDERS.filter((p) => p.kind === kind && p.id !== "mock"),
   ];
 }
 
@@ -217,6 +250,15 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
       mode: "live",
       error: `${spec.label} has credentials but its API shape is not implemented here — use mock until it lands`,
     };
+  }
+
+  const spend = evaluateSpend(spendPolicyFromEnv(), {
+    provider: spec.id,
+    executionClass: spec.executionClass,
+    estimatedCostUsd: spec.estimateCostUsd?.(req),
+  });
+  if (!spend.allowed) {
+    return { ok: false, provider: spec.id, mode: "live", error: spend.reason };
   }
 
   try {

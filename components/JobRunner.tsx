@@ -14,6 +14,7 @@ type ProviderReadiness = {
   id: string;
   billable: boolean;
   wired: boolean;
+  blockedReason?: string;
   envKey?: string;
   credentialSet?: boolean;
 };
@@ -73,6 +74,7 @@ export function JobRunner({
 
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
+  const providerUnavailable = Boolean(chosen && provider !== "mock" && !chosen.billable);
 
   async function run() {
     setBusy(true);
@@ -151,7 +153,7 @@ export function JobRunner({
               const r = readiness[p.id];
               const mark = !r ? "" : r.billable ? " · live" : p.id === "mock" ? "" : " · unavailable";
               return (
-                <option key={p.id} value={p.id}>
+                <option key={p.id} value={p.id} disabled={Boolean(r && p.id !== "mock" && !r.billable)}>
                   {p.label}
                   {mark}
                 </option>
@@ -164,7 +166,7 @@ export function JobRunner({
           variant="accent"
           className="min-h-11 w-full sm:w-auto"
           onClick={run}
-          disabled={busy || tracking || Boolean(blockedReason) || !prompt.trim()}
+          disabled={busy || tracking || Boolean(blockedReason) || providerUnavailable || !prompt.trim()}
         >
           {busy && !job ? "Submitting…" : "Run job"}
         </Button>
@@ -178,14 +180,10 @@ export function JobRunner({
             </span>
           ) : chosen.id === "mock" ? (
             <span className="text-navy/50">Offline path — no spend, and no media produced.</span>
-          ) : !chosen.wired ? (
-            <span className="text-navy/50">
-              No live path implemented for this provider yet — it will refuse rather than pretend.
-            </span>
+          ) : chosen.blockedReason ? (
+            <span className="text-navy/50">{chosen.blockedReason}.</span>
           ) : (
-            <span className="text-navy/50">
-              {chosen.envKey} is not set, so this will refuse rather than run.
-            </span>
+            <span className="text-navy/50">Provider unavailable — it will refuse rather than pretend.</span>
           )}
         </p>
       )}

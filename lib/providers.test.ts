@@ -10,10 +10,31 @@ import {
   submitToProvider,
 } from "./providers";
 
-const KEYS = ["RUNWAY_API_KEY", "KLING_API_KEY", "VEO_API_KEY", "SEEDREAM_API_KEY", "ELEVENLABS_API_KEY"];
+const KEYS = [
+  "RUNWAY_API_KEY",
+  "RUNWAY_COST_PER_SECOND_USD",
+  "KLING_API_KEY",
+  "VEO_API_KEY",
+  "SEEDREAM_API_KEY",
+  "ELEVENLABS_API_KEY",
+  "EDITFORGE_SPEND_MODE",
+  "EDITFORGE_BILLING_ENABLED",
+  "EDITFORGE_TOTAL_BUDGET_USD",
+  "EDITFORGE_SPENT_USD",
+  "EDITFORGE_PER_JOB_LIMIT_USD",
+];
 
 function clearKeys() {
   for (const k of KEYS) delete process.env[k];
+}
+
+function enableRunwaySpend() {
+  process.env.EDITFORGE_SPEND_MODE = "controlled";
+  process.env.EDITFORGE_BILLING_ENABLED = "true";
+  process.env.EDITFORGE_TOTAL_BUDGET_USD = "10";
+  process.env.EDITFORGE_SPENT_USD = "0";
+  process.env.EDITFORGE_PER_JOB_LIMIT_USD = "1";
+  process.env.RUNWAY_COST_PER_SECOND_USD = "0.05";
 }
 
 afterEach(() => {
@@ -104,9 +125,30 @@ describe("provider boundary", () => {
     expect(isLiveWired("nope")).toBe(false);
   });
 
+  it("an API key alone cannot enable spend", async () => {
+    clearKeys();
+    process.env.RUNWAY_API_KEY = "secret-key";
+    process.env.RUNWAY_COST_PER_SECOND_USD = "0.05";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "locked wide",
+      idempotencyKey: "zero-cost",
+      options: { durationSec: 5 },
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toMatch(/zero-cost/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("submits live with auth and an idempotency header, returning the provider id", async () => {
     clearKeys();
     process.env.RUNWAY_API_KEY = "secret-key";
+    enableRunwaySpend();
     // Typed with the fetch signature so the recorded init is inspectable.
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
@@ -119,6 +161,7 @@ describe("provider boundary", () => {
       kind: "gen-video",
       prompt: "locked wide",
       idempotencyKey: "key-abc",
+      options: { durationSec: 10, aspect: "16:9", quality: "social", mode: "text-to-video" },
     });
 
     expect(res.ok).toBe(true);
@@ -144,6 +187,10 @@ describe("provider boundary", () => {
     // Post-2024-11-06 this carries a resolution, not an aspect name.
     expect(body.ratio).toMatch(/^\d+:\d+$/);
     expect(body).not.toHaveProperty("prompt");
+    expect(body).not.toHaveProperty("durationSec");
+    expect(body).not.toHaveProperty("aspect");
+    expect(body).not.toHaveProperty("quality");
+    expect(body).not.toHaveProperty("mode");
   });
 
   it("carries the version header on polls too, not just submits", async () => {
@@ -164,6 +211,7 @@ describe("provider boundary", () => {
   it("surfaces a provider HTTP error instead of a fabricated success", async () => {
     clearKeys();
     process.env.RUNWAY_API_KEY = "tok";
+    enableRunwaySpend();
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 429 }) as unknown as Response));
 
     const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k5" });
@@ -176,6 +224,7 @@ describe("provider boundary", () => {
     // about the refusal is the part that makes it actionable.
     clearKeys();
     process.env.RUNWAY_API_KEY = "tok";
+    enableRunwaySpend();
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -221,9 +270,9 @@ describe("provider boundary", () => {
     for (const kind of ["gen-video", "voice", "avatar"] as const) {
       const ids = providerChoicesFor(kind).map((p) => p.id);
       expect(ids).toContain("mock");
-      // Listed once, and last — the real providers lead.
+      // Listed once, and first — opening a picker must default to zero spend.
       expect(ids.filter((i) => i === "mock")).toHaveLength(1);
-      expect(ids[ids.length - 1]).toBe("mock");
+      expect(ids[0]).toBe("mock");
 
       // Anything a picker offers must be something the boundary will accept.
       for (const id of ids) {

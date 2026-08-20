@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAndQueue, listJobs, submitJob } from "@/lib/jobstore";
-import { findProvider, hasCredentials } from "@/lib/providers";
+import { findProvider, hasCredentials, isLiveWired } from "@/lib/providers";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, isAuthenticated } from "@/lib/auth";
 import type { JobKind } from "@/lib/jobs";
@@ -13,7 +13,7 @@ const MEDIA_KINDS: JobKind[] = ["gen-video", "voice", "avatar"];
 function willBill(provider: string): boolean {
   const spec = findProvider(provider);
   if (!spec || spec.id === "mock") return false;
-  return hasCredentials(spec.id) && Boolean(spec.endpoint);
+  return hasCredentials(spec.id) && isLiveWired(spec.id);
 }
 
 export async function GET() {
@@ -95,7 +95,10 @@ export async function POST(req: Request) {
     });
 
     return NextResponse.json(
-      { job: submitted ?? job, live: hasCredentials(provider) && provider !== "mock" },
+      {
+        job: submitted ?? job,
+        live: submitted?.mode === "live" && submitted.status !== "failed",
+      },
       { status: 201 }
     );
   } catch (err) {

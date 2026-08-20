@@ -57,6 +57,7 @@ If no → continue the loop.
 | Dailies | ~89 | Contact sheet + mobile-first approve/reject |
 | JobRunner | ~90 | Result stage + mobile actions + honesty |
 | Mobile nav | ~84 | Priority strip |
+| Engines | Unscored | Functional and policy-gated; browser visual audit still required |
 | **Overall** | **~89** | Climbing toward 99 |
 
 Update this table as surfaces clear higher bars.

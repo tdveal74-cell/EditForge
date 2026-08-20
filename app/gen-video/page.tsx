@@ -13,7 +13,7 @@ import { PRIMARY_CLIP, REFERENCE_STILL } from "@/lib/mediaLibrary";
 const GEN_JOB_PROVIDERS = providerChoicesFor("gen-video").map((p) => ({ id: p.id, label: p.label }));
 
 export default function GenVideoPage() {
-  const [provider, setProvider] = useState("runway");
+  const [provider, setProvider] = useState("mock");
   const [prompt, setPrompt] = useState(
     "Locked wide: empty room, soft window light, dust in air, slow push-in, no faces, cinematic restraint, 24fps feel"
   );

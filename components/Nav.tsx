@@ -17,6 +17,7 @@ const groups: { label: string; links: { href: string; label: string }[] }[] = [
   {
     label: "AI media",
     links: [
+      { href: "/engines", label: "Engines" },
       { href: "/voice", label: "Voice" },
       { href: "/avatar", label: "Avatar" },
       { href: "/gen-video", label: "Gen video" },
@@ -45,7 +46,7 @@ const groups: { label: string; links: { href: string; label: string }[] }[] = [
 /** Highest-frequency operator destinations on small screens */
 const mobilePriority = [
   { href: "/studio", label: "Studio" },
-  { href: "/gen-video", label: "Gen" },
+  { href: "/engines", label: "Engines" },
   { href: "/dailies", label: "Dailies" },
   { href: "/review", label: "Review" },
   { href: "/jobs", label: "Jobs" },
@@ -57,7 +58,7 @@ export function Nav() {
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-surface-elevated/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
           <Link
             href="/"
             className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600 transition-colors duration-flagship hover:text-amber-700"
@@ -65,7 +66,10 @@ export function Nav() {
             EditForge
           </Link>
           {/* Mobile priority strip — product actions, not full map */}
-          <nav aria-label="Priority" className="flex items-center gap-1 sm:gap-2 lg:hidden">
+          <nav
+            aria-label="Priority"
+            className="flex w-full items-center justify-between gap-1 sm:w-auto sm:justify-start sm:gap-2 lg:hidden"
+          >
             {mobilePriority.map((l) => {
               const active = pathname === l.href || pathname.startsWith(l.href + "/");
               return (
@@ -74,7 +78,7 @@ export function Nav() {
                   href={l.href}
                   aria-current={active ? "page" : undefined}
                   className={clsx(
-                    "rounded-control px-2.5 py-1.5 text-[11px] font-medium transition-colors duration-flagship",
+                    "whitespace-nowrap rounded-control px-2 py-1.5 text-[11px] font-medium transition-colors duration-flagship sm:px-2.5",
                     active
                       ? "bg-navy text-surface"
                       : "text-navy/65 hover:bg-surface-muted hover:text-navy"

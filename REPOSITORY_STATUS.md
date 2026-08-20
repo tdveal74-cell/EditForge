@@ -9,6 +9,7 @@
 | Completion vocabulary | **code-complete** for Studio plan/control plane MVP |
 | Job lifecycle | `lib/jobs.ts` — planned→authorized→queued→running→validating→completed/failed/cancelled + rubric decision record |
 | Provider boundary | `lib/providers.ts` — the one place a provider is called. Fails closed without credentials, never invents an external id, mock always labelled and returns no media |
+| Zero-cost engine control | `lib/spend-policy.ts` + `lib/engine-capabilities.ts` + `/engines` — Persona, Cinema, and Edit capability registry; paid remote providers hard-blocked by default. Controlled billing remains preflight-only until the atomic spend ledger is implemented. |
 | Worker path | `lib/jobstore.ts` + `/api/jobs` — durable submit · poll · complete · retry · cancel. Wired into `/voice`, `/avatar`, `/gen-video` via `components/JobRunner.tsx`; runs appear on `/jobs` |
 | Gen-video boundary | `lib/genvideo.ts` `submitGenVideo` — planning only; execution goes through `lib/providers.ts` |
 | Deployed | Vercel production — https://editforge.vercel.app · git-connected: pushes to `main` deploy, PRs get previews |

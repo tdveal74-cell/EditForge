@@ -1,4 +1,4 @@
-# EditForge — MVP complete
+# EditForge — production control plane and worker
 
 ## Definition of done (this repo)
 Studio OS code is **complete** for local run + plan APIs.
@@ -15,11 +15,15 @@ Studio OS code is **complete** for local run + plan APIs.
 - [x] Shared primitives: Button · Card · Badge · PageHeader
 - [x] Hardware reference tier: `lib/hardware.ts` · `/hardware` · `docs/HARDWARE.md`
 
-### AI media (plan + keys)
+### AI media
 - [x] Voice (ElevenLabs-class)
 - [x] Avatar / HyperFrames
 - [x] Gen video (Runway · Kling · Veo · Seedream)
 - [x] Stock (Artlist-class index)
+- [x] Self-hosted Forge Worker with authenticated uploads, provenance, durable jobs, artifact streaming, and honest engine-readiness gates
+- [x] Chatterbox, LivePortrait, MuseTalk, LTX-Video, and FFmpeg adapters
+- [x] Ascension Caudex 12-episode 4K production lane
+- [x] TSWS Microdrama Grok Visuals source registry and long-form protection boundary
 
 ### Bridges
 - [x] NLE · mix · VFX engine · MAM · render farm
@@ -31,15 +35,15 @@ Studio OS code is **complete** for local run + plan APIs.
 - [x] `REPOSITORY_STATUS.md`
 - [x] `.github/workflows/ci.yml` (install · typecheck · test · build)
 
-## Not in this MVP
-- [ ] Live provider renders (API keys + worker)
+## Still requires production infrastructure
+- [ ] GPU-host proof render with the official model weights and accepted licenses
 - [ ] Vercel deploy (explicit approve)
 - [ ] Foundation-model training
-- [ ] Full durable job state machine with immutable rubric decision records
+- [ ] Durable object storage/queue deployment for multi-instance production scale
 
 ## Verify
 ```bash
 npm install && npm test && npm run build && npm run dev
 ```
 
-**Status: MVP code-complete · CI defined · not live-provider-complete.**
+**Status: control plane and self-hosted worker code-complete · GPU inference proof pending · paid providers disabled by default.**

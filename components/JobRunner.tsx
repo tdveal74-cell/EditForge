@@ -12,6 +12,7 @@ export type ProviderChoice = { id: string; label: string };
 
 type ProviderReadiness = {
   id: string;
+  available: boolean;
   billable: boolean;
   wired: boolean;
   blockedReason?: string;
@@ -74,7 +75,7 @@ export function JobRunner({
 
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
-  const providerUnavailable = Boolean(chosen && provider !== "mock" && !chosen.billable);
+  const providerUnavailable = Boolean(chosen && !chosen.available);
 
   async function run() {
     setBusy(true);
@@ -151,9 +152,17 @@ export function JobRunner({
           <Select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={tracking}>
             {providers.map((p) => {
               const r = readiness[p.id];
-              const mark = !r ? "" : r.billable ? " · live" : p.id === "mock" ? "" : " · unavailable";
+              const mark = !r
+                ? ""
+                : r.billable
+                  ? " · paid live"
+                  : r.available && p.id !== "mock"
+                    ? " · self-hosted"
+                    : p.id === "mock"
+                      ? ""
+                      : " · unavailable";
               return (
-                <option key={p.id} value={p.id} disabled={Boolean(r && p.id !== "mock" && !r.billable)}>
+                <option key={p.id} value={p.id} disabled={Boolean(r && !r.available)}>
                   {p.label}
                   {mark}
                 </option>
@@ -180,6 +189,8 @@ export function JobRunner({
             </span>
           ) : chosen.id === "mock" ? (
             <span className="text-navy/50">Offline path — no spend, and no media produced.</span>
+          ) : chosen.available ? (
+            <span className="text-navy/50">Self-hosted execution — no paid provider call; worker compute is still required.</span>
           ) : chosen.blockedReason ? (
             <span className="text-navy/50">{chosen.blockedReason}.</span>
           ) : (

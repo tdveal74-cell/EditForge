@@ -1,16 +1,31 @@
 import { NextResponse } from "next/server";
 import { createAndQueue, listJobs, submitJob } from "@/lib/jobstore";
-import { findProvider, hasCredentials, isLiveWired } from "@/lib/providers";
+import { findProvider, hasCredentials, isBillableProvider, isLiveWired } from "@/lib/providers";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, isAuthenticated } from "@/lib/auth";
 import type { JobKind } from "@/lib/jobs";
 
 export const dynamic = "force-dynamic";
 
-const MEDIA_KINDS: JobKind[] = ["gen-video", "voice", "avatar"];
+const MEDIA_KINDS: JobKind[] = [
+  "gen-video",
+  "voice",
+  "avatar",
+  "proof-shot",
+  "episode-generate",
+  "episode-master",
+  "thread-master",
+];
 
 /** Would a submit to this provider reach a real, paid service? */
 function willBill(provider: string): boolean {
+  const spec = findProvider(provider);
+  if (!spec || spec.id === "mock") return false;
+  return isBillableProvider(spec.id) && hasCredentials(spec.id) && isLiveWired(spec.id);
+}
+
+/** Any real execution path consumes a protected identity or compute resource. */
+function requiresAuthentication(provider: string): boolean {
   const spec = findProvider(provider);
   if (!spec || spec.id === "mock") return false;
   return hasCredentials(spec.id) && isLiveWired(spec.id);
@@ -63,11 +78,12 @@ export async function POST(req: Request) {
     authorization: req.headers.get("authorization"),
     sessionCookie: (await cookies()).get(SESSION_COOKIE)?.value,
   });
-  if (willBill(provider) && !authed) {
+  if (requiresAuthentication(provider) && !authed) {
     return NextResponse.json(
       {
-        error:
-          "This provider bills real work, so it requires authentication. Sign in, or send the MCP bearer token. Provider 'mock' is always available.",
+        error: willBill(provider)
+          ? "This provider bills real work, so it requires authentication. Sign in, or send the MCP bearer token. Provider 'mock' is always available."
+          : "This provider executes real media and protected identity assets, so it requires authentication. Sign in, or send the MCP bearer token.",
       },
       { status: 401 }
     );

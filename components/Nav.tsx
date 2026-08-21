@@ -8,6 +8,8 @@ const groups: { label: string; links: { href: string; label: string }[] }[] = [
   {
     label: "Create",
     links: [
+      { href: "/ascension", label: "Ascension" },
+      { href: "/tsws-microdrama", label: "TSWS Micro" },
       { href: "/studio", label: "Studio" },
       { href: "/pipeline", label: "Pipeline" },
       { href: "/projects", label: "Projects" },
@@ -45,11 +47,11 @@ const groups: { label: string; links: { href: string; label: string }[] }[] = [
 
 /** Highest-frequency operator destinations on small screens */
 const mobilePriority = [
+  { href: "/ascension", label: "Ascension" },
+  { href: "/tsws-microdrama", label: "TSWS" },
   { href: "/studio", label: "Studio" },
-  { href: "/engines", label: "Engines" },
   { href: "/dailies", label: "Dailies" },
-  { href: "/review", label: "Review" },
-  { href: "/jobs", label: "Jobs" },
+  { href: "/engines", label: "Engines" },
 ];
 
 export function Nav() {

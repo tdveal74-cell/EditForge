@@ -1,5 +1,6 @@
 import type { JobKind } from "./jobs";
 import { evaluateSpend, spendPolicyFromEnv, type ExecutionClass } from "./spend-policy";
+import { workerResultToStudioUrl } from "./forge-worker";
 
 /**
  * The one execution boundary for AI media work.
@@ -44,6 +45,8 @@ export type ProviderWire = {
 export type ProviderSpec = {
   id: string;
   kind: JobKind;
+  /** Additional kinds served by a shared worker endpoint. */
+  kinds?: readonly JobKind[];
   label: string;
   executionClass: ExecutionClass;
   /** Env var holding the credential; empty means the provider needs none. */
@@ -53,6 +56,8 @@ export type ProviderSpec = {
   estimateCostUsd?: (req: SubmitRequest) => number | undefined;
   /** Base endpoint for the live path. Absent means live is not wired yet. */
   endpoint?: string;
+  /** Runtime-owned endpoint for a self-hosted worker; read per request, never at import. */
+  endpointEnvKey?: string;
   /** Absent means the shape is not implemented — the boundary refuses. */
   wire?: ProviderWire;
 };
@@ -78,6 +83,25 @@ function durationSeconds(req: SubmitRequest): number {
 }
 
 export const PROVIDERS: ProviderSpec[] = [
+  {
+    id: "forge-worker",
+    kind: "gen-video",
+    kinds: ["gen-video", "voice", "avatar", "proof-shot", "episode-generate", "episode-master", "thread-master"],
+    label: "Forge Worker (self-hosted)",
+    executionClass: "free-local",
+    envKey: "EDITFORGE_WORKER_TOKEN",
+    endpointEnvKey: "EDITFORGE_WORKER_URL",
+    wire: {
+      submitPath: "/v1/jobs",
+      buildBody: (req) => ({
+        kind: req.kind,
+        prompt: req.prompt,
+        idempotencyKey: req.idempotencyKey,
+        options: req.options ?? {},
+      }),
+      pollPath: (id) => `/v1/jobs/${encodeURIComponent(id)}`,
+    },
+  },
   // Gen video
   {
     id: "runway",
@@ -137,7 +161,20 @@ export function isLiveWired(id: string): boolean {
   const p = findProvider(id);
   if (!p) return false;
   if (p.id === "mock") return true;
-  return Boolean(p.endpoint && p.wire);
+  return Boolean(providerEndpoint(p) && p.wire);
+}
+
+export function providerEndpoint(provider: ProviderSpec): string | undefined {
+  const raw = provider.endpointEnvKey ? process.env[provider.endpointEnvKey] : provider.endpoint;
+  return raw?.replace(/\/+$/, "");
+}
+
+export function providerServes(provider: ProviderSpec, kind: JobKind): boolean {
+  return provider.kind === kind || Boolean(provider.kinds?.includes(kind));
+}
+
+export function isBillableProvider(id: string): boolean {
+  return findProvider(id)?.executionClass === "paid-remote";
 }
 
 export function findProvider(id: string): ProviderSpec | undefined {
@@ -145,7 +182,7 @@ export function findProvider(id: string): ProviderSpec | undefined {
 }
 
 export function providersFor(kind: JobKind): ProviderSpec[] {
-  return PROVIDERS.filter((p) => p.kind === kind);
+  return PROVIDERS.filter((p) => providerServes(p, kind));
 }
 
 /**
@@ -156,7 +193,7 @@ export function providersFor(kind: JobKind): ProviderSpec[] {
 export function providerChoicesFor(kind: JobKind): ProviderSpec[] {
   return [
     ...PROVIDERS.filter((p) => p.id === "mock"),
-    ...PROVIDERS.filter((p) => p.kind === kind && p.id !== "mock"),
+    ...PROVIDERS.filter((p) => providerServes(p, kind) && p.id !== "mock"),
   ];
 }
 
@@ -214,7 +251,7 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
   if (!spec) {
     return { ok: false, provider: req.provider, mode: "mock", error: `Unknown provider "${req.provider}"` };
   }
-  if (spec.kind !== req.kind && spec.id !== "mock") {
+  if (!providerServes(spec, req.kind) && spec.id !== "mock") {
     return {
       ok: false,
       provider: spec.id,
@@ -243,12 +280,16 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
     };
   }
 
-  if (!spec.endpoint || !spec.wire) {
+  const endpoint = providerEndpoint(spec);
+  if (!endpoint || !spec.wire) {
+    const endpointReason = spec.endpointEnvKey && !endpoint
+      ? `${spec.endpointEnvKey} not configured`
+      : `${spec.label} API shape is not implemented`;
     return {
       ok: false,
       provider: spec.id,
       mode: "live",
-      error: `${spec.label} has credentials but its API shape is not implemented here — use mock until it lands`,
+      error: `${endpointReason} — use mock until the execution path is ready`,
     };
   }
 
@@ -262,7 +303,7 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
   }
 
   try {
-    const res = await fetch(`${spec.endpoint}${spec.wire.submitPath}`, {
+    const res = await fetch(`${endpoint}${spec.wire.submitPath}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env[spec.envKey]}`,
@@ -312,12 +353,13 @@ export async function pollProvider(provider: string, externalId: string): Promis
   if (spec.envKey && !process.env[spec.envKey]) {
     return { ok: false, provider: spec.id, mode: "live", error: `${spec.envKey} not configured` };
   }
-  if (!spec.endpoint || !spec.wire) {
+  const endpoint = providerEndpoint(spec);
+  if (!endpoint || !spec.wire) {
     return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} has no implemented API shape yet` };
   }
 
   try {
-    const res = await fetch(`${spec.endpoint}${spec.wire.pollPath(externalId)}`, {
+    const res = await fetch(`${endpoint}${spec.wire.pollPath(externalId)}`, {
       headers: {
         Authorization: `Bearer ${process.env[spec.envKey]}`,
         // The version header is required on every request, polls included — a
@@ -334,16 +376,27 @@ export async function pollProvider(provider: string, externalId: string): Promis
         error: `${spec.label} poll failed: HTTP ${res.status}${await detail(res)}`,
       };
     }
-    const data = (await res.json()) as { status?: string; output?: string | string[]; failure?: string };
+    const data = (await res.json()) as {
+      status?: string;
+      output?: string | string[];
+      result?: string;
+      failure?: string;
+      error?: string;
+      note?: string;
+    };
     const state = normalizeState(data.status);
-    const output = Array.isArray(data.output) ? data.output[0] : data.output;
+    const rawOutput = data.result ?? data.output;
+    const output = workerResultToStudioUrl(
+      spec.id,
+      Array.isArray(rawOutput) ? rawOutput[0] : rawOutput,
+    );
     return {
       ok: true,
       provider: spec.id,
       mode: "live",
       state,
       result: state === "succeeded" ? output : undefined,
-      note: state === "failed" ? data.failure : undefined,
+      note: state === "failed" ? data.failure ?? data.error : data.note,
     };
   } catch (err) {
     return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} unreachable: ${(err as Error).message}` };

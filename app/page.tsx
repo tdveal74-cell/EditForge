@@ -6,6 +6,16 @@ import { PRIMARY_CLIP, REFERENCE_STILL, videos } from "@/lib/mediaLibrary";
 
 const capabilities = [
   {
+    title: "Ascension production",
+    body: "Consent-linked Devon performance, 12 vertical 4K episodes, and the combined Thread master.",
+    href: "/ascension",
+  },
+  {
+    title: "TSWS Microdrama",
+    body: "Tee-authored Grok Visuals cut, released before—and isolated from—the protected long-form videos.",
+    href: "/tsws-microdrama",
+  },
+  {
     title: "Generative video",
     body: "Kling · Veo · Runway · Seedream-class output under a real quality bar.",
     href: "/gen-video",
@@ -111,7 +121,7 @@ export default function HomePage() {
           <h2 className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
             Creation, review, and delivery in one operating surface
           </h2>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {capabilities.map((c) => (
               <Link key={c.title} href={c.href} className="group">
                 <Card className="h-full p-5 transition-all duration-flagship ease-flagship group-hover:-translate-y-0.5 group-hover:shadow-lifted">

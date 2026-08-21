@@ -13,6 +13,8 @@ afterEach(() => {
     "EDITFORGE_TOTAL_BUDGET_USD",
     "EDITFORGE_SPENT_USD",
     "EDITFORGE_PER_JOB_LIMIT_USD",
+    "EDITFORGE_WORKER_URL",
+    "EDITFORGE_WORKER_TOKEN",
   ]) delete process.env[key];
 });
 
@@ -75,5 +77,18 @@ describe("provider readiness endpoint", () => {
     const mock = body.providers.find((p: { id: string }) => p.id === "mock");
     expect(mock.billable).toBe(false);
     expect(mock.wired).toBe(true);
+    expect(mock.available).toBe(true);
+  });
+
+  it("marks an authenticated self-hosted worker available without enabling paid providers", async () => {
+    process.env.EDITFORGE_WORKER_URL = "http://worker.internal:8787";
+    process.env.EDITFORGE_WORKER_TOKEN = "private-token";
+    const body = await (await GET()).json();
+    const worker = body.providers.find((p: { id: string }) => p.id === "forge-worker");
+    expect(worker.wired).toBe(true);
+    expect(worker.available).toBe(true);
+    expect(worker.billable).toBe(false);
+    expect(worker.executionClass).toBe("free-local");
+    expect(JSON.stringify(body)).not.toContain("private-token");
   });
 });

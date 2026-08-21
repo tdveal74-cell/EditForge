@@ -10,7 +10,11 @@ export type JobKind =
   | "export"
   | "gen-video"
   | "voice"
-  | "avatar";
+  | "avatar"
+  | "proof-shot"
+  | "episode-generate"
+  | "episode-master"
+  | "thread-master";
 
 export type JobStatus =
   | "planned"

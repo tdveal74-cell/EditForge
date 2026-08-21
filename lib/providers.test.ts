@@ -17,6 +17,8 @@ const KEYS = [
   "VEO_API_KEY",
   "SEEDREAM_API_KEY",
   "ELEVENLABS_API_KEY",
+  "EDITFORGE_WORKER_URL",
+  "EDITFORGE_WORKER_TOKEN",
   "EDITFORGE_SPEND_MODE",
   "EDITFORGE_BILLING_ENABLED",
   "EDITFORGE_TOTAL_BUDGET_USD",
@@ -45,6 +47,7 @@ afterEach(() => {
 describe("provider boundary", () => {
   it("routes providers by the kind of work they serve", () => {
     expect(providersFor("voice").map((p) => p.id)).toContain("elevenlabs");
+    expect(providersFor("voice").map((p) => p.id)).toContain("forge-worker");
     expect(providersFor("avatar").map((p) => p.id)).toContain("hyperframes");
     expect(providersFor("gen-video").map((p) => p.id)).toEqual(
       expect.arrayContaining(["runway", "kling", "veo", "seedream"])
@@ -121,8 +124,42 @@ describe("provider boundary", () => {
     expect(isLiveWired("runway")).toBe(true);
     expect(isLiveWired("mock")).toBe(true);
     expect(isLiveWired("elevenlabs")).toBe(false);
+    expect(isLiveWired("forge-worker")).toBe(false);
+    process.env.EDITFORGE_WORKER_URL = "http://worker.internal:8787";
+    expect(isLiveWired("forge-worker")).toBe(true);
     expect(isLiveWired("kling")).toBe(false);
     expect(isLiveWired("nope")).toBe(false);
+  });
+
+  it("submits all production kinds through the authenticated self-hosted worker", async () => {
+    clearKeys();
+    process.env.EDITFORGE_WORKER_URL = "http://worker.internal:8787/";
+    process.env.EDITFORGE_WORKER_TOKEN = "worker-token";
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        ({
+          ok: true,
+          json: async () => ({ id: "forge-job-1", status: "queued" }),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await submitToProvider({
+      provider: "forge-worker",
+      kind: "proof-shot",
+      prompt: "Devon proof shot",
+      idempotencyKey: "proof-1",
+      options: { projectId: "ascension-caudex-thread-01" },
+    });
+
+    expect(res.ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe("http://worker.internal:8787/v1/jobs");
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer worker-token");
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      kind: "proof-shot",
+      idempotencyKey: "proof-1",
+    });
   });
 
   it("an API key alone cannot enable spend", async () => {

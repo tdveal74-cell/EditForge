@@ -26,28 +26,40 @@ export async function GET() {
     const rateConfigured = p.rateEnvKey
       ? Number.isFinite(configuredRate) && Number(configuredRate) > 0
       : true;
-    const billable =
-      p.id !== "mock" && wired && credentialSet && rateConfigured && spendEnabled;
+    const chargeable = p.executionClass === "paid-remote";
+    const available =
+      wired &&
+      credentialSet &&
+      (p.id === "mock" || !chargeable || (rateConfigured && spendEnabled));
+    const billable = chargeable && available;
 
     let blockedReason: string | undefined;
     if (p.id !== "mock") {
-      if (!wired) blockedReason = "Live adapter not implemented";
+      if (!wired) {
+        blockedReason = p.endpointEnvKey && !process.env[p.endpointEnvKey]
+          ? `${p.endpointEnvKey} is not configured`
+          : "Live adapter not implemented";
+      }
       else if (!credentialSet) blockedReason = `${p.envKey} is not configured`;
-      else if (policy.mode === "zero-cost") blockedReason = "Paid providers are hard blocked by zero-cost mode";
-      else if (!policy.billingEnabled) blockedReason = "Billing is disabled";
-      else if (!rateConfigured) blockedReason = `${p.rateEnvKey} is not configured`;
-      else if (!spendEnabled) blockedReason = "A positive total and per-job budget is required";
-      else blockedReason = "Server cost preflight required before submission";
+      else if (chargeable && policy.mode === "zero-cost") blockedReason = "Paid providers are hard blocked by zero-cost mode";
+      else if (chargeable && !policy.billingEnabled) blockedReason = "Billing is disabled";
+      else if (chargeable && !rateConfigured) blockedReason = `${p.rateEnvKey} is not configured`;
+      else if (chargeable && !spendEnabled) blockedReason = "A positive total and per-job budget is required";
+      else if (chargeable) blockedReason = "Server cost preflight required before submission";
     }
 
     return {
       id: p.id,
       label: p.label,
       kind: p.kind,
+      kinds: p.kinds,
+      executionClass: p.executionClass,
+      available,
       billable,
       wired,
       blockedReason,
       envKey: p.envKey || undefined,
+      endpointEnvKey: p.endpointEnvKey,
       credentialSet: p.envKey ? credentialSet : undefined,
       rateEnvKey: p.rateEnvKey,
       rateConfigured: p.rateEnvKey ? rateConfigured : undefined,

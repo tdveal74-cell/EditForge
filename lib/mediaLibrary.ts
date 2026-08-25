@@ -86,3 +86,83 @@ export function noteIsInRange(atSeconds: number, durationSec?: number): boolean 
   if (durationSec === undefined) return true;
   return atSeconds >= 0 && atSeconds <= durationSec;
 }
+
+/**
+ * A shot sequence — Node 01, five beats in order.
+ *
+ * The library above holds two clips and a reference frame, which is enough to
+ * prove a player works and a grade has something to be judged against. It is
+ * not enough to show a *cut*. An assembly is an ordered set of shots, and with
+ * three unrelated assets there was no order to show: the timeline drew coloured
+ * bars with no frames in them, and the VFX board tracked shots nobody could
+ * look at.
+ *
+ * These five are one continuous beat sequence — the archivist opens the book,
+ * the copy assembles, the copy in close-up, the confrontation, the dissolution.
+ * Their order is the content, which is why `shot` is a number and not a label:
+ * a surface that renders them out of sequence is wrong in a way a reader can
+ * see.
+ *
+ * Vertical, like everything else this studio finishes. 941x1672 is roughly 9:16
+ * — the house delivers Shorts/Reels, so a landscape "master" would be the odd
+ * one out rather than the norm.
+ */
+export type Shot = MediaAsset & { shot: number };
+
+export const SHOT_SEQUENCE: Shot[] = [
+  {
+    shot: 1,
+    id: "node01-s1",
+    src: "/media/node01_s1_archivist_book.png",
+    kind: "image",
+    label: "S1 — Archivist, book",
+    width: 941,
+    height: 1672,
+    note: "Opening beat. The book is the object every later shot refers back to.",
+  },
+  {
+    shot: 2,
+    id: "node01-s2",
+    src: "/media/node01_s2_copy_assembling.png",
+    kind: "image",
+    label: "S2 — Copy assembling",
+    width: 941,
+    height: 1672,
+    note: "The turn. Motion begins here, so it is the first shot a grade has to hold together.",
+  },
+  {
+    shot: 3,
+    id: "node01-s3",
+    src: "/media/node01_s3_copy_closeup.png",
+    kind: "image",
+    label: "S3 — Copy, close",
+    width: 941,
+    height: 1672,
+    note: "Close coverage of S2. Skin and edge detail — where over-sharpening shows first.",
+  },
+  {
+    shot: 4,
+    id: "node01-s4",
+    src: "/media/node01_s4_confrontation.png",
+    kind: "image",
+    label: "S4 — Confrontation",
+    width: 941,
+    height: 1672,
+    note: "Two subjects in frame. The widest tonal range in the sequence.",
+  },
+  {
+    shot: 5,
+    id: "node01-s5",
+    src: "/media/node01_s5_dissolution.png",
+    kind: "image",
+    label: "S5 — Dissolution",
+    width: 941,
+    height: 1672,
+    note: "Closing beat. Deep shadow — the one most easily crushed by a heavy grade.",
+  },
+];
+
+/** The sequence in order, guarded so a caller cannot render it shuffled. */
+export function shotsInOrder(): Shot[] {
+  return [...SHOT_SEQUENCE].sort((a, b) => a.shot - b.shot);
+}

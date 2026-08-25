@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { SAMPLE_TIMELINE, TRACK_ORDER, totalDuration } from "@/lib/timeline";
 import { PageHeader } from "@/components/PageHeader";
+import { shotsInOrder } from "@/lib/mediaLibrary";
 
 // Rows follow the audio ladder top-down. They used to run video/vo/music/sfx,
 // which drew music above the SFX that outranks it — the screen contradicting the
@@ -43,6 +45,36 @@ export default function TimelinePage() {
           </span>
         }
       />
+
+      {/* Shot strip. The tracks below carry duration and order but no picture,
+          which is the one thing an assembly is actually read for — you scan the
+          shots, not the bars. Deliberately a separate band rather than
+          thumbnails inside the video clips: there are five shots and two video
+          clips, so any mapping between them would be invented, and a timeline
+          that shows a shot sitting somewhere it does not sit is worse than one
+          that shows no shots at all.
+
+          next/image because these are ~2MB masters; serving them raw into a
+          112px-wide cell would ship 9MB to draw a filmstrip. */}
+      <section className="mt-10">
+        <h2 className="text-xs uppercase tracking-wide text-navy/45">Shots — Node 01</h2>
+        <ol className="mt-2 flex gap-2 overflow-x-auto pb-2">
+          {shotsInOrder().map((s) => (
+            <li key={s.id} className="w-28 shrink-0">
+              <div className="relative aspect-[941/1672] overflow-hidden rounded-sm border border-border bg-surface-muted">
+                <Image
+                  src={s.src}
+                  alt={s.label}
+                  fill
+                  sizes="112px"
+                  className="object-cover"
+                />
+              </div>
+              <p className="mt-1 font-mono text-[10px] tabular-nums text-navy/45">S{s.shot}</p>
+            </li>
+          ))}
+        </ol>
+      </section>
 
       <div className="mt-10 overflow-x-auto pb-2">
         {/* w-max so the row sizes to label gutter + track, whatever the scale. */}

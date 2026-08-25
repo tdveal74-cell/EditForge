@@ -83,3 +83,28 @@ describe("stock library", () => {
     for (const item of await listStock()) expect(item.licenseNote.trim()).not.toBe("");
   });
 });
+
+describe("seeded asset locations", () => {
+  it("point at files that are actually in public/", async () => {
+    // The seed rows carry a `location` under /media, and nothing checked it.
+    // When the rain clips were swapped for the TSWS masters, mediaLibrary was
+    // caught by its own test and this file was not — the catalog would have
+    // gone on advertising two videos that had been deleted, and /assets is
+    // the index whose whole job is knowing where things are.
+    //
+    // Only local paths are checked: an asset can legitimately live in an
+    // online store ("online/cut-01/...") or nowhere yet, and neither is a
+    // broken link.
+    const assets = await listAssets();
+    const local = assets.filter((a) => a.location?.startsWith("/"));
+    expect(local.length, "no seeded asset points into public/ any more").toBeGreaterThan(0);
+
+    for (const a of local) {
+      const file = path.join(process.cwd(), "public", a.location!.replace(/^\//, ""));
+      await expect(
+        fs.access(file),
+        `${a.name} is indexed at ${a.location} but no such file exists`
+      ).resolves.toBeUndefined();
+    }
+  });
+});

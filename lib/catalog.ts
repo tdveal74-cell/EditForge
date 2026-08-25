@@ -24,8 +24,8 @@ function seedAssets(): Asset[] {
     { id: "a4", name: "still_hold_frame.png", type: "image", tags: ["still", "ending"], addedAt: now },
     // The three files that actually ship in public/media. An index whose first
     // rows are imaginary teaches people not to trust the rest.
-    { id: "a-rain-a", name: "rain_street_night_a.mp4", type: "video", tags: ["rain", "night", "vertical", "master"], location: "/media/rain_street_night_a.mp4", addedAt: now },
-    { id: "a-rain-b", name: "rain_street_night_b.mp4", type: "video", tags: ["rain", "night", "vertical", "alt"], location: "/media/rain_street_night_b.mp4", addedAt: now },
+    { id: "a-tsws-a", name: "tsws_brand_master_a.mp4", type: "video", tags: ["tsws", "brand", "vertical", "master"], location: "/media/tsws_brand_master_a.mp4", addedAt: now },
+    { id: "a-tsws-b", name: "tsws_brand_master_b.mp4", type: "video", tags: ["tsws", "brand", "vertical", "alt"], location: "/media/tsws_brand_master_b.mp4", addedAt: now },
     { id: "a-rain-still", name: "rain_street_still.png", type: "image", tags: ["rain", "night", "reference", "grade"], location: "/media/rain_street_still.png", addedAt: now },
   ];
 }

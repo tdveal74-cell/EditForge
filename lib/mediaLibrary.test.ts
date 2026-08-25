@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, statSync } from "fs";
 import path from "path";
-import { MEDIA, PRIMARY_CLIP, REFERENCE_STILL, noteIsInRange, videos } from "./mediaLibrary";
+import { MEDIA, PRIMARY_CLIP, REFERENCE_STILL, SHOT_SEQUENCE, noteIsInRange, shotsInOrder, videos } from "./mediaLibrary";
 
 describe("the media library points at files that exist", () => {
   it("has every declared asset on disk under public/", () => {
@@ -58,5 +58,45 @@ describe("note range", () => {
 
   it("permits anything when the duration is unknown, rather than guessing", () => {
     expect(noteIsInRange(9999, undefined)).toBe(true);
+  });
+});
+
+describe("the shot sequence", () => {
+  it("has every frame on disk", () => {
+    // Same reason as the library above: a missing src renders as a broken cell,
+    // which reads as "the strip is broken" rather than "the file moved".
+    for (const shot of SHOT_SEQUENCE) {
+      const file = path.join(process.cwd(), "public", shot.src.replace(/^\//, ""));
+      expect(existsSync(file), `${shot.src} is declared but not on disk`).toBe(true);
+      expect(statSync(file).size).toBeGreaterThan(0);
+    }
+  });
+
+  it("numbers the shots 1..n with no gaps or repeats", () => {
+    // The order is the content. A duplicate or a hole means two frames claim
+    // the same beat, and the strip silently renders a sequence that never
+    // existed.
+    const numbers = SHOT_SEQUENCE.map((s) => s.shot).sort((a, b) => a - b);
+    expect(numbers).toEqual(Array.from({ length: SHOT_SEQUENCE.length }, (_, i) => i + 1));
+  });
+
+  it("returns them in order however the array is arranged", () => {
+    const order = shotsInOrder().map((s) => s.shot);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("keeps ids unique and distinct from the main library", () => {
+    expect(new Set(SHOT_SEQUENCE.map((s) => s.id)).size).toBe(SHOT_SEQUENCE.length);
+    const clash = SHOT_SEQUENCE.filter((s) => MEDIA.some((m) => m.id === s.id));
+    expect(clash, "a shot id collides with a MEDIA id").toEqual([]);
+  });
+
+  it("records the real pixel dimensions the layout reserves space from", () => {
+    // The strip sets aspect-[941/1672]; a wrong number here is a cell that
+    // letterboxes or crops every frame in the sequence.
+    for (const shot of SHOT_SEQUENCE) {
+      expect(shot.width).toBe(941);
+      expect(shot.height).toBe(1672);
+    }
   });
 });

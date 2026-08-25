@@ -12,6 +12,13 @@
  * the containers, not estimated — a filmstrip spaces its frames across the
  * duration it is told, so a wrong number here shows up as a strip that stops
  * early or repeats the last frame.
+ *
+ * The clips are the TSWS brand masters. They used to be rain-street footage,
+ * which was real but was not TSWS — and `cut-01` calls itself "TSWS E01 cold
+ * open", so every surface reading from it was showing an operator one show
+ * while naming another. Both masters run 6.04s rather than the 15s the previous
+ * primary did; at eight samples that is a frame every 0.75s, which still moves,
+ * but it is a shorter take and the note above no longer claims otherwise.
  */
 
 export type MediaAsset = {
@@ -30,24 +37,24 @@ export type MediaAsset = {
 
 export const MEDIA: MediaAsset[] = [
   {
-    id: "rain-a",
-    src: "/media/rain_street_night_a.mp4",
+    id: "tsws-a",
+    src: "/media/tsws_brand_master_a.mp4",
     kind: "video",
-    label: "Rain street, night — A",
-    durationSec: 15.07,
+    label: "TSWS brand master — A",
+    durationSec: 6.04,
     width: 720,
     height: 1280,
-    note: "Vertical master. The long take: enough runtime for a filmstrip to show change rather than repeat.",
+    note: "Vertical brand master. cut-01 is 'TSWS E01 cold open', so the footage under it is TSWS rather than stand-in coverage of somewhere else.",
   },
   {
-    id: "rain-b",
-    src: "/media/rain_street_night_b.mp4",
+    id: "tsws-b",
+    src: "/media/tsws_brand_master_b.mp4",
     kind: "video",
-    label: "Rain street, night — B",
-    durationSec: 8.06,
+    label: "TSWS brand master — B",
+    durationSec: 6.04,
     width: 720,
     height: 1280,
-    note: "Vertical alt. Shorter coverage of the same set-up.",
+    note: "Second master, same set-up and runtime. Two clips is what makes an A/B comparison possible at all.",
   },
   {
     id: "rain-still",

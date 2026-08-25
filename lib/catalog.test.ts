@@ -108,3 +108,37 @@ describe("seeded asset locations", () => {
     }
   });
 });
+
+describe("a store seeded before the media changed", () => {
+  it("drops the retired rows and gains their replacements", async () => {
+    // The real production state, reproduced: KV was seeded on the first deploy
+    // and `SET NX` means it never re-seeds, so it kept serving the rain clips
+    // long after they were deleted from the repo. Written straight to the
+    // backing file, because going through addAsset would exercise the writer
+    // rather than the drift.
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    const stale = [
+      { id: "a-rain-a", name: "rain_street_night_a.mp4", type: "video", tags: [], location: "/media/rain_street_night_a.mp4", addedAt: "2026-08-12T16:24:30.492Z" },
+      { id: "a-rain-b", name: "rain_street_night_b.mp4", type: "video", tags: [], location: "/media/rain_street_night_b.mp4", addedAt: "2026-08-12T16:24:30.492Z" },
+      // An operator's own row. The repair must not take this with it — that is
+      // why the fix retires known ids rather than re-seeding the collection.
+      { id: "a-operator", name: "handheld_pickup.mov", type: "video", tags: ["mine"], location: "/media/handheld_pickup.mov", addedAt: "2026-08-20T00:00:00.000Z" },
+    ];
+    await fs.writeFile(path.join(DATA_DIR, "assets.json"), JSON.stringify(stale, null, 2));
+
+    const after = await listAssets();
+    const ids = after.map((a) => a.id);
+
+    expect(ids, "a retired row survived").not.toContain("a-rain-a");
+    expect(ids, "a retired row survived").not.toContain("a-rain-b");
+    expect(ids, "an operator's own asset was destroyed by the repair").toContain("a-operator");
+    expect(ids, "the replacement master was not added").toContain("a-tsws-a");
+    expect(ids).toContain("a-tsws-b");
+  });
+
+  it("is idempotent — a repaired store is not rewritten", async () => {
+    const first = await listAssets();
+    const second = await listAssets();
+    expect(second).toEqual(first);
+  });
+});

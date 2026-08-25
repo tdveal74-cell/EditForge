@@ -36,8 +36,43 @@ const assets = durableCollection<Asset>({
   seed: seedAssets,
 });
 
+/**
+ * Seed rows that no longer exist, and must be cleared from stores already
+ * written.
+ *
+ * `durableCollection` seeds with `SET NX` — the seed runs once, when the
+ * collection has never existed, and never again. So editing `seedAssets()`
+ * changes nothing for a store that has already been written. When the rain
+ * clips were replaced by the TSWS masters, production kept serving
+ * `/media/rain_street_night_a.mp4` and `_b.mp4` from KV: two rows in the index
+ * whose entire job is knowing where things are, pointing at files that had been
+ * deleted from the deployment.
+ *
+ * The unit test could not have caught it. It runs against a fresh data dir, so
+ * it always gets a freshly seeded store and never sees the drift.
+ */
+const RETIRED_ASSET_IDS = new Set(["a-rain-a", "a-rain-b"]);
+
 export async function listAssets(): Promise<Asset[]> {
-  return assets.list();
+  const all = await assets.list();
+  // Fast path, and the reason this is safe to run on every read: once the
+  // retired rows are gone there is nothing to do and nothing is written.
+  if (!all.some((a) => RETIRED_ASSET_IDS.has(a.id))) return all;
+
+  return assets.mutate((rows) => {
+    for (let i = rows.length - 1; i >= 0; i--) {
+      if (RETIRED_ASSET_IDS.has(rows[i].id)) rows.splice(i, 1);
+    }
+    // Add the replacements rather than only deleting the dead links, so the
+    // index ends up describing the media that is actually there. Repaired in
+    // place instead of by bumping the store key, because this catalog is
+    // writable — anything an operator added is real data and has to survive.
+    for (const row of seedAssets()) {
+      if (row.location?.startsWith("/media/") && !rows.some((a) => a.id === row.id)) {
+        rows.push(row);
+      }
+    }
+  });
 }
 
 export type AddResult<T> = { ok: true; item: T } | { ok: false; reason: string };

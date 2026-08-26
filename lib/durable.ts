@@ -150,6 +150,10 @@ export function durableCollection<T extends { id: string }>(opts: {
   file: string;
   seed: () => T[];
 }): DurableCollection<T> {
+  // The file backend needs the same read-modify-write isolation as KV. Without
+  // this queue, concurrent requests can overwrite each other or race on the
+  // collection's shared temporary filename.
+  let fileMutation: Promise<void> = Promise.resolve();
   // Resolved per operation, not captured once: the collection is created at
   // module scope, so a captured path would freeze the data dir at import time.
   const filePath = () => path.join(dataDir(), opts.file);
@@ -214,10 +218,20 @@ export function durableCollection<T extends { id: string }>(opts: {
         }
         throw new Error("KV update failed: concurrent-write retries exhausted");
       }
-      const items = await readFile();
-      fn(items);
-      await writeFile(items);
-      return items;
+      let result: T[] = [];
+      const transaction = fileMutation.then(async () => {
+        const items = await readFile();
+        fn(items);
+        await writeFile(items);
+        result = items;
+      });
+      // A rejected mutation must not poison later writes.
+      fileMutation = transaction.then(
+        () => undefined,
+        () => undefined
+      );
+      await transaction;
+      return result;
     },
   };
 }

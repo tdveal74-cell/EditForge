@@ -1,6 +1,14 @@
-# EditForge — Deploy & Durable Store
+# EditForge — deployment and durable store
 
-Production runs on Vercel at **https://editforge.vercel.app**.
+EditForge supports two deployment shapes:
+
+- `compose.yaml` self-hosts the Next.js control plane, FFmpeg worker, durable state,
+  and artifact volumes. This is the recommended DEVON-operated shape. See
+  `docs/DEVON_EXECUTION.md`.
+- Vercel hosts the control plane. A separately deployed worker is still required for
+  real edit execution.
+
+The existing hosted control plane runs on Vercel at **https://editforge.vercel.app**.
 
 **Both setup steps below are done** (2026-08-12): the project is git-connected and a
 Redis store is live. They are kept here as the record of how the deployment is wired,

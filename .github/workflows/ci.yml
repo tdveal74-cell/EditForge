@@ -44,3 +44,23 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  self-host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compose contract
+        env:
+          EDITFORGE_ACCESS_PASSWORD: ci-access-password
+          EDITFORGE_MCP_TOKEN: ci-mcp-token
+          EDITFORGE_WORKER_TOKEN: ci-worker-token
+          EDITFORGE_PUBLIC_URL: http://localhost:3100
+        run: docker compose config --quiet
+
+      - name: Build control plane image
+        run: docker build -f infrastructure/web/Dockerfile -t editforge-web-ci .
+
+      - name: Build render worker image
+        run: docker build -f infrastructure/worker/Dockerfile -t editforge-worker-ci .

@@ -1,5 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, URL_TOKEN_PARAM, accessGateEnabled, isAuthenticated } from "@/lib/auth";
+import {
+  SESSION_COOKIE,
+  URL_TOKEN_PARAM,
+  accessGateEnabled,
+  bearerFrom,
+  isAuthenticated,
+  secretsMatch,
+} from "@/lib/auth";
 
 /**
  * Makes the whole studio private when `EDITFORGE_ACCESS_PASSWORD` is set.
@@ -19,6 +26,18 @@ export async function middleware(req: NextRequest) {
 
   const { pathname } = req.nextUrl;
   if (OPEN_PATHS.some((p) => pathname === p)) return NextResponse.next();
+
+  // Worker receipts use a separate token and are verified again by the route.
+  // Let only the exact callback shape reach that verification layer.
+  const workerToken = process.env.EDITFORGE_WORKER_TOKEN;
+  if (
+    req.method === "POST" &&
+    /^\/api\/edits\/[^/]+$/.test(pathname) &&
+    workerToken &&
+    secretsMatch(bearerFrom(req.headers.get("authorization")), workerToken)
+  ) {
+    return NextResponse.next();
+  }
 
   const authed = await isAuthenticated({
     authorization: req.headers.get("authorization"),

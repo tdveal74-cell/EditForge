@@ -1,0 +1,70 @@
+name: editforge
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      EDITFORGE_DATA_DIR: /data
+      EDITFORGE_ACCESS_PASSWORD: ${EDITFORGE_ACCESS_PASSWORD:?set EDITFORGE_ACCESS_PASSWORD}
+      EDITFORGE_MCP_TOKEN: ${EDITFORGE_MCP_TOKEN:?set EDITFORGE_MCP_TOKEN}
+      EDITFORGE_WORKER_URL: http://worker:8787
+      EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
+      EDITFORGE_WORKER_CALLBACK_BASE_URL: http://web:3000
+      EDITFORGE_ARTIFACT_DIR: /artifacts
+    ports:
+      - "${EDITFORGE_PORT:-3000}:3000"
+    volumes:
+      - editforge_web_data:/data
+      - editforge_artifacts:/artifacts
+    depends_on:
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks: [control, render]
+
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      EDITFORGE_WORK_DIR: /data
+      EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
+      EDITFORGE_CALLBACK_ORIGIN: http://web:3000
+      EDITFORGE_WORKER_CONCURRENCY: ${EDITFORGE_WORKER_CONCURRENCY:-1}
+      EDITFORGE_PROVIDER_TOKEN: ${EDITFORGE_PROVIDER_TOKEN:-}
+      EDITFORGE_VOICE_ADAPTER_URL: ${EDITFORGE_VOICE_ADAPTER_URL:-}
+      EDITFORGE_MOTION_ADAPTER_URL: ${EDITFORGE_MOTION_ADAPTER_URL:-}
+      EDITFORGE_LIPSYNC_ADAPTER_URL: ${EDITFORGE_LIPSYNC_ADAPTER_URL:-}
+      EDITFORGE_TIMELINE_ADAPTER_URL: ${EDITFORGE_TIMELINE_ADAPTER_URL:-}
+      EDITFORGE_ARTIFACT_DIR: /artifacts
+      EDITFORGE_ARTIFACT_BASE_URL: ${EDITFORGE_PUBLIC_URL:?set EDITFORGE_PUBLIC_URL}/api/artifacts
+    volumes:
+      - editforge_worker_data:/data
+      - editforge_artifacts:/artifacts
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks: [render]
+
+volumes:
+  editforge_web_data:
+  editforge_worker_data:
+  editforge_artifacts:
+
+networks:
+  control:
+  render:

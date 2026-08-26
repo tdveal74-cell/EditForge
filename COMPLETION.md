@@ -1,7 +1,8 @@
-# EditForge — MVP complete
+# EditForge — execution completion record
 
 ## Definition of done (this repo)
-Studio OS code is **complete** for local run + plan APIs.
+Studio OS and the governed DEVON execution path are code-complete. Live provider
+readiness remains credential- and adapter-dependent.
 
 ### Operational
 - [x] Studio department map
@@ -24,6 +25,17 @@ Studio OS code is **complete** for local run + plan APIs.
 ### Bridges
 - [x] NLE · mix · VFX engine · MAM · render farm
 
+### DEVON execution (2026-08-26)
+- [x] Exact-intent DEVON command contract and operation scopes
+- [x] Durable idempotent edit execution and immutable revision ids
+- [x] Long-form, short-form, and full-motion micro-drama routing
+- [x] Clone/voice/version/consent identity lock
+- [x] FFmpeg/FFprobe worker with source and artifact SHA-256 checks
+- [x] Voice, motion, lip-sync, and nonlinear timeline adapter seams
+- [x] Preview/master outputs with recorded rubric gate for masters
+- [x] Retry, cancel, polling, callback, and late-receipt cancellation protection
+- [x] Self-hosted Docker Compose web, worker, durable state, and artifacts
+
 ### Tests authored
 - [x] restraint · ffmpeg · grade · longform · jobs · genvideo · hardware
 
@@ -31,15 +43,14 @@ Studio OS code is **complete** for local run + plan APIs.
 - [x] `REPOSITORY_STATUS.md`
 - [x] `.github/workflows/ci.yml` (install · typecheck · test · build)
 
-## Not in this MVP
-- [ ] Live provider renders (API keys + worker)
-- [ ] Vercel deploy (explicit approve)
+## Requires deployment-specific inputs
+- [ ] Live clone/full-motion render using the user's consented IDs, adapter endpoints, and credentials
+- [ ] Production self-host boot and smoke render on the target machine
 - [ ] Foundation-model training
-- [ ] Full durable job state machine with immutable rubric decision records
 
 ## Verify
 ```bash
 npm install && npm test && npm run build && npm run dev
 ```
 
-**Status: MVP code-complete · CI defined · not live-provider-complete.**
+**Status: governed execution code-complete · self-hostable · not live-provider-verified without deployment credentials.**

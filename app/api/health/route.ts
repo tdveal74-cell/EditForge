@@ -1,15 +1,18 @@
 import { NextResponse } from "next/server";
 import { probeStore, storeEnvPresent, storeFallbackReason } from "@/lib/store";
 import { accessGateEnabled } from "@/lib/auth";
+import { probeWorker } from "@/lib/edit-worker";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const store = await probeStore();
+  const worker = await probeWorker();
   const fallbackReason = storeFallbackReason();
+  const healthy = store.reachable && (!worker.configured || worker.reachable);
   return NextResponse.json(
     {
-      status: store.reachable ? "healthy" : "degraded",
+      status: healthy ? "healthy" : "degraded",
       service: "editforge",
       version: "0.1.0",
       standard: "ultra-meta-supreme-flagship-aaa",
@@ -21,9 +24,13 @@ export async function GET() {
       // and it reveals nothing an unauthenticated caller cannot already tell by
       // requesting any other path and seeing whether it redirects.
       accessGate: accessGateEnabled(),
+      executionReady: worker.configured && worker.reachable,
+      workerConfigured: worker.configured,
+      workerReachable: worker.reachable,
+      ...(worker.error ? { workerError: worker.error } : {}),
       ...(fallbackReason ? { storeFallbackReason: fallbackReason } : {}),
       ...(store.error ? { storeError: store.error } : {}),
     },
-    { status: store.reachable ? 200 : 503 }
+    { status: healthy ? 200 : 503 }
   );
 }

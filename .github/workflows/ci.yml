@@ -57,6 +57,7 @@ jobs:
           EDITFORGE_MCP_TOKEN: ci-mcp-token
           EDITFORGE_WORKER_TOKEN: ci-worker-token
           EDITFORGE_PUBLIC_URL: http://localhost:3100
+          EDITFORGE_IDENTITY_REGISTRY_FILE: ./provider/identity-registry.example.json
         run: docker compose config --quiet
 
       - name: Build control plane image
@@ -64,3 +65,6 @@ jobs:
 
       - name: Build render worker image
         run: docker build -f infrastructure/worker/Dockerfile -t editforge-worker-ci .
+
+      - name: Build provider adapter image
+        run: docker build -f infrastructure/provider/Dockerfile -t editforge-provider-ci .

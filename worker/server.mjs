@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { compileRenderPlan, validateWorkerCommand } from "./plan.mjs";
+import { remoteMediaUrl } from "./media-url.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -83,20 +84,6 @@ async function download(uri, target) {
   await pipeline(Readable.fromWeb(response.body), createWriteStream(target));
 }
 
-function remoteMediaUrl(value, label) {
-  const parsed = new URL(value);
-  if (!["http:", "https:"].includes(parsed.protocol)) throw new Error(`${label} must be HTTP or HTTPS`);
-  if (process.env.NODE_ENV === "production" && process.env.EDITFORGE_ALLOW_PRIVATE_MEDIA_URLS !== "true") {
-    if (parsed.protocol !== "https:") throw new Error(`${label} must use HTTPS in production`);
-    const host = parsed.hostname.toLowerCase();
-    const privateHost = host === "localhost" || host === "::1" || host.startsWith("127.") ||
-      host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.") ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(host);
-    if (privateHost) throw new Error(`${label} cannot target a private network address`);
-  }
-  return parsed;
-}
-
 async function sha256File(file) {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(file)) hash.update(chunk);
@@ -145,7 +132,17 @@ async function callAdapter(step, command, inputArtifact) {
   const response = await fetch(endpoint, {
     method: "POST",
     headers: { Authorization: `Bearer ${providerToken}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ commandId: command.commandId, projectId: command.projectId, operation: step.operation, identity: command.identity, canon: command.canon, input: inputArtifact }),
+    body: JSON.stringify({
+      commandId: command.commandId,
+      projectId: command.projectId,
+      property: command.property,
+      deliverable: command.deliverable,
+      operation: step.operation,
+      identity: command.identity,
+      canon: command.canon,
+      input: inputArtifact,
+      output: command.output,
+    }),
   });
   const value = await response.json().catch(() => ({}));
   if (!response.ok || !value.artifact?.uri || !value.artifact?.sha256) {

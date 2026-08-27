@@ -2,8 +2,9 @@
 
 EditForge supports two deployment shapes:
 
-- `compose.yaml` self-hosts the Next.js control plane, FFmpeg worker, durable state,
-  and artifact volumes. This is the recommended DEVON-operated shape. See
+- `compose.yaml` self-hosts the Next.js control plane, FFmpeg worker, private
+  identity-locked provider adapter, durable state, and artifact volumes. This is
+  the recommended DEVON-operated shape. See
   `docs/DEVON_EXECUTION.md`.
 - Vercel hosts the control plane. A separately deployed worker is still required for
   real edit execution.

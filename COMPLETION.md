@@ -1,8 +1,8 @@
 # EditForge — execution completion record
 
 ## Definition of done (this repo)
-Studio OS and the governed DEVON execution path are code-complete. Live provider
-readiness remains credential- and adapter-dependent.
+Studio OS, the governed DEVON execution path, and the private provider adapter are
+code-complete. Live provider readiness remains credential-, identity-, and host-dependent.
 
 ### Operational
 - [x] Studio department map
@@ -32,9 +32,12 @@ readiness remains credential- and adapter-dependent.
 - [x] Clone/voice/version/consent identity lock
 - [x] FFmpeg/FFprobe worker with source and artifact SHA-256 checks
 - [x] Voice, motion, lip-sync, and nonlinear timeline adapter seams
+- [x] Private ElevenLabs voice, Runway avatar lip-sync, and Act-Two full-motion adapter
+- [x] External identity registry with consent, property, clone, voice, and version locks
+- [x] Per-operation provider ceilings bound into DEVON approval and enforced at execution
 - [x] Preview/master outputs with recorded rubric gate for masters
 - [x] Retry, cancel, polling, callback, and late-receipt cancellation protection
-- [x] Self-hosted Docker Compose web, worker, durable state, and artifacts
+- [x] Self-hosted Docker Compose web, worker, provider, durable state, and artifacts
 
 ### Tests authored
 - [x] restraint · ffmpeg · grade · longform · jobs · genvideo · hardware
@@ -44,7 +47,7 @@ readiness remains credential- and adapter-dependent.
 - [x] `.github/workflows/ci.yml` (install · typecheck · test · build)
 
 ## Requires deployment-specific inputs
-- [ ] Live clone/full-motion render using the user's consented IDs, adapter endpoints, and credentials
+- [ ] Live clone/full-motion render using the user's consented IDs, assets, and credentials
 - [ ] Production self-host boot and smoke render on the target machine
 - [ ] Foundation-model training
 
@@ -53,4 +56,4 @@ readiness remains credential- and adapter-dependent.
 npm install && npm test && npm run build && npm run dev
 ```
 
-**Status: governed execution code-complete · self-hostable · not live-provider-verified without deployment credentials.**
+**Status: governed provider execution code-complete · self-hostable · live account configuration pending.**

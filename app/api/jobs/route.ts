@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAndQueue, listJobs, submitJob } from "@/lib/jobstore";
-import { findProvider, hasCredentials } from "@/lib/providers";
+import { findProvider, hasCredentials, isLiveWired } from "@/lib/providers";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, isAuthenticated } from "@/lib/auth";
 import type { JobKind } from "@/lib/jobs";
@@ -13,7 +13,10 @@ const MEDIA_KINDS: JobKind[] = ["gen-video", "voice", "avatar"];
 function willBill(provider: string): boolean {
   const spec = findProvider(provider);
   if (!spec || spec.id === "mock") return false;
-  return hasCredentials(spec.id) && Boolean(spec.endpoint);
+  // `Boolean(spec.endpoint)` was the old test, and it disagreed with the
+  // boundary: a provider with a base URL but no implemented shape counted as
+  // billable, so the auth gate fired on a submit that could never spend a cent.
+  return hasCredentials(spec.id) && isLiveWired(spec.id);
 }
 
 export async function GET() {
@@ -94,10 +97,7 @@ export async function POST(req: Request) {
       options: body.options,
     });
 
-    return NextResponse.json(
-      { job: submitted ?? job, live: hasCredentials(provider) && provider !== "mock" },
-      { status: 201 }
-    );
+    return NextResponse.json({ job: submitted ?? job, live: willBill(provider) }, { status: 201 });
   } catch (err) {
     // authorizeJob throws when the rubric gate is not satisfied.
     return NextResponse.json({ error: (err as Error).message }, { status: 409 });

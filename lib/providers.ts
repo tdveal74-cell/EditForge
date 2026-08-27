@@ -1,10 +1,26 @@
-import type { JobKind } from "./jobs";
+import { artifactStoreConfigured, artifactUrl, storeArtifact } from "./artifacts";
+import {
+  DEFAULT_AUTH,
+  credentialFor,
+  credentialKeysFor,
+  findProvider,
+  normalizeState,
+  type EnvLike,
+  type PollReading,
+  type ProviderMode,
+  type ProviderSpec,
+  type ProviderState,
+  type SubmitRequest,
+  type WireSettings,
+} from "./provider-registry";
+
+export * from "./provider-registry";
 
 /**
  * The one execution boundary for AI media work.
  *
  * Every provider call in the studio goes through `submitToProvider` and
- * `pollProvider` — never an ad-hoc SDK call from a route. Two rules hold
+ * `pollProvider` — never an ad-hoc SDK call from a route. Three rules hold
  * regardless of provider:
  *
  *  1. Without credentials the boundary refuses rather than pretending. A mock
@@ -12,140 +28,29 @@ import type { JobKind } from "./jobs";
  *     it for rendered media.
  *  2. A submit that never reached the provider returns `ok: false`. It does not
  *     invent an external id.
- */
-
-export type ProviderMode = "mock" | "live";
-
-/** Provider-side lifecycle, deliberately narrower than the studio's job states. */
-export type ProviderState = "queued" | "running" | "succeeded" | "failed";
-
-/**
- * How one provider's HTTP surface actually looks.
+ *  3. Anything a provider hands back as bytes is stored before the call is
+ *     called a success. Paying for audio and then dropping it is worse than
+ *     refusing to start.
  *
- * There used to be no such thing: every live provider was submitted as
- * `POST {endpoint}/tasks {prompt}`, a shape no provider in this registry
- * implements. Runway rejected it with a 400 and ElevenLabs has no `/tasks`
- * route at all, so the live path had never once succeeded for anybody — it was
- * only ever reached with credentials configured, which no test does.
- *
- * A provider is live only when it has one of these. That is what makes
- * `liveWired` a fact rather than a hope.
+ * The registry it dispatches on lives in `lib/provider-registry.ts` and is
+ * re-exported here, so existing importers keep one import path.
  */
-export type ProviderWire = {
-  /** Headers this provider requires on every request, beyond auth and JSON. */
-  headers?: Record<string, string>;
-  /** Path appended to `endpoint` to create work. */
-  submitPath: string;
-  buildBody: (req: SubmitRequest) => Record<string, unknown>;
-  pollPath: (externalId: string) => string;
-};
-
-export type ProviderSpec = {
-  id: string;
-  kind: JobKind;
-  label: string;
-  /** Env var holding the credential; empty means the provider needs none. */
-  envKey: string;
-  /** Base endpoint for the live path. Absent means live is not wired yet. */
-  endpoint?: string;
-  /** Absent means the shape is not implemented — the boundary refuses. */
-  wire?: ProviderWire;
-};
-
-/**
- * Runway pins behaviour to a dated API version and rejects any request that
- * omits the header. Bumping this date is a deliberate migration, never a
- * silent follow-the-latest.
- */
-const RUNWAY_API_VERSION = "2024-11-06";
-
-export const PROVIDERS: ProviderSpec[] = [
-  // Gen video
-  {
-    id: "runway",
-    kind: "gen-video",
-    label: "Runway",
-    envKey: "RUNWAY_API_KEY",
-    endpoint: "https://api.dev.runwayml.com/v1",
-    wire: {
-      headers: { "X-Runway-Version": RUNWAY_API_VERSION },
-      // Creation is per-modality; there is no generic task-creation route.
-      submitPath: "/text_to_video",
-      buildBody: (req) => ({
-        model: "gen4.5",
-        promptText: req.prompt,
-        // Since 2024-11-06 `ratio` carries the output resolution itself rather
-        // than an aspect name — "16:9" is refused.
-        ratio: "1280:720",
-        duration: 5,
-        ...(req.options ?? {}),
-      }),
-      pollPath: (id) => `/tasks/${encodeURIComponent(id)}`,
-    },
-  },
-  { id: "kling", kind: "gen-video", label: "Kling", envKey: "KLING_API_KEY" },
-  { id: "veo", kind: "gen-video", label: "Veo", envKey: "VEO_API_KEY" },
-  { id: "seedream", kind: "gen-video", label: "Seedream", envKey: "SEEDREAM_API_KEY" },
-  // Voice. Deliberately no wire: ElevenLabs text-to-speech answers a POST with
-  // the audio bytes themselves, synchronously. There is no task to poll and
-  // nowhere here to put a binary body, so it does not fit this submit-and-poll
-  // boundary without somewhere to store the blob. Leaving the endpoint recorded
-  // and the wire absent is the honest state — it refuses instead of issuing a
-  // request that would 404.
-  { id: "elevenlabs", kind: "voice", label: "ElevenLabs", envKey: "ELEVENLABS_API_KEY", endpoint: "https://api.elevenlabs.io/v1" },
-  // Avatar — driven through the connected HyperFrames tools, not an API key here.
-  { id: "hyperframes", kind: "avatar", label: "HyperFrames / HeyGen", envKey: "" },
-  // Always available, never charges, never pretends.
-  { id: "mock", kind: "gen-video", label: "Mock (offline)", envKey: "" },
-];
-
-/** True when this provider has both a base endpoint and an implemented shape. */
-export function isLiveWired(id: string): boolean {
-  const p = findProvider(id);
-  if (!p) return false;
-  if (p.id === "mock") return true;
-  return Boolean(p.endpoint && p.wire);
-}
-
-export function findProvider(id: string): ProviderSpec | undefined {
-  return PROVIDERS.find((p) => p.id === id);
-}
-
-export function providersFor(kind: JobKind): ProviderSpec[] {
-  return PROVIDERS.filter((p) => p.kind === kind);
-}
-
-/**
- * Choices for a UI picker: the providers that serve this kind, then the offline
- * path, which serves every kind. Built from the same registry the boundary
- * dispatches on, so a picker cannot offer a provider that would be refused.
- */
-export function providerChoicesFor(kind: JobKind): ProviderSpec[] {
-  return [
-    ...PROVIDERS.filter((p) => p.kind === kind && p.id !== "mock"),
-    ...PROVIDERS.filter((p) => p.id === "mock"),
-  ];
-}
-
-/** True when this provider could actually run live right now. */
-export function hasCredentials(id: string): boolean {
-  const p = findProvider(id);
-  if (!p) return false;
-  if (!p.envKey) return true;
-  return Boolean(process.env[p.envKey]);
-}
-
-export type SubmitRequest = {
-  provider: string;
-  kind: JobKind;
-  prompt: string;
-  idempotencyKey: string;
-  /** Provider-specific knobs (aspect, duration, voiceId…), passed through. */
-  options?: Record<string, unknown>;
-};
 
 export type SubmitResult =
-  | { ok: true; provider: string; mode: ProviderMode; externalId: string; state: ProviderState; note: string }
+  | {
+      ok: true;
+      provider: string;
+      mode: ProviderMode;
+      externalId: string;
+      state: ProviderState;
+      note: string;
+      /**
+       * Set only when the submit itself finished the work — a provider that
+       * answers with the media rather than a task id. Carried here so the job
+       * does not sit in `running` waiting on a poll for something already done.
+       */
+      result?: string;
+    }
   | { ok: false; provider: string; mode: ProviderMode; error: string };
 
 export type PollResult =
@@ -176,21 +81,62 @@ function mockId(req: SubmitRequest): string {
   return `mock-${req.kind}-${req.idempotencyKey}`;
 }
 
-export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult> {
+/** Credential header for this provider, however it wants to be given the key. */
+function authHeaders(spec: ProviderSpec, env: EnvLike): Record<string, string> {
+  const key = credentialFor(spec, env);
+  if (!key) return {};
+  const auth = spec.wire?.auth ?? DEFAULT_AUTH;
+  return { [auth.header]: auth.scheme ? `${auth.scheme} ${key}` : key };
+}
+
+/** The refusal for a provider that has no key under any of its names. */
+function missingCredential(spec: ProviderSpec): string {
+  const keys = credentialKeysFor(spec);
+  const names = keys.length > 1 ? `${keys.slice(0, -1).join(", ")} or ${keys[keys.length - 1]}` : keys[0];
+  return `${names} not configured — set it or submit against the mock provider`;
+}
+
+type Ready = { spec: ProviderSpec; settings: WireSettings };
+
+/**
+ * Everything that must hold before a request is worth making.
+ *
+ * Deliberately ahead of the network call: an unset voice id, a ratio the
+ * provider does not accept, or nowhere to put returned bytes are all cheaper to
+ * catch here than after the provider has been paid.
+ */
+function prepare(req: SubmitRequest, env: EnvLike): Ready | { error: string; mode: ProviderMode } {
   const spec = findProvider(req.provider);
-  if (!spec) {
-    return { ok: false, provider: req.provider, mode: "mock", error: `Unknown provider "${req.provider}"` };
-  }
+  if (!spec) return { error: `Unknown provider "${req.provider}"`, mode: "mock" };
+
   if (spec.kind !== req.kind && spec.id !== "mock") {
+    return { error: `Provider ${spec.id} does not serve ${req.kind} work`, mode: "mock" };
+  }
+  if (spec.envKey && !credentialFor(spec, env)) {
+    return { error: missingCredential(spec), mode: "live" };
+  }
+  if (!spec.endpoint || !spec.wire) {
     return {
-      ok: false,
-      provider: spec.id,
-      mode: "mock",
-      error: `Provider ${spec.id} does not serve ${req.kind} work`,
+      error: `${spec.label} has credentials but its API shape is not implemented here — use mock until it lands`,
+      mode: "live",
+    };
+  }
+  if (spec.wire.binary && !artifactStoreConfigured()) {
+    return {
+      error: `${spec.label} answers with the media itself and EDITFORGE_ARTIFACT_DIR is not set, so there is nowhere to keep it — configure the artifact store or run against mock`,
+      mode: "live",
     };
   }
 
-  if (spec.id === "mock") {
+  const resolved = spec.wire.settings?.(env, req) ?? { ok: true as const, value: {} };
+  if (!resolved.ok) return { error: `${spec.label}: ${resolved.error}`, mode: "live" };
+  return { spec, settings: resolved.value };
+}
+
+export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult> {
+  const spec = findProvider(req.provider);
+
+  if (spec?.id === "mock") {
     return {
       ok: true,
       provider: "mock",
@@ -201,53 +147,86 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
     };
   }
 
-  if (spec.envKey && !process.env[spec.envKey]) {
-    return {
-      ok: false,
-      provider: spec.id,
-      mode: "live",
-      error: `${spec.envKey} not configured — set it or submit against the mock provider`,
-    };
+  const ready = prepare(req, process.env);
+  if ("error" in ready) {
+    return { ok: false, provider: spec?.id ?? req.provider, mode: ready.mode, error: ready.error };
   }
-
-  if (!spec.endpoint || !spec.wire) {
-    return {
-      ok: false,
-      provider: spec.id,
-      mode: "live",
-      error: `${spec.label} has credentials but its API shape is not implemented here — use mock until it lands`,
-    };
-  }
+  const { settings } = ready;
+  const wire = ready.spec.wire!;
 
   try {
-    const res = await fetch(`${spec.endpoint}${spec.wire.submitPath}`, {
+    const res = await fetch(`${ready.spec.endpoint}${wire.submitPath(req, settings)}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${process.env[spec.envKey]}`,
+        ...authHeaders(ready.spec, process.env),
         "Content-Type": "application/json",
         // Providers that honour it will dedupe a retried submit for us.
         "Idempotency-Key": req.idempotencyKey,
-        ...(spec.wire.headers ?? {}),
+        ...(wire.headers ?? {}),
       },
-      body: JSON.stringify(spec.wire.buildBody(req)),
+      body: JSON.stringify(wire.buildBody(req, settings)),
       cache: "no-store",
     });
     if (!res.ok) {
       return {
         ok: false,
-        provider: spec.id,
+        provider: ready.spec.id,
         mode: "live",
-        error: `${spec.label} submit failed: HTTP ${res.status}${await detail(res)}`,
+        error: `${ready.spec.label} submit failed: HTTP ${res.status}${await detail(res)}`,
       };
     }
-    const data = (await res.json()) as { id?: string; task_id?: string };
-    const externalId = data.id ?? data.task_id;
-    if (!externalId) {
-      return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} returned no task id` };
+
+    // The provider handed back the media rather than a task. Keep it, and let
+    // the stored name stand in for an external id so the poll has something to
+    // resolve. Storing before reporting success is the point: a failure here
+    // must not read as a finished render.
+    if (wire.binary) {
+      const bytes = await res.arrayBuffer();
+      let stored;
+      try {
+        stored = await storeArtifact({
+          bytes,
+          extension: wire.binary.extension,
+          prefix: `${ready.spec.id}-${req.kind}`,
+        });
+      } catch (err) {
+        // Deliberately not inside the outer catch: the provider answered, and
+        // reporting a full disk as "ElevenLabs unreachable" would send whoever
+        // reads this job to check the wrong thing entirely.
+        return {
+          ok: false,
+          provider: ready.spec.id,
+          mode: "live",
+          error: `${ready.spec.label} answered but the artifact could not be stored — the render was paid for and is lost: ${(err as Error).message}`,
+        };
+      }
+      return {
+        ok: true,
+        provider: ready.spec.id,
+        mode: "live",
+        externalId: stored.name,
+        state: "succeeded",
+        result: stored.url,
+        note: `${ready.spec.label} returned ${stored.byteLength} bytes — stored as ${stored.name} (sha256 ${stored.sha256.slice(0, 12)}…)`,
+      };
     }
-    return { ok: true, provider: spec.id, mode: "live", externalId, state: "queued", note: `Submitted to ${spec.label}` };
+
+    const data = (await res.json()) as { id?: string; task_id?: string };
+    const externalId =
+      wire.readSubmitId?.(data) ?? (typeof data.id === "string" ? data.id : undefined) ?? data.task_id;
+    if (!externalId) {
+      return { ok: false, provider: ready.spec.id, mode: "live", error: `${ready.spec.label} returned no task id` };
+    }
+    return {
+      ok: true,
+      provider: ready.spec.id,
+      mode: "live",
+      externalId,
+      state: "queued",
+      note: `Submitted to ${ready.spec.label}`,
+    };
   } catch (err) {
-    return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} unreachable: ${(err as Error).message}` };
+    return { ok: false, provider: ready.spec.id, mode: "live", error: `${ready.spec.label} unreachable: ${(err as Error).message}` };
   }
 }
 
@@ -267,17 +246,34 @@ export async function pollProvider(provider: string, externalId: string): Promis
     };
   }
 
-  if (spec.envKey && !process.env[spec.envKey]) {
-    return { ok: false, provider: spec.id, mode: "live", error: `${spec.envKey} not configured` };
+  if (spec.envKey && !credentialFor(spec, process.env)) {
+    return { ok: false, provider: spec.id, mode: "live", error: `${credentialKeysFor(spec)[0]} not configured` };
   }
   if (!spec.endpoint || !spec.wire) {
     return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} has no implemented API shape yet` };
   }
 
+  // A binary provider finished at submit time. The work is the stored file, and
+  // there is no upstream task to ask about.
+  if (spec.wire.binary) {
+    return {
+      ok: true,
+      provider: spec.id,
+      mode: "live",
+      state: "succeeded",
+      result: artifactUrl(externalId),
+      note: `${spec.label} audio stored as ${externalId}`,
+    };
+  }
+
+  if (!spec.wire.pollPath) {
+    return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} has no poll route` };
+  }
+
   try {
     const res = await fetch(`${spec.endpoint}${spec.wire.pollPath(externalId)}`, {
       headers: {
-        Authorization: `Bearer ${process.env[spec.envKey]}`,
+        ...authHeaders(spec, process.env),
         // The version header is required on every request, polls included — a
         // poll that omitted it would 400 just as the submit did.
         ...(spec.wire.headers ?? {}),
@@ -292,27 +288,29 @@ export async function pollProvider(provider: string, externalId: string): Promis
         error: `${spec.label} poll failed: HTTP ${res.status}${await detail(res)}`,
       };
     }
-    const data = (await res.json()) as { status?: string; output?: string | string[]; failure?: string };
-    const state = normalizeState(data.status);
-    const output = Array.isArray(data.output) ? data.output[0] : data.output;
+    const data = await res.json();
+    const reading: PollReading = spec.wire.readPoll?.(data) ?? defaultPoll(data);
     return {
       ok: true,
       provider: spec.id,
       mode: "live",
-      state,
-      result: state === "succeeded" ? output : undefined,
-      note: state === "failed" ? data.failure : undefined,
+      state: reading.state,
+      result: reading.result,
+      note: reading.note,
     };
   } catch (err) {
     return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} unreachable: ${(err as Error).message}` };
   }
 }
 
-/** Providers each spell their statuses differently; collapse to our four. */
-export function normalizeState(raw?: string): ProviderState {
-  const s = (raw ?? "").toLowerCase();
-  if (["succeeded", "success", "completed", "complete", "done", "ready"].includes(s)) return "succeeded";
-  if (["failed", "error", "cancelled", "canceled", "rejected"].includes(s)) return "failed";
-  if (["running", "processing", "in_progress", "generating"].includes(s)) return "running";
-  return "queued";
+/** The common `{status, output, failure}` shape, which Runway speaks. */
+function defaultPoll(data: unknown): PollReading {
+  const body = (data ?? {}) as { status?: string; output?: string | string[]; failure?: string };
+  const state = normalizeState(body.status);
+  const output = Array.isArray(body.output) ? body.output[0] : body.output;
+  return {
+    state,
+    result: state === "succeeded" ? output : undefined,
+    note: state === "failed" ? body.failure : undefined,
+  };
 }

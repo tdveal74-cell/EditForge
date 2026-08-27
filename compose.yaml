@@ -15,6 +15,23 @@ services:
       EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
       EDITFORGE_WORKER_CALLBACK_BASE_URL: http://web:3000
       EDITFORGE_ARTIFACT_DIR: /artifacts
+      EDITFORGE_PUBLIC_URL: ${EDITFORGE_PUBLIC_URL:?set EDITFORGE_PUBLIC_URL}
+      # Studio-side providers. The control plane calls these directly from
+      # /gen-video, /voice and /avatar; the identity-locked DEVON path below is
+      # a separate boundary with its own credentials. Passing none of them here
+      # was why a self-host with every key set still had a studio that could
+      # only run mock.
+      RUNWAY_API_KEY: ${RUNWAY_API_KEY:-${RUNWAYML_API_SECRET:-}}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+      # Optional per-voice pins. The studio's voice ids are its own vocabulary;
+      # these map them onto real ElevenLabs voices, falling back to the default.
+      ELEVENLABS_VOICE_ID_AUREN: ${ELEVENLABS_VOICE_ID_AUREN:-}
+      ELEVENLABS_VOICE_ID_VESPERA: ${ELEVENLABS_VOICE_ID_VESPERA:-}
+      ELEVENLABS_VOICE_ID_STOCK_NARRATOR: ${ELEVENLABS_VOICE_ID_STOCK_NARRATOR:-}
+      HEYGEN_API_KEY: ${HEYGEN_API_KEY:-}
+      HEYGEN_AVATAR_ID: ${HEYGEN_AVATAR_ID:-}
+      HEYGEN_VOICE_ID: ${HEYGEN_VOICE_ID:-}
     ports:
       - "${EDITFORGE_PORT:-3000}:3000"
     volumes:

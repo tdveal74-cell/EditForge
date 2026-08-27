@@ -7,7 +7,7 @@ import { Label, Select, Textarea, Output } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { JobRunner } from "@/components/JobRunner";
-import { providerChoicesFor } from "@/lib/providers";
+import { providerChoicesFor } from "@/lib/provider-registry";
 
 const VOICE_PROVIDERS = providerChoicesFor("voice").map((p) => ({ id: p.id, label: p.label }));
 

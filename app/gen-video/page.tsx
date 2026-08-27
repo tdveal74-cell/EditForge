@@ -7,7 +7,7 @@ import { Label, Select, Input, Textarea, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { PageHeader } from "@/components/PageHeader";
 import { JobRunner } from "@/components/JobRunner";
-import { providerChoicesFor } from "@/lib/providers";
+import { providerChoicesFor } from "@/lib/provider-registry";
 import { PRIMARY_CLIP, REFERENCE_STILL } from "@/lib/mediaLibrary";
 
 const GEN_JOB_PROVIDERS = providerChoicesFor("gen-video").map((p) => ({ id: p.id, label: p.label }));
@@ -19,6 +19,8 @@ export default function GenVideoPage() {
   );
   const [aspect, setAspect] = useState("16:9");
   const [quality, setQuality] = useState("social");
+  // Runway text-to-video takes 2-10s; offering 30 here only produced a
+  // provider refusal after the click.
   const [durationSec, setDurationSec] = useState(5);
   const [out, setOut] = useState<string | null>(null);
   const meta = GEN_PROVIDERS.find((p) => p.id === provider);
@@ -102,7 +104,7 @@ export default function GenVideoPage() {
               <p className="rounded-card border border-border-faint bg-surface-elevated/60 px-4 py-2.5 text-xs text-navy/60">
                 {meta.strengths}
                 {meta.envKey && (
-                  <span className="ml-2 font-mono text-navy/35">needs {meta.envKey}</span>
+                  <span className="ml-2 font-mono text-navy/35">needs {meta.envKeys.join(" or ")}</span>
                 )}
               </p>
             )}
@@ -112,7 +114,6 @@ export default function GenVideoPage() {
                 <Select value={aspect} onChange={(e) => setAspect(e.target.value)}>
                   <option value="16:9">16:9</option>
                   <option value="9:16">9:16</option>
-                  <option value="1:1">1:1</option>
                 </Select>
               </Label>
               <Label text="Quality">
@@ -126,7 +127,7 @@ export default function GenVideoPage() {
                 <Input
                   type="number"
                   min={2}
-                  max={30}
+                  max={10}
                   value={durationSec}
                   onChange={(e) => setDurationSec(Number(e.target.value))}
                 />

@@ -69,3 +69,16 @@ export function isPlayableVideo(url: string | undefined): boolean {
 function round(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
+
+/**
+ * Whether a URL is something an <audio> element can be asked to play.
+ *
+ * Voice results are audio, and putting an mp3 in a <video> element renders a
+ * black rectangle with sound — which reads as a broken render rather than a
+ * finished take.
+ */
+export function isPlayableAudio(url: string | undefined): boolean {
+  if (!url) return false;
+  const clean = url.split("?")[0].toLowerCase();
+  return [".mp3", ".wav", ".m4a", ".ogg", ".aac"].some((ext) => clean.endsWith(ext));
+}

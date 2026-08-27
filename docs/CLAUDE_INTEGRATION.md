@@ -67,6 +67,30 @@ https://editforge.vercel.app/api/mcp?key=YOUR_TOKEN
 Paste that as the whole connector URL and it authenticates exactly as the
 header does.
 
+### If the connector cannot reach the app at all
+
+Two things sit in front of `/api/mcp`, and both fail before any EditForge code
+runs — so the symptom is not an EditForge error message.
+
+**Vercel Authentication.** When it is enabled for "all except custom domains",
+every request to `*.vercel.app` is bounced by Vercel's edge unless it carries a
+Vercel SSO session. A browser signed into the account gets through; an MCP client
+never does. `Project → Settings → Deployment Protection` shows the current
+setting. Two ways out: attach a custom domain (protection skips those), or turn
+Vercel Authentication off and let the app's own gate do the work —
+`EDITFORGE_ACCESS_PASSWORD` makes the whole deployment private and
+`EDITFORGE_MCP_TOKEN` gates the write tools, which is what they are for. Do not
+turn it off without setting at least one of those first.
+
+**Client-side egress rules.** Some Claude environments only reach an allowlist of
+hosts. A `403` on `CONNECT editforge.vercel.app:443`, or a connector that reports
+a rejected `Authorization` header without the app ever logging a request, is that
+— not a bad token. Add the host to the environment's network settings.
+
+Either way, `curl -s https://<your-deployment>/api/health` from the machine
+running the client is the fastest test: if that does not answer with EditForge's
+own JSON, the connector was never going to work, and no token will fix it.
+
 This is deliberately the weaker option. URLs are recorded in server and proxy
 logs where headers usually are not, so a token sent this way should be treated
 as more exposed and rotated more readily. Prefer the header wherever the client

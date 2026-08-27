@@ -25,7 +25,7 @@ const statusTone: Record<ModuleStatus, "neutral" | "outline" | "accent" | "quiet
 const createLanes = [
   { href: "/gen-video", label: "Gen video", note: "Text-to-video under quality bar" },
   { href: "/voice", label: "Voice", note: "Clone / TTS with consent" },
-  { href: "/avatar", label: "Avatar", note: "HyperFrames · talking head" },
+  { href: "/avatar", label: "Avatar", note: "HeyGen · talking head" },
   { href: "/stock", label: "Stock", note: "Music · SFX · footage" },
   { href: "/dailies", label: "Dailies", note: "Review before assembly" },
   { href: "/review", label: "Review", note: "Frame notes · QC" },

@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { SAMPLE_AVATARS, HYPERFRAMES_FLOW } from "@/lib/avatar";
+import { SAMPLE_AVATARS, AVATAR_FLOW } from "@/lib/avatar";
 import { Button } from "@/components/ui/button";
 import { Label, Select, Textarea, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { StatusLabel, toneFor } from "@/components/ui/status-dot";
 import { PageHeader } from "@/components/PageHeader";
 import { JobRunner } from "@/components/JobRunner";
-import { providerChoicesFor } from "@/lib/providers";
+import { providerChoicesFor } from "@/lib/provider-registry";
 
 const DESIGN_SOURCES = ["signal", "monochrome", "claude", "mat", "blockframe"];
 const AVATAR_PROVIDERS = providerChoicesFor("avatar").map((p) => ({ id: p.id, label: p.label }));
@@ -33,8 +33,8 @@ export default function AvatarPage() {
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
         eyebrow="AI Media"
-        title="Avatar / HyperFrames"
-        description="HeyGen-class delivery via HyperFrames. EditForge owns the brief, the cut linkage, and the rubric gate; the provider renders."
+        title="Avatar / talking head"
+        description="HeyGen renders the performance. EditForge owns the brief, the cut linkage, and the rubric gate."
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-5">
@@ -47,7 +47,7 @@ export default function AvatarPage() {
                 Avatar output
               </p>
               <p className="mt-3 max-w-sm text-center text-sm leading-relaxed text-navy/70">
-                Completed HyperFrames / avatar renders appear here. Until a job returns media,
+                Completed avatar renders appear here. Until a job returns media,
                 the stage stays honest — no placeholder talking head implied as live.
               </p>
               <p className="mt-5 rounded-control border border-border-faint bg-surface-elevated px-3 py-1 text-xs text-navy/50">
@@ -83,7 +83,7 @@ export default function AvatarPage() {
 
           <Section title="Provider flow">
             <ol className="space-y-1.5">
-              {HYPERFRAMES_FLOW.map((step, i) => (
+              {AVATAR_FLOW.map((step, i) => (
                 <li key={step} className="flex gap-3 text-xs text-navy/65">
                   <span className="w-4 shrink-0 text-right font-mono tabular-nums text-navy/30">
                     {i + 1}
@@ -117,7 +117,7 @@ export default function AvatarPage() {
             </Label>
 
             <Button type="button" variant="secondary" onClick={plan}>
-              Build HyperFrames plan
+              Build avatar plan
             </Button>
 
             {out && <Output>{out}</Output>}

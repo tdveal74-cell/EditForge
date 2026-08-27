@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { estimateTtsSeconds, SAMPLE_VOICES } from "@/lib/voice";
+import { SAMPLE_VOICES, VOICE_ENV, estimateTtsSeconds, voiceEnvKeyFor } from "@/lib/voice";
+import { elevenLabsVoiceId } from "@/lib/provider-registry";
+import { artifactStoreConfigured } from "@/lib/artifacts";
 
 export async function POST(req: Request) {
   const body = await req.json();
@@ -10,20 +12,36 @@ export async function POST(req: Request) {
   }
   const voice = SAMPLE_VOICES.find((v) => v.id === voiceId) || SAMPLE_VOICES[0];
   const seconds = estimateTtsSeconds(text);
-  const configured = Boolean(process.env.ELEVENLABS_API_KEY);
+
+  // Three separate things have to be true before a live run works, and saying
+  // "API key present" when only one of them holds is what made the old note
+  // misleading: the key can be set and the run still refuse.
+  const missing: string[] = [];
+  if (!process.env[VOICE_ENV.apiKey]?.trim()) missing.push(VOICE_ENV.apiKey);
+  // Names only — the resolved id is a provider identifier, not a secret, but it
+  // is not this endpoint's job to hand it out either.
+  if (!elevenLabsVoiceId(process.env, voice.id)) {
+    missing.push(`${voiceEnvKeyFor(voice.id)} or ${VOICE_ENV.defaultVoice}`);
+  }
+  if (!artifactStoreConfigured()) missing.push("EDITFORGE_ARTIFACT_DIR");
 
   return NextResponse.json({
     plan: {
-      provider: configured ? "elevenlabs" : "mock",
+      provider: missing.length === 0 ? "elevenlabs" : "mock",
       voice,
       textPreview: text.slice(0, 120),
       estimatedSeconds: seconds,
-      outputPath: `voice/${voiceId}-${Date.now()}.mp3`,
+      // Content-addressed at store time, so the plan can describe the shape but
+      // not pretend to know the name before the bytes exist.
+      outputFormat: "mp3_44100_128",
     },
     allowed: true,
-    note: configured
-      ? "API key present — wire real ElevenLabs synthesize on worker"
-      : "No ELEVENLABS_API_KEY — plan only (mock). Set env for live clone/TTS.",
+    configured: missing.length === 0,
+    missing,
+    note:
+      missing.length === 0
+        ? "ElevenLabs is configured — a run synthesises the script and stores the audio in the artifact store."
+        : `Plan only. A live run refuses until ${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} set.`,
     consentRequired: voice.kind === "cloned",
   });
 }

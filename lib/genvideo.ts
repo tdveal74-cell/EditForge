@@ -1,19 +1,46 @@
+import { PROVIDERS, credentialKeysFor, hasCredentials, isLiveWired } from "./provider-registry";
+
 export type GenProvider = "runway" | "kling" | "veo" | "seedream" | "mock";
 export type GenMode = "text-to-video" | "image-to-video" | "extend" | "restyle";
 export type QualityTier = "draft" | "social" | "broadcast-intent";
 
-export const GEN_PROVIDERS: {
+/**
+ * What each gen-video provider is for, in studio terms.
+ *
+ * Only the editorial half lives here — which provider suits which shot. Which
+ * env var holds the key, and whether the live path exists at all, comes from
+ * `lib/provider-registry.ts`, because a second copy of that answer is a second
+ * chance to disagree with the boundary that actually dispatches.
+ */
+const STRENGTHS: Record<GenProvider, string> = {
+  runway: "Gen-4.5 · motion brush · restyle · extend",
+  kling: "Longer takes · strong motion coherence",
+  veo: "High fidelity · cinematic intent",
+  seedream: "Stylized · concept-heavy looks",
+  mock: "Plan + QA only — no cloud spend",
+};
+
+export type GenProviderInfo = {
   id: GenProvider;
   label: string;
   strengths: string;
   envKey: string;
-}[] = [
-  { id: "runway", label: "Runway", strengths: "Gen-3 / motion brush · restyle · extend", envKey: "RUNWAY_API_KEY" },
-  { id: "kling", label: "Kling", strengths: "Longer takes · strong motion coherence", envKey: "KLING_API_KEY" },
-  { id: "veo", label: "Veo", strengths: "High fidelity · cinematic intent", envKey: "VEO_API_KEY" },
-  { id: "seedream", label: "Seedream", strengths: "Stylized · concept-heavy looks", envKey: "SEEDREAM_API_KEY" },
-  { id: "mock", label: "Mock (offline)", strengths: "Plan + QA only — no cloud spend", envKey: "" },
-];
+  /** Every name the credential may be set under. */
+  envKeys: string[];
+  /** Whether this provider's API shape is implemented at all. */
+  liveWired: boolean;
+};
+
+export const GEN_PROVIDERS: GenProviderInfo[] = PROVIDERS.filter(
+  (p) => p.kind === "gen-video"
+).map((p) => ({
+  id: p.id as GenProvider,
+  label: p.label,
+  strengths: STRENGTHS[p.id as GenProvider] ?? "",
+  envKey: p.envKey,
+  envKeys: credentialKeysFor(p),
+  liveWired: isLiveWired(p.id),
+}));
 
 export const GEN_QUALITY_BAR = [
   "No random morphing faces on hero talent without review",
@@ -29,74 +56,17 @@ export function pickProvider(requested?: string): GenProvider {
   return GEN_PROVIDERS.some((p) => p.id === id) ? id : "mock";
 }
 
-export type GenSubmitRequest = {
-  provider: GenProvider;
-  mode: GenMode;
-  prompt: string;
-  tier: QualityTier;
-  idempotencyKey: string;
-};
-
-export type GenSubmitResult =
-  | {
-      ok: true;
-      provider: GenProvider;
-      jobId: string;
-      mode: "mock" | "live";
-      status: "queued";
-      note: string;
-    }
-  | {
-      ok: false;
-      provider: GenProvider;
-      error: string;
-      mode: "mock" | "live";
-    };
-
 /**
- * Single entry for gen-video execution boundary.
- * Live providers require env keys; without keys, only mock is allowed.
- * This is the one path CI and the UI must call — never ad-hoc provider SDKs.
+ * Whether a gen-video provider could run right now.
+ *
+ * Execution itself is `submitToProvider` in `lib/providers.ts` — the one place
+ * a provider is called. There used to be a `submitGenVideo` here too, returning
+ * a `live-…` id and the note "worker not yet attached in this MVP": an id no
+ * provider had issued, for work nothing had started. Nothing called it but its
+ * own test, and a fabricated job id is precisely what this boundary exists to
+ * prevent, so it is gone rather than kept as a second answer.
  */
-export function submitGenVideo(req: GenSubmitRequest): GenSubmitResult {
-  const provider = pickProvider(req.provider);
-  const meta = GEN_PROVIDERS.find((p) => p.id === provider)!;
-
-  if (provider === "mock") {
-    return {
-      ok: true,
-      provider: "mock",
-      jobId: `mock-${req.idempotencyKey}`,
-      mode: "mock",
-      status: "queued",
-      note: "Offline plan only — no cloud spend",
-    };
-  }
-
-  const key = process.env[meta.envKey];
-  if (!key) {
-    return {
-      ok: false,
-      provider,
-      mode: "live",
-      error: `${meta.envKey} not configured — use mock or set the key for live path`,
-    };
-  }
-
-  // Live path is intentionally a boundary stub: auth exists, worker/polling is next increment.
-  return {
-    ok: true,
-    provider,
-    jobId: `live-${provider}-${req.idempotencyKey}`,
-    mode: "live",
-    status: "queued",
-    note: "Live credentials present — submit/poll worker not yet attached in this MVP",
-  };
-}
-
-export function providerHasCredentials(provider: GenProvider): boolean {
+export function providerReady(provider: GenProvider): boolean {
   if (provider === "mock") return true;
-  const meta = GEN_PROVIDERS.find((p) => p.id === provider);
-  if (!meta?.envKey) return false;
-  return Boolean(process.env[meta.envKey]);
+  return isLiveWired(provider) && hasCredentials(provider);
 }

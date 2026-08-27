@@ -134,6 +134,16 @@ export async function submitJob(
     j.externalId = res.externalId;
     j.note = res.note;
     delete j.error;
+
+    // Some providers answer the submit with the finished media rather than a
+    // task id. Leaving those in `running` would park completed work behind a
+    // poll that has nothing to ask, so they go straight to the human-accept
+    // stage — which is still a stage, not a skip.
+    if (res.state === "succeeded") {
+      advanceJob(j, "validating");
+      j.status = "validating";
+      if (res.result) j.result = res.result;
+    }
   });
 }
 

@@ -147,10 +147,14 @@ export type BrandClip = DriveMaster & {
  * and unlike the Node 01 shots, where the order *is* documented content, there
  * is nothing here to recover it from.
  *
- * So this is what the material honestly supports: the studio knows what it
- * holds, what each one weighs, and which two are already on screen. Ordering
- * needs either the shot list from the delivery or somebody who has watched
- * them.
+ * The two that are on disk were probed for anything that could recover an
+ * order — creation time, title, scene, take. They carry none: an encoder
+ * string and a generator signature, nothing else. So the ordering has to come
+ * from the delivery shot list or from somebody who has watched them.
+ *
+ * Both of those two are 720x1280, under the 1080x1920 the intake set as the
+ * delivery floor. Two out of twenty-nine is not a finding about the set, but it
+ * is the reason to measure the rest before anything here is cut as a master.
  */
 export const TSWS_CLIP_BIN: BrandClip[] = [
   { name: "tsws_2388dd38.mp4", fileId: "1phUzIJXqY0PNf-8VyAQmXb5cyNPN81tn", bytes: 17_807_832 },

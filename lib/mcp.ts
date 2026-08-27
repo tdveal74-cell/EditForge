@@ -3,7 +3,8 @@ import { RESTRAINT_RUBRIC, allRequiredPass } from "./restraint";
 import { buildExportCommand, buildProxyCommand, canRun } from "./ffmpeg";
 import { getCut, listCuts, probeStore } from "./store";
 import { cancelJob, completeJob, createAndQueue, getJob, listJobs, pollJob, retryJob, submitJob } from "./jobstore";
-import { PROVIDERS, hasCredentials, isLiveWired } from "./providers";
+import { PROVIDERS, credentialKeysFor, hasCredentials, isLiveWired } from "./providers";
+import { artifactStoreConfigured } from "./artifacts";
 import { idempotencyKeyFor } from "./idempotency";
 import { listRolls, reviewRoll, selectForCut } from "./dailies";
 import { addShot, listShots, setShotStatus, shotsForCut } from "./vfxboard";
@@ -77,23 +78,42 @@ export const TOOLS: Tool[] = [
     inputSchema: obj({}),
     run: async () => {
       const probe = await probeStore();
+      const artifactStore = artifactStoreConfigured();
       return {
         store: probe.backend,
         storeReachable: probe.reachable,
         storeError: probe.error,
-        providers: PROVIDERS.map((p) => ({
-          id: p.id,
-          kind: p.kind,
-          // Names and booleans only — never a credential value.
-          credentialVar: p.envKey || undefined,
-          credentialSet: p.envKey ? hasCredentials(p.id) : undefined,
-          // Asks whether the provider's API shape is actually implemented, not
-          // merely whether a base URL string was filled in. The old check read
-          // `Boolean(p.endpoint)` and so reported Runway and ElevenLabs as live
-          // while every submit to either was malformed — the status was the
-          // last place you would have learned the live path did not work.
-          liveWired: isLiveWired(p.id),
-        })),
+        // Providers that answer with the media itself have nowhere to put it
+        // without this, so a voice run refuses when it is false.
+        artifactStore,
+        providers: PROVIDERS.map((p) => {
+          const wired = isLiveWired(p.id);
+          const needsStore = Boolean(p.wire?.binary);
+          return {
+            id: p.id,
+            kind: p.kind,
+            // Names and booleans only — never a credential value.
+            credentialVar: p.envKey || undefined,
+            credentialVars: credentialKeysFor(p),
+            credentialSet: p.envKey ? hasCredentials(p.id) : undefined,
+            // Asks whether the provider's API shape is actually implemented, not
+            // merely whether a base URL string was filled in. The old check read
+            // `Boolean(p.endpoint)` and so reported Runway and ElevenLabs as live
+            // while every submit to either was malformed — the status was the
+            // last place you would have learned the live path did not work.
+            liveWired: wired,
+            // The further env this provider still needs before a live run is
+            // accepted. An avatar render refused for a missing look id reads as
+            // a credential problem until this says otherwise.
+            settingsMissing: (p.settingKeys ?? []).filter((key) => !process.env[key]?.trim()),
+            readyToRun:
+              p.id === "mock" ||
+              (wired &&
+                hasCredentials(p.id) &&
+                (!needsStore || artifactStore) &&
+                (p.settingKeys ?? []).every((key) => Boolean(process.env[key]?.trim()))),
+          };
+        }),
       };
     },
   },

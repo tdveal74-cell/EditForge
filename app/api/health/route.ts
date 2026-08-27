@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { probeStore, storeEnvPresent, storeFallbackReason } from "@/lib/store";
 import { accessGateEnabled } from "@/lib/auth";
 import { probeWorker } from "@/lib/edit-worker";
+import { artifactStoreConfigured } from "@/lib/artifacts";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,10 @@ export async function GET() {
       // requesting any other path and seeing whether it redirects.
       accessGate: accessGateEnabled(),
       executionReady: worker.configured && worker.reachable,
+      // Providers that answer with the media itself (ElevenLabs TTS) need
+      // somewhere to put it. Reported here so a voice submit that would refuse
+      // is diagnosable before anyone spends money finding out.
+      artifactStore: artifactStoreConfigured(),
       workerConfigured: worker.configured,
       workerReachable: worker.reachable,
       ...(worker.error ? { workerError: worker.error } : {}),

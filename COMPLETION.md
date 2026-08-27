@@ -16,10 +16,12 @@ code-complete. Live provider readiness remains credential-, identity-, and host-
 - [x] Shared primitives: Button · Card · Badge · PageHeader
 - [x] Hardware reference tier: `lib/hardware.ts` · `/hardware` · `docs/HARDWARE.md`
 
-### AI media (plan + keys)
-- [x] Voice (ElevenLabs-class)
-- [x] Avatar / HyperFrames
-- [x] Gen video (Runway · Kling · Veo · Seedream)
+### AI media
+- [x] Voice — ElevenLabs wired end to end: `xi-api-key`, studio-voice → provider-voice resolution, returned bytes stored in the artifact store as the job's result
+- [x] Avatar — HeyGen wired end to end: `POST /v3/videos` → `GET /v3/videos/{id}`, `X-Api-Key`, look and voice required before a run is accepted
+- [x] Gen video — Runway wired (`text_to_video` / `tasks`, aspect and duration translated and bounded); Kling · Veo · Seedream registered and refusing until implemented
+- [x] Control-plane artifact store (`lib/artifacts.ts` + `/api/artifacts/[name]`), content-addressed, audio and video
+- [x] One readiness answer across `/api/providers`, `/api/health`, `editforge_status` and the picker: wired · credentialSet · settingsMissing · billable
 - [x] Stock (Artlist-class index)
 
 ### Bridges
@@ -51,9 +53,12 @@ code-complete. Live provider readiness remains credential-, identity-, and host-
 - [ ] Production self-host boot and smoke render on the target machine
 - [ ] Foundation-model training
 
+Credential wiring for every provider above — which variable, on which service,
+and how to verify it without reading a secret — is `docs/CREDENTIALS.md`.
+
 ## Verify
 ```bash
 npm install && npm test && npm run build && npm run dev
 ```
 
-**Status: governed provider execution code-complete · self-hostable · live account configuration pending.**
+**Status: studio and DEVON provider execution code-complete · self-hostable · live account configuration pending.**

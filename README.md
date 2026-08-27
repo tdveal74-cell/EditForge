@@ -2,10 +2,10 @@
 
 **Flagship production studio OS** — Ultra Meta Supreme AAA.
 
-Departments · long-form stitch · gen video · voice · HyperFrames · stock · rubric ship gate.
+Departments · long-form stitch · gen video · voice · avatar · stock · rubric ship gate.
 
 ```bash
-pnpm install && pnpm test && pnpm dev
+npm install && npm test && npm run dev
 ```
 
 Start at **`/studio`**.
@@ -14,4 +14,4 @@ Run hosted on Vercel or self-host the complete web + worker + provider stack wit
 `docker compose up -d --build`. DEVON control, self-hosting, clone voice, full motion,
 and long/short/micro-drama execution are documented in `docs/DEVON_EXECUTION.md`.
 
-Docs: `docs/STUDIO_OS.md` · `docs/DEVON_EXECUTION.md` · `docs/FLAGSHIP_SPEC.md` · `docs/HARDWARE.md` · `docs/DEPLOY.md` · `docs/LONGFORM.md` · `docs/GEN_VIDEO.md` · `docs/AI_MEDIA.md` · `COMPLETION.md`
+Docs: `docs/CREDENTIALS.md` · `docs/STUDIO_OS.md` · `docs/DEVON_EXECUTION.md` · `docs/FLAGSHIP_SPEC.md` · `docs/HARDWARE.md` · `docs/DEPLOY.md` · `docs/LONGFORM.md` · `docs/GEN_VIDEO.md` · `docs/AI_MEDIA.md` · `COMPLETION.md`

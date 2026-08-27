@@ -9,13 +9,31 @@ export type AvatarProject = {
 
 export const SAMPLE_AVATARS: AvatarProject[] = [
   { id: "av-tsws-cold", title: "TSWS cold open — avatar bed", status: "draft", scriptPreview: "Where are we today?", designSource: "signal" },
-  { id: "av-tqo-teach", title: "TQO presenter teach via HyperFrames", status: "ready", scriptPreview: "Three steps. No hype.", designSource: "monochrome" },
+  { id: "av-tqo-teach", title: "TQO presenter teach via HeyGen", status: "ready", scriptPreview: "Three steps. No hype.", designSource: "monochrome" },
 ];
 
-export const HYPERFRAMES_FLOW = [
-  "compose(prompt, designSource?) → project_id",
-  "get_project_status(project_id) until draft/completed",
-  "render_video(project_id) if separate render needed",
-  "get_render_status → video_url",
-  "Attach MP4 to EditForge cut + rubric before master ship",
+/**
+ * What EditForge actually does when an avatar job runs.
+ *
+ * This used to describe the HyperFrames MCP tools — compose, get_project_status,
+ * render_video — which is a flow an assistant drives by hand in another client,
+ * not one this studio could execute. The avatar provider is now wired through
+ * the same boundary as everything else, so the steps below are the steps the
+ * job runner takes.
+ */
+export const AVATAR_FLOW = [
+  "POST /v3/videos {type, avatar_id, voice_id, script} → video id",
+  "GET /v3/videos/{id} until completed or failed",
+  "Completed → video_url recorded on the job as its result",
+  "Attach the MP4 to an EditForge cut",
+  "Rubric pass before master ship — the gate is not optional",
 ] as const;
+
+export const AVATAR_ENV = {
+  provider: "HEYGEN",
+  apiKey: "HEYGEN_API_KEY",
+  /** The avatar look to render. HeyGen calls this a look id. */
+  avatar: "HEYGEN_AVATAR_ID",
+  /** The voice HeyGen speaks the script in. */
+  voice: "HEYGEN_VOICE_ID",
+} as const;

@@ -10,7 +10,7 @@ Studio OS: departments + AI media + engine bridges.
 | VFX | `/vfx` + `/vfx-engine` | Fusion · AE · 3D |
 | MAM | `/assets` + `/mam` | Drive · S3 · Frame.io |
 | Render | `/render` + `/jobs` | Worker / farm |
-| Voice | `/voice` | ElevenLabs-class |
-| Avatar | `/avatar` | HyperFrames / HeyGen |
+| Voice | `/voice` | ElevenLabs |
+| Avatar | `/avatar` | HeyGen |
 
 Consent for clones. Rubric before master. No silent auto-ship.

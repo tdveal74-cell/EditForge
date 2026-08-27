@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JobKind, JobStatus, StudioJob } from "@/lib/jobs";
 import { idempotencyKeyFor } from "@/lib/idempotency";
+import { isPlayableAudio, isPlayableVideo } from "@/lib/media";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label, Select } from "@/components/ui/field";
@@ -15,7 +16,11 @@ type ProviderReadiness = {
   billable: boolean;
   wired: boolean;
   envKey?: string;
+  envKeys?: string[];
   credentialSet?: boolean;
+  /** Env this provider still needs beyond its API key, e.g. an avatar look id. */
+  settingsMissing?: string[];
+  requiresArtifactStore?: boolean;
 };
 
 type Props = {
@@ -48,6 +53,7 @@ export function JobRunner({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<Record<string, ProviderReadiness>>({});
+  const [artifactStore, setArtifactStore] = useState(true);
   const [polls, setPolls] = useState(0);
   const alive = useRef(true);
   useEffect(() => {
@@ -62,8 +68,9 @@ export function JobRunner({
       try {
         const res = await fetch("/api/providers", { cache: "no-store" });
         if (!res.ok) return;
-        const data = (await res.json()) as { providers: ProviderReadiness[] };
+        const data = (await res.json()) as { providers: ProviderReadiness[]; artifactStore?: boolean };
         if (!alive.current) return;
+        setArtifactStore(Boolean(data.artifactStore));
         setReadiness(Object.fromEntries(data.providers.map((p) => [p.id, p])));
       } catch {
         // degraded picker is fine
@@ -73,6 +80,7 @@ export function JobRunner({
 
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
+  const missingSettings = chosen?.settingsMissing ?? [];
 
   async function run() {
     setBusy(true);
@@ -149,7 +157,11 @@ export function JobRunner({
           <Select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={tracking}>
             {providers.map((p) => {
               const r = readiness[p.id];
-              const mark = !r ? "" : r.billable ? " · live" : p.id === "mock" ? "" : " · unavailable";
+              // "live" has to mean runnable, not merely credentialled: a
+              // provider whose key is set but whose look id is not would other-
+              // wise be offered as live and refuse on click.
+              const ready = Boolean(r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
+              const mark = !r ? "" : ready ? " · live" : p.id === "mock" ? "" : " · unavailable";
               return (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -172,7 +184,7 @@ export function JobRunner({
 
       {chosen && (
         <p className="mt-2.5 text-xs">
-          {chosen.billable ? (
+          {chosen.billable && missingSettings.length === 0 ? (
             <span className="text-amber-700">
               Live provider — running this bills real work against {chosen.envKey}.
             </span>
@@ -182,10 +194,26 @@ export function JobRunner({
             <span className="text-navy/50">
               No live path implemented for this provider yet — it will refuse rather than pretend.
             </span>
-          ) : (
+          ) : !chosen.credentialSet ? (
             <span className="text-navy/50">
-              {chosen.envKey} is not set, so this will refuse rather than run.
+              {(chosen.envKeys?.length ? chosen.envKeys : [chosen.envKey]).filter(Boolean).join(" or ")} is
+              not set, so this will refuse rather than run.
             </span>
+          ) : chosen.requiresArtifactStore && !artifactStore ? (
+            <span className="text-navy/50">
+              This provider answers with the media itself and EDITFORGE_ARTIFACT_DIR is not set, so there
+              is nowhere to keep it. It will refuse rather than spend.
+            </span>
+          ) : missingSettings.length > 0 ? (
+            // Without this, a HeyGen render refused for a missing look id reads
+            // as a bad API key — the one thing that is not wrong.
+            <span className="text-navy/50">
+              The key is set, but {missingSettings.join(" and ")}{" "}
+              {missingSettings.length > 1 ? "are" : "is"} not — this will refuse until{" "}
+              {missingSettings.length > 1 ? "they are" : "it is"} configured.
+            </span>
+          ) : (
+            <span className="text-navy/50">This provider is not ready to run live yet.</span>
           )}
         </p>
       )}
@@ -219,6 +247,19 @@ export function JobRunner({
                     <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">
                       Result ready
                     </p>
+                    {/* Play it here. A finished VO that can only be opened in
+                        another tab is a link, not a result — and judging a take
+                        is the whole reason to come back to this page. */}
+                    {isPlayableAudio(job.result) ? (
+                      <audio className="mt-3 w-full max-w-md" controls preload="metadata" src={job.result} />
+                    ) : isPlayableVideo(job.result) ? (
+                      <video
+                        className="mt-3 max-h-64 w-full max-w-md rounded-control bg-navy/5"
+                        controls
+                        preload="metadata"
+                        src={job.result}
+                      />
+                    ) : null}
                     <a
                       href={job.result}
                       target="_blank"

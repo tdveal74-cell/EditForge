@@ -19,6 +19,7 @@ import type { RubricDecision } from "./jobs";
 const DATA_DIR = path.join(process.cwd(), ".data-test-jobstore");
 process.env.EDITFORGE_DATA_DIR = DATA_DIR;
 const JOBS_FILE = path.join(DATA_DIR, "jobs.json");
+const ARTIFACT_DIR = path.join(DATA_DIR, "artifacts");
 
 const PASS: RubricDecision = {
   cutHash: "abc123",
@@ -32,9 +33,68 @@ beforeEach(async () => {
   await fs.rm(JOBS_FILE, { force: true });
 });
 
-afterEach(() => {
+afterEach(async () => {
   vi.unstubAllGlobals();
-  delete process.env.RUNWAY_API_KEY;
+  for (const key of ["RUNWAY_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "EDITFORGE_ARTIFACT_DIR"]) {
+    delete process.env[key];
+  }
+  await fs.rm(ARTIFACT_DIR, { recursive: true, force: true });
+});
+
+describe("submits that finish on the spot", () => {
+  it("parks finished media at the accept gate instead of polling for it", async () => {
+    // ElevenLabs answers the submit with the audio itself. Leaving the job in
+    // `running` would hold completed work behind a poll with nothing to ask —
+    // but it still stops at `validating`, because a human accept is the gate,
+    // not a formality.
+    process.env.ELEVENLABS_API_KEY = "tok";
+    process.env.ELEVENLABS_VOICE_ID = "voice-1";
+    process.env.EDITFORGE_ARTIFACT_DIR = ARTIFACT_DIR;
+    const bytes = new Uint8Array([1, 2, 3]);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "audio/mpeg" }),
+        arrayBuffer: async () => bytes.buffer.slice(0),
+      }) as unknown as Response)
+    );
+
+    const job = await createAndQueue({
+      kind: "voice",
+      label: "VO",
+      note: "queued",
+      idempotencyKey: "vo-instant",
+    });
+    const submitted = await submitJob(job.id, { provider: "elevenlabs", prompt: "Where are we today?" });
+
+    expect(submitted?.status).toBe("validating");
+    expect(submitted?.mode).toBe("live");
+    expect(submitted?.result).toMatch(/^\/api\/artifacts\/elevenlabs-voice-[0-9a-f]{16}\.mp3$/);
+
+    const accepted = await completeJob(job.id);
+    expect(accepted?.status).toBe("completed");
+  });
+
+  it("fails the job rather than banking a render it could not keep", async () => {
+    process.env.ELEVENLABS_API_KEY = "tok";
+    process.env.ELEVENLABS_VOICE_ID = "voice-1";
+    // No artifact store configured.
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const job = await createAndQueue({
+      kind: "voice",
+      label: "VO",
+      note: "queued",
+      idempotencyKey: "vo-nostore",
+    });
+    const submitted = await submitJob(job.id, { provider: "elevenlabs", prompt: "x" });
+    expect(submitted?.status).toBe("failed");
+    expect(submitted?.error).toMatch(/EDITFORGE_ARTIFACT_DIR/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("durable job lifecycle", () => {

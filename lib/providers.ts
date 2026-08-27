@@ -181,11 +181,25 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
     // resolve. Storing before reporting success is the point: a failure here
     // must not read as a finished render.
     if (wire.binary) {
-      const stored = await storeArtifact({
-        bytes: await res.arrayBuffer(),
-        extension: wire.binary.extension,
-        prefix: `${ready.spec.id}-${req.kind}`,
-      });
+      const bytes = await res.arrayBuffer();
+      let stored;
+      try {
+        stored = await storeArtifact({
+          bytes,
+          extension: wire.binary.extension,
+          prefix: `${ready.spec.id}-${req.kind}`,
+        });
+      } catch (err) {
+        // Deliberately not inside the outer catch: the provider answered, and
+        // reporting a full disk as "ElevenLabs unreachable" would send whoever
+        // reads this job to check the wrong thing entirely.
+        return {
+          ok: false,
+          provider: ready.spec.id,
+          mode: "live",
+          error: `${ready.spec.label} answered but the artifact could not be stored — the render was paid for and is lost: ${(err as Error).message}`,
+        };
+      }
       return {
         ok: true,
         provider: ready.spec.id,

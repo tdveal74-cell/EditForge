@@ -444,6 +444,32 @@ describe("ElevenLabs voice", () => {
     expect(res.externalId).toContain(createHash("sha256").update(bytes).digest("hex").slice(0, 16));
   });
 
+  it("says the store failed, not that the provider was unreachable", async () => {
+    // The provider answered and was paid. Reporting a store failure as
+    // "ElevenLabs unreachable" sends whoever reads the job to check the one
+    // thing that worked.
+    clearKeys();
+    process.env.ELEVENLABS_API_KEY = "el-key";
+    process.env.ELEVENLABS_VOICE_ID = "voice-1";
+    process.env.EDITFORGE_ARTIFACT_DIR = store;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => audioResponse(new Uint8Array()))
+    );
+
+    const res = await submitToProvider({
+      provider: "elevenlabs",
+      kind: "voice",
+      prompt: "read this",
+      idempotencyKey: "v-empty",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.error).toMatch(/could not be stored/);
+      expect(res.error).not.toMatch(/unreachable/);
+    }
+  });
+
   it("settles at the store rather than polling a task that does not exist", async () => {
     clearKeys();
     process.env.ELEVENLABS_API_KEY = "el-key";

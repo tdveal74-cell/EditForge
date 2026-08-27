@@ -56,7 +56,10 @@ jobs:
           EDITFORGE_ACCESS_PASSWORD: ci-access-password
           EDITFORGE_MCP_TOKEN: ci-mcp-token
           EDITFORGE_WORKER_TOKEN: ci-worker-token
+          EDITFORGE_PROVIDER_TOKEN: ci-provider-token
           EDITFORGE_PUBLIC_URL: http://localhost:3100
+          EDITFORGE_IDENTITY_REGISTRY_FILE: ./provider/identity-registry.example.json
+          EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB: "100"
         run: docker compose config --quiet
 
       - name: Build control plane image
@@ -64,3 +67,6 @@ jobs:
 
       - name: Build render worker image
         run: docker build -f infrastructure/worker/Dockerfile -t editforge-worker-ci .
+
+      - name: Build provider adapter image
+        run: docker build -f infrastructure/provider/Dockerfile -t editforge-provider-ci .

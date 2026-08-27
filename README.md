@@ -10,7 +10,7 @@ pnpm install && pnpm test && pnpm dev
 
 Start at **`/studio`**.
 
-Run hosted on Vercel or self-host the complete web + worker stack with
+Run hosted on Vercel or self-host the complete web + worker + provider stack with
 `docker compose up -d --build`. DEVON control, self-hosting, clone voice, full motion,
 and long/short/micro-drama execution are documented in `docs/DEVON_EXECUTION.md`.
 

@@ -43,12 +43,13 @@ services:
       EDITFORGE_CALLBACK_ORIGIN: http://web:3000
       EDITFORGE_WORKER_CONCURRENCY: ${EDITFORGE_WORKER_CONCURRENCY:-1}
       EDITFORGE_PROVIDER_TOKEN: ${EDITFORGE_PROVIDER_TOKEN:-}
-      EDITFORGE_VOICE_ADAPTER_URL: ${EDITFORGE_VOICE_ADAPTER_URL:-}
-      EDITFORGE_MOTION_ADAPTER_URL: ${EDITFORGE_MOTION_ADAPTER_URL:-}
-      EDITFORGE_LIPSYNC_ADAPTER_URL: ${EDITFORGE_LIPSYNC_ADAPTER_URL:-}
+      EDITFORGE_VOICE_ADAPTER_URL: ${EDITFORGE_VOICE_ADAPTER_URL:-http://provider:9080/v1/voice}
+      EDITFORGE_MOTION_ADAPTER_URL: ${EDITFORGE_MOTION_ADAPTER_URL:-http://provider:9080/v1/motion}
+      EDITFORGE_LIPSYNC_ADAPTER_URL: ${EDITFORGE_LIPSYNC_ADAPTER_URL:-http://provider:9080/v1/lipsync}
       EDITFORGE_TIMELINE_ADAPTER_URL: ${EDITFORGE_TIMELINE_ADAPTER_URL:-}
       EDITFORGE_ARTIFACT_DIR: /artifacts
       EDITFORGE_ARTIFACT_BASE_URL: ${EDITFORGE_PUBLIC_URL:?set EDITFORGE_PUBLIC_URL}/api/artifacts
+      EDITFORGE_TRUSTED_MEDIA_ORIGINS: http://provider:9080
     volumes:
       - editforge_worker_data:/data
       - editforge_artifacts:/artifacts
@@ -59,12 +60,48 @@ services:
       retries: 8
       start_period: 20s
     networks: [render]
+    depends_on:
+      provider:
+        condition: service_healthy
+
+  provider:
+    build:
+      context: .
+      dockerfile: infrastructure/provider/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      EDITFORGE_PROVIDER_TOKEN: ${EDITFORGE_PROVIDER_TOKEN:?set EDITFORGE_PROVIDER_TOKEN}
+      EDITFORGE_IDENTITY_REGISTRY_FILE: /run/secrets/editforge-identities.json
+      EDITFORGE_PROVIDER_ARTIFACT_DIR: /provider-artifacts
+      EDITFORGE_PROVIDER_ARTIFACT_BASE_URL: http://provider:9080/artifacts
+      EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB: ${EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB:?set EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB}
+      EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB: ${EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB:-5000}
+      RUNWAYML_API_SECRET: ${RUNWAYML_API_SECRET:-}
+      RUNWAY_API_VERSION: ${RUNWAY_API_VERSION:-2024-11-06}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+    volumes:
+      - editforge_provider_artifacts:/provider-artifacts
+    secrets:
+      - editforge_identities
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:9080/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 15s
+    networks: [render]
 
 volumes:
   editforge_web_data:
   editforge_worker_data:
   editforge_artifacts:
+  editforge_provider_artifacts:
 
 networks:
   control:
   render:
+
+secrets:
+  editforge_identities:
+    file: ${EDITFORGE_IDENTITY_REGISTRY_FILE:?set EDITFORGE_IDENTITY_REGISTRY_FILE}

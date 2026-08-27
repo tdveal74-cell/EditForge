@@ -1,0 +1,20 @@
+{
+  "schema": "editforge.identity-registry.v1",
+  "identities": [
+    {
+      "id": "tee-identity-v1",
+      "cloneId": "tee-clone-v1",
+      "voiceId": "tee-voice-v1",
+      "properties": ["tqo", "nco-forge"],
+      "consentRecorded": true,
+      "providers": {
+        "elevenlabsVoiceId": "replace-with-consented-elevenlabs-voice-id",
+        "runwayAvatarId": "replace-with-consented-runway-avatar-uuid",
+        "runwayVoiceId": "replace-with-consented-runway-voice-uuid",
+        "runwayCharacterUri": "https://replace-with-private-signed-character-reference.example/tee.png",
+        "runwayCharacterType": "image"
+      }
+    }
+  ]
+}
+

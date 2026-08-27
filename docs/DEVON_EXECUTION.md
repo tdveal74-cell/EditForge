@@ -19,7 +19,8 @@ Locally compiled operations are `trim`, `reframe`, `derive-short`, `speed`,
 `captions`, `audio-mix`, `grade`, and preview/master encoding. Nonlinear timeline
 operations (`split`, `reorder`, `replace-shot`, `title`, `transition`, episode and
 compilation assembly) use `EDITFORGE_TIMELINE_ADAPTER_URL`. Clone voice, full motion,
-and lip sync use the voice, motion, and lip-sync adapter URLs. An accepted operation
+and lip sync use the voice, motion, and lip-sync adapter URLs. Self-hosted defaults
+point those URLs at the private built-in provider service. An accepted operation
 without a compiler or adapter fails; it is never silently skipped.
 
 ## Authority and lifecycle
@@ -46,8 +47,8 @@ Master commands additionally require the named cut to have a recorded rubric pas
 ## Self-hosted deployment
 
 The canonical self-hosted shape is `compose.yaml`: a private Next.js control plane,
-an FFmpeg/FFprobe worker, durable state volumes, and a shared artifact volume. The
-worker has no published host port; EditForge reaches it on the compose network.
+an FFmpeg/FFprobe worker, a private identity-locked provider adapter, durable state
+volumes, and artifact volumes. Only the web service publishes a host port.
 
 Create `.env` from `.env.example` and set at least:
 
@@ -59,19 +60,41 @@ EDITFORGE_PUBLIC_URL=http://localhost:3100
 EDITFORGE_PORT=3100
 ```
 
-For clone/full-motion work, also configure the adapter boundary:
+For clone/full-motion work, copy `provider/identity-registry.example.json` to a
+host path outside the repository, replace the placeholders with consented provider
+identifiers, and configure the private adapter:
 
 ```dotenv
-EDITFORGE_PROVIDER_TOKEN=<adapter bearer token>
-EDITFORGE_VOICE_ADAPTER_URL=https://voice-adapter.example/v1/render
-EDITFORGE_MOTION_ADAPTER_URL=https://motion-adapter.example/v1/render
-EDITFORGE_LIPSYNC_ADAPTER_URL=https://lipsync-adapter.example/v1/render
-EDITFORGE_TIMELINE_ADAPTER_URL=https://timeline-adapter.example/v1/render
+EDITFORGE_PROVIDER_TOKEN=<different random adapter bearer token>
+EDITFORGE_IDENTITY_REGISTRY_FILE=/absolute/host/path/editforge-identities.json
+EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB=100
+EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB=5000
+RUNWAYML_API_SECRET=<Runway developer key>
+ELEVENLABS_API_KEY=<ElevenLabs key>
 ```
 
+The built-in adapter maps `synthesize-voice` to the registry-locked ElevenLabs
+voice, `lip-sync` to the registry-locked Runway custom avatar, and
+`generate-full-motion` to Runway Act-Two using the registry-locked character
+reference. Provider IDs and API keys never enter a DEVON command or receipt. The
+adapter refuses a command when its identity, property, consent flag, or registry
+record does not match.
+
+Paid Runway operations must carry `params.maxCredits`; voice operations must carry
+`params.maxCharacters`. The adapter applies the lower of the operation approval and
+host ceiling and cancels a Runway task if its reported estimate exceeds that ceiling.
+No paid smoke render should be submitted until Tee approves the exact identity,
+source assets, and per-job ceiling.
+
+`EDITFORGE_TIMELINE_ADAPTER_URL` remains optional for nonlinear assembly. The FFmpeg
+worker already executes trims, reframes, derivatives, speed, captions, audio mix,
+grade, and preview/master encoding locally.
+
 Production source and signed-upload URLs must use HTTPS and cannot target private
-addresses by default. A deliberately private on-prem media server can be enabled with
-`EDITFORGE_ALLOW_PRIVATE_MEDIA_URLS=true` only when the render network is trusted.
+addresses by default. The Compose stack allowlists only its internal provider origin
+through `EDITFORGE_TRUSTED_MEDIA_ORIGINS`. A deliberately private on-prem media server
+can be enabled more broadly with `EDITFORGE_ALLOW_PRIVATE_MEDIA_URLS=true` only when
+the entire render network is trusted.
 
 Then:
 

@@ -99,8 +99,15 @@ export type ProviderSpec = {
   endpoint?: string;
   /** Absent means the shape is not implemented — the boundary refuses. */
   wire?: ProviderWire;
-  /** Extra env this provider needs before it can run, for readiness reporting. */
-  settingKeys?: string[];
+  /**
+   * Env this provider needs beyond its credential, for readiness reporting.
+   *
+   * A plain string must be set. `{ anyOf }` is satisfied by any one of several
+   * names, and reports the first as the one to set — ElevenLabs is happy with
+   * either the default voice or a per-voice pin, and calling it unconfigured
+   * because the default is absent would be a refusal it would not actually make.
+   */
+  settingKeys?: (string | { label: string; anyOf: string[] })[];
 };
 
 /**
@@ -205,7 +212,7 @@ export const PROVIDERS: ProviderSpec[] = [
     label: "ElevenLabs",
     envKey: "ELEVENLABS_API_KEY",
     endpoint: "https://api.elevenlabs.io/v1",
-    settingKeys: ["ELEVENLABS_VOICE_ID"],
+    settingKeys: [{ label: "ELEVENLABS_VOICE_ID", anyOf: ["ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_ID_*"] }],
     wire: {
       auth: { header: "xi-api-key" },
       binary: { extension: ".mp3" },
@@ -358,4 +365,49 @@ export function normalizeState(raw?: string): ProviderState {
   if (["failed", "error", "cancelled", "canceled", "rejected"].includes(s)) return "failed";
   if (["running", "processing", "in_progress", "generating"].includes(s)) return "running";
   return "queued";
+}
+
+/**
+ * The env names this provider still needs, beyond its credential.
+ *
+ * One implementation, read by `/api/providers`, `/api/health`'s neighbours and
+ * the `editforge_status` tool, so a picker and an assistant cannot disagree
+ * about why a run would refuse.
+ */
+export function missingSettingsFor(spec: ProviderSpec, env: EnvLike = process.env): string[] {
+  const missing: string[] = [];
+  for (const entry of spec.settingKeys ?? []) {
+    if (typeof entry === "string") {
+      if (!text(env[entry])) missing.push(entry);
+      continue;
+    }
+    // A wildcard stands for a family of names — any member satisfies it.
+    const satisfied = entry.anyOf.some((name) =>
+      name.endsWith("*")
+        ? Object.keys(env).some((key) => key.startsWith(name.slice(0, -1)) && text(env[key]))
+        : Boolean(text(env[name]))
+    );
+    if (!satisfied) missing.push(entry.label);
+  }
+  return missing;
+}
+
+/** Whether a submit to this provider would reach it and bill for it. */
+export function providerReadiness(
+  spec: ProviderSpec,
+  opts: { artifactStore: boolean; env?: EnvLike }
+): { wired: boolean; credentialSet: boolean; settingsMissing: string[]; ready: boolean } {
+  const env = opts.env ?? process.env;
+  const wired = isLiveWired(spec.id);
+  const credentialSet = hasCredentials(spec.id, env);
+  const settingsMissing = missingSettingsFor(spec, env);
+  // A provider whose submit answers with bytes cannot run at all without
+  // somewhere to keep them, so it is not ready until the store exists.
+  const storeOk = !spec.wire?.binary || opts.artifactStore;
+  return {
+    wired,
+    credentialSet,
+    settingsMissing,
+    ready: spec.id !== "mock" && wired && credentialSet && storeOk && settingsMissing.length === 0,
+  };
 }

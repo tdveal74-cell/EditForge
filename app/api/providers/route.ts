@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PROVIDERS, credentialKeysFor, hasCredentials, isLiveWired } from "@/lib/providers";
+import { PROVIDERS, credentialKeysFor, providerReadiness } from "@/lib/providers";
 import { artifactStoreConfigured } from "@/lib/artifacts";
 
 export const dynamic = "force-dynamic";
@@ -17,27 +17,24 @@ export async function GET() {
   const providers = PROVIDERS.map((p) => {
     // `wired` used to read `Boolean(p.endpoint)` while `isLiveWired` asked
     // whether the shape was implemented. The two disagreed, so the picker
-    // called a provider ready that the boundary would refuse. One answer now.
-    const wired = isLiveWired(p.id);
-    // A provider whose submit answers with bytes cannot run at all without
-    // somewhere to keep them, so it is not billable until the store exists.
-    const needsStore = Boolean(p.wire?.binary);
+    // called a provider ready that the boundary would refuse. One answer now,
+    // computed in the registry and shared with the MCP status tool.
+    const readiness = providerReadiness(p, { artifactStore });
     return {
       id: p.id,
       label: p.label,
       kind: p.kind,
       /** True when a run would reach a real provider and bill for it. */
-      billable: p.id !== "mock" && wired && hasCredentials(p.id) && (!needsStore || artifactStore),
+      billable: readiness.ready,
       /** Whether the live path is implemented at all for this provider. */
-      wired,
+      wired: readiness.wired,
       envKey: p.envKey || undefined,
       /** Every name this provider's credential may be set under. */
       envKeys: credentialKeysFor(p),
-      credentialSet: p.envKey ? hasCredentials(p.id) : undefined,
+      credentialSet: p.envKey ? readiness.credentialSet : undefined,
       /** Further env this provider needs before a live run will be accepted. */
-      settingKeys: p.settingKeys,
-      settingsMissing: (p.settingKeys ?? []).filter((key) => !process.env[key]?.trim()),
-      requiresArtifactStore: needsStore || undefined,
+      settingsMissing: readiness.settingsMissing,
+      requiresArtifactStore: Boolean(p.wire?.binary) || undefined,
     };
   });
 

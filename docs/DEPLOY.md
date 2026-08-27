@@ -103,5 +103,18 @@ every test cut persists in the shared store forever.
 
 ## Secrets
 
-Never commit real keys. `.env.example` lists the provider variables; storage credentials
-are injected by Vercel and should not be copied into the repo.
+Never commit real keys. `.env.example` lists the provider variables and
+[`CREDENTIALS.md`](CREDENTIALS.md) says which belongs on which deployment; storage
+credentials are injected by Vercel and should not be copied into the repo.
+
+### One provider does not belong on Vercel
+
+ElevenLabs answers a text-to-speech request with the audio bytes themselves, so the
+control plane has to keep them — `EDITFORGE_ARTIFACT_DIR`, served back through
+`/api/artifacts/[name]`. A serverless filesystem is per-instance and vanishes between
+invocations, so on Vercel that store is not durable and a voice run refuses rather than
+handing out a link that 404s a minute later. `/api/health` reports `artifactStore` so
+this is visible before anyone tries.
+
+Voice belongs on the self-hosted stack, where `compose.yaml` already mounts a shared
+volume at `/artifacts`. Runway and HeyGen return URLs and are fine on Vercel.

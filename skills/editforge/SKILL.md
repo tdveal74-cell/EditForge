@@ -57,7 +57,13 @@ it yet.
 Provider work (voice, avatar, generative video) bills real money once
 credentials are configured. Before submitting:
 
-- Check readiness first (`editforge_status`, or `GET /api/providers`).
+- Check readiness first (`editforge_status`, or `GET /api/providers`). It
+  answers in parts that fail differently: `liveWired` (is the API shape
+  implemented here at all), `credentialSet` (is the key present) and
+  `settingsMissing` (what else it still needs — a HeyGen look id, an ElevenLabs
+  voice id). Only `readyToRun` means a submit would reach the provider. Relay
+  which part is missing; "the key must be wrong" is usually the one thing that
+  is right.
 - Default to provider `mock` unless the user asked for a real render.
 - Say plainly that a run will bill, **before** running it.
 - Submitting the same brief twice returns the original job. If a user wants a

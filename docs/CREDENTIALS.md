@@ -76,6 +76,12 @@ Files are content-addressed — the same bytes always land on the same name, so 
 retried submit does not accumulate near-duplicates. `/api/artifacts/[name]`
 serves them behind the same authentication as the rest of the app.
 
+That last part has a consequence worth knowing: a browser authenticates with the
+session cookie from `/login`, which only exists when `EDITFORGE_ACCESS_PASSWORD`
+is set. On a deployment holding only `EDITFORGE_MCP_TOKEN`, jobs run fine through
+MCP but nobody can open the result in a browser. **Set the access password on any
+deployment where people will watch or listen to what it renders.**
+
 **On Vercel this store is not durable.** A serverless filesystem is per-instance
 and vanishes between invocations, so voice belongs on the self-hosted stack (or
 on a deployment with a persistent volume). `/api/health` reports

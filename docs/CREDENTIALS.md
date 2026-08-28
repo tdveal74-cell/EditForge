@@ -120,6 +120,7 @@ Set on the worker and provider services, never on the control plane. See
 | `EDITFORGE_WORKER_URL` / `EDITFORGE_WORKER_TOKEN` | web | How the control plane reaches the render worker. |
 | `EDITFORGE_PROVIDER_TOKEN` | worker, provider | Shared token for the private adapter. |
 | `EDITFORGE_IDENTITY_REGISTRY_FILE` | provider | Host file of consented identities. Keep it outside the repository. |
+| `EDITFORGE_RUNWAY_CHARACTER_FILE` | provider | Optional private Runway character image mounted read-only by the identity-reference Compose overlay. |
 | `EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB` | provider | Host ceiling. The effective ceiling is the lower of this and the approved command's own. |
 | `EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB` | provider | Host ceiling on script length. |
 | `RUNWAYML_API_SECRET` | provider | Runway key for Act-Two motion and avatar lip-sync. |

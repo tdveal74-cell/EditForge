@@ -67,11 +67,24 @@ identifiers, and configure the private adapter:
 ```dotenv
 EDITFORGE_PROVIDER_TOKEN=<different random adapter bearer token>
 EDITFORGE_IDENTITY_REGISTRY_FILE=/absolute/host/path/editforge-identities.json
+EDITFORGE_RUNWAY_CHARACTER_FILE=/absolute/host/path/tee-runway-clone-reference.png
 EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB=100
 EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB=5000
 RUNWAYML_API_SECRET=<Runway developer key>
 ELEVENLABS_API_KEY=<ElevenLabs key>
 ```
+
+For a private local Runway character reference, set `runwayCharacterFile` in the
+identity registry to `/run/secrets/tee-runway-clone-reference.png` and start the
+stack with both Compose files:
+
+```bash
+docker compose -f compose.yaml -f compose.identity-reference.example.yaml up -d --build
+```
+
+The provider accepts only PNG, JPEG, or WebP files inside `/run/secrets`, enforces
+Runway's 16 MB inline limit, and converts the image to a data URI inside the private
+provider container. The canonical likeness is never published as a web URL.
 
 The built-in adapter maps `synthesize-voice` to the registry-locked ElevenLabs
 voice, `lip-sync` to the registry-locked Runway custom avatar, and

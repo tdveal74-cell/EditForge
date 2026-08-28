@@ -11,10 +11,9 @@
         "elevenlabsVoiceId": "replace-with-consented-elevenlabs-voice-id",
         "runwayAvatarId": "replace-with-consented-runway-avatar-uuid",
         "runwayVoiceId": "replace-with-consented-runway-voice-uuid",
-        "runwayCharacterUri": "https://replace-with-private-signed-character-reference.example/tee.png",
+        "runwayCharacterFile": "/run/secrets/tee-runway-clone-reference.png",
         "runwayCharacterType": "image"
       }
     }
   ]
 }
-

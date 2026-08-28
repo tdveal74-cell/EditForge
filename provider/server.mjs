@@ -53,6 +53,43 @@ function mediaTypeForExtension(extension) {
         : "video/mp4";
 }
 
+function imageMediaType(buffer) {
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
+    return "image/png";
+  }
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (buffer.length >= 12 && buffer.subarray(0, 4).toString("ascii") === "RIFF" && buffer.subarray(8, 12).toString("ascii") === "WEBP") {
+    return "image/webp";
+  }
+  return "";
+}
+
+function isChildPath(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return Boolean(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+async function privateImageAsDataUri(filename, env) {
+  const secretRoot = path.resolve(asText(env.EDITFORGE_PROVIDER_SECRET_DIR) || "/run/secrets");
+  const resolved = path.resolve(filename);
+  if (!isChildPath(secretRoot, resolved)) {
+    throw new Error("canonical Runway character file must be inside the provider secret directory");
+  }
+  const [realRoot, realFile] = await Promise.all([fs.realpath(secretRoot), fs.realpath(resolved)]);
+  if (!isChildPath(realRoot, realFile)) {
+    throw new Error("canonical Runway character file must be inside the provider secret directory");
+  }
+  const stat = await fs.stat(resolved);
+  if (!stat.isFile()) throw new Error("canonical Runway character file must be a regular file");
+  if (stat.size <= 0 || stat.size > MAX_INLINE_MEDIA_BYTES) {
+    throw new Error("canonical Runway character file must be between 1 byte and 16MB");
+  }
+  const buffer = await fs.readFile(resolved);
+  const contentType = imageMediaType(buffer);
+  if (!contentType) throw new Error("canonical Runway character file must be PNG, JPEG, or WebP");
+  return `data:${contentType};base64,${buffer.toString("base64")}`;
+}
+
 async function readBody(req) {
   const chunks = [];
   let size = 0;
@@ -245,10 +282,14 @@ function outputRatio(request) {
 }
 
 async function generateMotion(request, identity, fetchImpl, env) {
-  const characterUri = asText(identity.providers?.runwayCharacterUri);
+  const characterFile = asText(identity.providers?.runwayCharacterFile);
+  const characterUri = characterFile
+    ? await privateImageAsDataUri(characterFile, env)
+    : asText(identity.providers?.runwayCharacterUri);
   const characterType = identity.providers?.runwayCharacterType === "video" ? "video" : "image";
   const performanceUri = asText(request.operation?.params?.performanceUri);
-  if (!characterUri) throw new Error("canonical Runway character URI is required");
+  if (characterFile && characterType !== "image") throw new Error("local Runway character file must be an image");
+  if (!characterUri) throw new Error("canonical Runway character URI or private file is required");
   if (!performanceUri) throw new Error("operation.params.performanceUri is required for full motion");
   const maxCredits = operationBudget(request.operation, env);
   const task = await runRunwayTask(fetchImpl, env, "character_performance", {

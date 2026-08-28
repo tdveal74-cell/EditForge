@@ -1,0 +1,9 @@
+services:
+  provider:
+    environment:
+      EDITFORGE_PROVIDER_SECRET_DIR: /run/secrets
+    volumes:
+      - type: bind
+        source: ${EDITFORGE_RUNWAY_CHARACTER_FILE:?set EDITFORGE_RUNWAY_CHARACTER_FILE}
+        target: /run/secrets/tee-runway-clone-reference.png
+        read_only: true

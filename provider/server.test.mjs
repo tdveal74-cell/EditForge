@@ -8,6 +8,8 @@ import { createProviderServer } from "./server.mjs";
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "editforge-provider-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const characterFile = path.join(root, "tee-runway.png");
+  await fs.writeFile(characterFile, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]));
   const registryFile = path.join(root, "identities.json");
   await fs.writeFile(registryFile, JSON.stringify({
     schema: "editforge.identity-registry.v1",
@@ -21,7 +23,7 @@ async function fixture(t) {
         elevenlabsVoiceId: "eleven-tee",
         runwayAvatarId: "123e4567-e89b-42d3-a456-426614174000",
         runwayVoiceId: "123e4567-e89b-42d3-a456-426614174001",
-        runwayCharacterUri: "https://media.example/tee.png",
+        runwayCharacterFile: characterFile,
         runwayCharacterType: "image",
       },
     }],
@@ -31,6 +33,7 @@ async function fixture(t) {
     EDITFORGE_IDENTITY_REGISTRY_FILE: registryFile,
     EDITFORGE_PROVIDER_ARTIFACT_DIR: root,
     EDITFORGE_PROVIDER_ARTIFACT_BASE_URL: "http://provider:9080/artifacts",
+    EDITFORGE_PROVIDER_SECRET_DIR: root,
     EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB: "100",
     EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB: "5000",
     ELEVENLABS_API_KEY: "eleven-secret",
@@ -101,9 +104,11 @@ test("adapter refuses Tee identity inside TSWS", async (t) => {
 test("motion adapter enforces approved credits and polls Runway", async (t) => {
   const { env } = await fixture(t);
   const calls = [];
+  let motionPayload;
   const fetchImpl = async (url, init = {}) => {
     calls.push([String(url), init.method || "GET"]);
     if (String(url).endsWith("/character_performance")) {
+      motionPayload = JSON.parse(init.body);
       return Response.json({ id: "task-1", estimatedCost: { credits: 25 } });
     }
     if (String(url).endsWith("/tasks/task-1")) {
@@ -125,10 +130,30 @@ test("motion adapter enforces approved credits and polls Runway", async (t) => {
   const body = await response.json();
   assert.equal(response.status, 200);
   assert.equal(body.artifact.mediaType, "video/mp4");
+  assert.equal(motionPayload.character.type, "image");
+  assert.match(motionPayload.character.uri, /^data:image\/png;base64,/);
   assert.deepEqual(calls.slice(0, 2), [
     ["https://runway.example/v1/character_performance", "POST"],
     ["https://runway.example/v1/tasks/task-1", "GET"],
   ]);
+});
+
+test("motion adapter refuses a local identity reference outside the secret directory", async (t) => {
+  const { env } = await fixture(t);
+  const registry = JSON.parse(await fs.readFile(env.EDITFORGE_IDENTITY_REGISTRY_FILE, "utf8"));
+  registry.identities[0].providers.runwayCharacterFile = "/tmp/not-a-provider-secret.png";
+  await fs.writeFile(env.EDITFORGE_IDENTITY_REGISTRY_FILE, JSON.stringify(registry));
+  const base = await withServer(t, env, async () => { throw new Error("provider must not be called"); });
+  const response = await fetch(`${base}/v1/motion`, {
+    method: "POST",
+    headers: { Authorization: "Bearer adapter-secret", "Content-Type": "application/json" },
+    body: JSON.stringify(requestBody({
+      operation: { id: "motion-private", type: "generate-full-motion", params: { performanceUri: "https://media.example/performance.mp4", maxCredits: 30 } },
+    })),
+  });
+  const body = await response.json();
+  assert.equal(response.status, 422);
+  assert.match(body.error, /inside the provider secret directory/);
 });
 
 test("paid generation requires an explicit per-operation ceiling", async (t) => {

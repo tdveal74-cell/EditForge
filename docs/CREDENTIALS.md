@@ -126,6 +126,27 @@ Set on the worker and provider services, never on the control plane. See
 | `RUNWAYML_API_SECRET` | provider | Runway key for Act-Two motion and avatar lip-sync. |
 | `ELEVENLABS_API_KEY` | provider | ElevenLabs key for the identity-locked voice adapter. |
 
+### Secure self-hosted setup
+
+On a self-hosted EditForge server, configure Runway and ElevenLabs without
+placing either secret in shell history:
+
+```bash
+cd /opt/editforge/app
+python3 scripts/configure-provider-credentials.py
+```
+
+The script uses hidden prompts, writes `.env` and the identity registry
+atomically with mode `0600`, verifies the private Runway character reference,
+and can select the canonical ElevenLabs voice by display name while keeping its
+internal ID out of the command line. It never prints either API key.
+
+Confirm only non-secret configuration state with:
+
+```bash
+python3 scripts/configure-provider-credentials.py --check
+```
+
 ## Where to set them
 
 **Vercel** — Project → Settings → Environment Variables, Production and Preview.

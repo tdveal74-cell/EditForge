@@ -136,6 +136,13 @@ cd /opt/editforge/app
 python3 scripts/configure-provider-credentials.py
 ```
 
+If the canonical ElevenLabs voice ID is already known, validate and bind that
+exact voice instead of choosing from a display-name list:
+
+```bash
+python3 scripts/configure-provider-credentials.py --elevenlabs-voice-id VOICE_ID
+```
+
 The script uses hidden prompts, writes `.env` and the identity registry
 atomically with mode `0600`, verifies the private Runway character reference,
 and can select the canonical ElevenLabs voice by display name while keeping its

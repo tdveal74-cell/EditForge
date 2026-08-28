@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest run && npm run test:worker",
     "test:worker": "node --test worker/*.test.mjs provider/*.test.mjs",
+    "test:setup-script": "python3 scripts/test_configure_provider_credentials.py",
     "test:watch": "vitest"
   },
   "dependencies": {

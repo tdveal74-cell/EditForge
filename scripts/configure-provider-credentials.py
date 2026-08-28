@@ -198,6 +198,17 @@ def select_voice(voices: list[dict[str, str]]) -> dict[str, str]:
         print(f"Enter a number from 1 to {len(voices)}.")
 
 
+def find_voice_by_id(voices: list[dict[str, str]], voice_id: str) -> dict[str, str]:
+    voice = next((item for item in voices if item["voice_id"] == voice_id), None)
+    if voice is None:
+        raise SetupError("The requested ElevenLabs voice ID is not available to this API key")
+    return voice
+
+
+def resolve_voice(voices: list[dict[str, str]], voice_id: str | None) -> dict[str, str]:
+    return find_voice_by_id(voices, voice_id) if voice_id else select_voice(voices)
+
+
 def store_voice_selection(registry_path: Path, identity_id: str, voice: dict[str, str]) -> None:
     registry = load_registry(registry_path)
     identity = find_identity(registry, identity_id)
@@ -224,12 +235,17 @@ def configure(args: argparse.Namespace) -> None:
 
     if args.skip_voice:
         return
+    if args.elevenlabs_voice_id:
+        voice = resolve_voice(fetch_elevenlabs_voices(elevenlabs_key), args.elevenlabs_voice_id)
+        store_voice_selection(args.registry, args.identity, voice)
+        print(f"Canonical ElevenLabs voice selected: {voice['name']} (ID validated).")
+        return
     answer = input("Select the canonical ElevenLabs voice now? [Y/n]: ").strip().lower()
     if answer not in ("", "y", "yes"):
         print("Voice selection skipped. Re-run with --select-elevenlabs-voice.")
         return
     voices = fetch_elevenlabs_voices(elevenlabs_key)
-    voice = select_voice(voices)
+    voice = resolve_voice(voices, None)
     store_voice_selection(args.registry, args.identity, voice)
     print(f"Canonical ElevenLabs voice selected: {voice['name']} (ID hidden).")
 
@@ -238,7 +254,7 @@ def select_existing_voice(args: argparse.Namespace) -> None:
     key = read_env(args.env).get("ELEVENLABS_API_KEY")
     if not _secret_is_configured(key):
         raise SetupError("ELEVENLABS_API_KEY is not configured; run without a mode first")
-    voice = select_voice(fetch_elevenlabs_voices(key or ""))
+    voice = resolve_voice(fetch_elevenlabs_voices(key or ""), args.elevenlabs_voice_id)
     store_voice_selection(args.registry, args.identity, voice)
     print(f"Canonical ElevenLabs voice selected: {voice['name']} (ID hidden).")
 
@@ -284,11 +300,18 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="select a voice using the already stored API key",
     )
     parser.add_argument("--skip-voice", action="store_true", help="store keys without selecting a voice")
+    parser.add_argument(
+        "--elevenlabs-voice-id",
+        help="validate and bind an exact ElevenLabs voice ID (the ID is not an API credential)",
+    )
     parser.add_argument("--env", type=Path, default=DEFAULT_ENV)
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     parser.add_argument("--reference", type=Path, default=DEFAULT_REFERENCE)
     parser.add_argument("--identity", default=DEFAULT_IDENTITY)
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.skip_voice and args.elevenlabs_voice_id:
+        parser.error("--skip-voice cannot be combined with --elevenlabs-voice-id")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:

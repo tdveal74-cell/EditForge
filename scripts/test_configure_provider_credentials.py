@@ -94,6 +94,22 @@ class ProviderSetupTests(unittest.TestCase):
             self.assertEqual(identity["providers"]["elevenlabsVoiceId"], "secret-internal-id")
             self.assertEqual(identity["providers"]["runwayCharacterType"], "image")
 
+    def test_exact_voice_id_must_be_available_to_key(self):
+        voices = [
+            {"voice_id": "tee-voice", "name": "Tee Clone", "category": "cloned"},
+            {"voice_id": "another-voice", "name": "Another", "category": "premade"},
+        ]
+        selected = provider_setup.resolve_voice(voices, "tee-voice")
+        self.assertEqual(selected["name"], "Tee Clone")
+        with self.assertRaises(provider_setup.SetupError):
+            provider_setup.resolve_voice(voices, "missing")
+
+    def test_skip_voice_rejects_exact_voice_id(self):
+        with self.assertRaises(SystemExit):
+            provider_setup.parse_args(
+                ["--skip-voice", "--elevenlabs-voice-id", "tee-voice"]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

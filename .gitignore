@@ -9,6 +9,7 @@ dist
 *.log
 .DS_Store
 *.tsbuildinfo
+__pycache__/
 
 # Renders. scripts/render-node01.mjs rebuilds them from the assembly.
 /out/

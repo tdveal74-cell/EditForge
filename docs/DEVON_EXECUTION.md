@@ -62,7 +62,7 @@ EDITFORGE_PORT=3100
 EDITFORGE_SOURCE_MEDIA_HOST_DIR=/root/Media Assets
 ```
 
-`EDITFORGE_SOURCE_MEDIA_HOST_DIR` is mounted read-only into the web and worker
+`EDITFORGE_SOURCE_MEDIA_HOST_DIR` defaults to `./media` and is mounted read-only into the web and worker
 containers. `GET /api/sources` returns only each asset's relative name, byte size,
 modified time, SHA-256, and an `editforge-source:///...` identifier. It never serves
 the source bytes publicly. The worker resolves that identifier only inside the

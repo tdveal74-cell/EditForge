@@ -15,6 +15,7 @@ services:
       EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
       EDITFORGE_WORKER_CALLBACK_BASE_URL: http://web:3000
       EDITFORGE_ARTIFACT_DIR: /artifacts
+      EDITFORGE_SOURCE_MEDIA_DIR: /sources
       EDITFORGE_PUBLIC_URL: ${EDITFORGE_PUBLIC_URL:?set EDITFORGE_PUBLIC_URL}
       # Studio-side providers. The control plane calls these directly from
       # /gen-video, /voice and /avatar; the identity-locked DEVON path below is
@@ -37,6 +38,7 @@ services:
     volumes:
       - editforge_web_data:/data
       - editforge_artifacts:/artifacts
+      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:-./media}:/sources:ro
     depends_on:
       worker:
         condition: service_healthy
@@ -65,11 +67,13 @@ services:
       EDITFORGE_LIPSYNC_ADAPTER_URL: ${EDITFORGE_LIPSYNC_ADAPTER_URL:-http://provider:9080/v1/lipsync}
       EDITFORGE_TIMELINE_ADAPTER_URL: ${EDITFORGE_TIMELINE_ADAPTER_URL:-}
       EDITFORGE_ARTIFACT_DIR: /artifacts
+      EDITFORGE_SOURCE_MEDIA_DIR: /sources
       EDITFORGE_ARTIFACT_BASE_URL: ${EDITFORGE_PUBLIC_URL:?set EDITFORGE_PUBLIC_URL}/api/artifacts
       EDITFORGE_TRUSTED_MEDIA_ORIGINS: http://provider:9080
     volumes:
       - editforge_worker_data:/data
       - editforge_artifacts:/artifacts
+      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:-./media}:/sources:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 15s

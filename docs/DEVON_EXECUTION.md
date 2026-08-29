@@ -41,6 +41,7 @@ The API surface is deliberately small:
 | `GET /api/edits/{commandId}?poll=1` | Read/poll execution and receipt |
 | `POST /api/edits/{commandId}` | Retry, cancel, or authenticated worker receipt |
 | `GET /api/artifacts/{name}` | Authenticated self-hosted artifact download |
+| `GET /api/sources` | Authenticated inventory and SHA-256 of private source media |
 
 Master commands additionally require the named cut to have a recorded rubric pass.
 
@@ -58,7 +59,14 @@ EDITFORGE_MCP_TOKEN=<random DEVON bearer token>
 EDITFORGE_WORKER_TOKEN=<different random worker token>
 EDITFORGE_PUBLIC_URL=http://localhost:3100
 EDITFORGE_PORT=3100
+EDITFORGE_SOURCE_MEDIA_HOST_DIR=/root/Media Assets
 ```
+
+`EDITFORGE_SOURCE_MEDIA_HOST_DIR` defaults to `./media` and is mounted read-only into the web and worker
+containers. `GET /api/sources` returns only each asset's relative name, byte size,
+modified time, SHA-256, and an `editforge-source:///...` identifier. It never serves
+the source bytes publicly. The worker resolves that identifier only inside the
+read-only mount and verifies the command's SHA-256 before any provider or FFmpeg work.
 
 For clone/full-motion work, copy `provider/identity-registry.example.json` to a
 host path outside the repository, replace the placeholders with consented provider

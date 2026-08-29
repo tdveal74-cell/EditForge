@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { compileRenderPlan, validateWorkerCommand } from "./plan.mjs";
 import { remoteMediaUrl } from "./media-url.mjs";
+import { localSourcePath } from "./local-source.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || "0.0.0.0";
@@ -78,6 +79,11 @@ function respond(res, status, value) {
 }
 
 async function download(uri, target) {
+  const local = await localSourcePath(uri);
+  if (local) {
+    await fs.copyFile(local, target);
+    return;
+  }
   const parsed = remoteMediaUrl(uri, "source URI");
   const response = await fetch(parsed, { redirect: "follow" });
   if (!response.ok || !response.body) throw new Error(`source download failed: HTTP ${response.status}`);

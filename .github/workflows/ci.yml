@@ -42,6 +42,14 @@ jobs:
       - name: Test
         run: npm test
 
+      # The credential setup script shipped with its own tests, and nothing ran
+      # them — not `npm test`, whose chain stops at the worker suite, and not
+      # this workflow. They passed, so nobody found out they were decorative.
+      # Blocking, like every other step here. Kept out of `npm test` on purpose:
+      # that is the README's quickstart and it should not start needing Python.
+      - name: Test setup script
+        run: npm run test:setup-script
+
       - name: Build
         run: npm run build
 

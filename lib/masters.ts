@@ -48,11 +48,13 @@ export type DriveMaster = {
  * 81,012 bytes. Two separately generated lines landing on the same size is what
  * constant bitrate plus constant overhead predicts, and nothing else does.
  *
- * These are derived from the encoder's own header rather than measured off a
- * decode of all eleven files — the sandbox can reach Drive only through the
- * connector, and pulling a megabyte of audio through it to confirm arithmetic
- * that already cross-checks three ways is not worth the round trip. Decoding
- * them locally would confirm, not correct.
+ * All eleven have since been pulled through the connector and decoded, and the
+ * model held: every file came down at exactly the byte count recorded below,
+ * and every decoded runtime matched its predicted one to the two decimal places
+ * a container reports. `MEASURED_SEC` carries those readings, and the test
+ * checks the formula against them rather than against the one header it was
+ * originally derived from — the difference being that a wrong constant now has
+ * eleven chances to show up instead of one.
  */
 const OVERHEAD_BYTES = 17_065;
 const BYTES_PER_SECOND = 16_000;
@@ -109,6 +111,29 @@ export const NODE01_VO_ALT: VoiceLine = voiceLine(
   "14mHTjt7P4lXr4XRThRskcW9Zajwl1RqE",
   129_078,
 );
+
+/**
+ * Decoded runtime of each line, in seconds, as the container reports it.
+ *
+ * Read off the eleven files after they were pulled down and decoded — this is
+ * measurement, not derivation, which is the whole reason it is worth carrying.
+ * Two decimal places because that is the precision the reading has; asserting
+ * more would be dressing up the source. The alternate take is absent for the
+ * same reason it is absent from `NODE01_VO`.
+ */
+export const MEASURED_SEC: Record<number, number> = {
+  1: 3.76,
+  2: 1.28,
+  3: 7.42,
+  4: 4.62,
+  5: 2.04,
+  6: 4.0,
+  7: 1.1,
+  8: 6.92,
+  9: 4.0,
+  10: 4.6,
+  11: 5.28,
+};
 
 /** Every line the studio holds for Node 01, alternates included. */
 export function node01VoiceTakes(): VoiceLine[] {

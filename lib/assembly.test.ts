@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  MEASURED_SEC,
   NODE01_VO,
   NODE01_VO_ALT,
   TSWS_CLIP_BIN,
@@ -20,11 +21,33 @@ import { SHOT_SEQUENCE } from "./mediaLibrary";
 import { TRACK_ORDER, totalDuration } from "./timeline";
 
 describe("voice line runtimes", () => {
-  it("reproduces the one line that was actually read", () => {
+  it("reproduces the one line the model was calibrated on", () => {
     // L07 is the calibration file: its Xing header declares 42 frames, which at
-    // 1152 samples and 44.1kHz is 1.097s. If the constants in masters.ts ever
-    // drift, this is the number that catches it.
+    // 1152 samples and 44.1kHz is 1.097s. The constants in masters.ts were
+    // derived from it, so it is the first thing to break if they drift.
     expect(voiceLineSeconds(34_619)).toBeCloseTo(1.097, 2);
+  });
+
+  it("matches the decoded runtime of every line", () => {
+    // The calibration above only proves the formula reproduces the file it came
+    // from. These eleven are measurements taken off the decoded audio, so they
+    // are the check that the model describes the set and not just its seed —
+    // and the only assertion here that would survive the derivation being wrong.
+    for (const line of NODE01_VO) {
+      expect(line.durationSec, `${line.name} disagrees with its decode`).toBeCloseTo(
+        MEASURED_SEC[line.line],
+        2,
+      );
+    }
+  });
+
+  it("has a measurement for every line in the read", () => {
+    // A line added to NODE01_VO without a decode behind it would sail through
+    // the test above, since a loop over the lines cannot miss what it never
+    // reaches. This is what makes the coverage real rather than incidental.
+    expect(Object.keys(MEASURED_SEC).map(Number).sort((a, b) => a - b)).toEqual(
+      NODE01_VO.map((l) => l.line),
+    );
   });
 
   it("gives byte-identical lines identical runtimes", () => {

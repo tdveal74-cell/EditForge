@@ -118,3 +118,18 @@ this is visible before anyone tries.
 
 Voice belongs on the self-hosted stack, where `compose.yaml` already mounts a shared
 volume at `/artifacts`. Runway and HeyGen return URLs and are fine on Vercel.
+
+Moving voice there takes two things, and the artifact volume is only the first. The
+studio also needs `ELEVENLABS_VOICE_ID` — the value `compose.yaml` forwards and
+`lib/provider-registry.ts` reads. Binding the voice in the identity registry alone
+configures the DEVON adapter and leaves the studio's own `/voice` page refusing, so
+run the setup script rather than editing the registry by hand:
+
+```bash
+python3 scripts/configure-provider-credentials.py --select-elevenlabs-voice
+python3 scripts/configure-provider-credentials.py --check
+```
+
+`--check` reports `studioVoiceConfigured` for exactly this. HeyGen is configured the
+same way with `--select-heygen-avatar`; see
+[`CREDENTIALS.md`](CREDENTIALS.md#secure-self-hosted-setup).

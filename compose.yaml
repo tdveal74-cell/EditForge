@@ -38,7 +38,7 @@ services:
     volumes:
       - editforge_web_data:/data
       - editforge_artifacts:/artifacts
-      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:?set EDITFORGE_SOURCE_MEDIA_HOST_DIR}:/sources:ro
+      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:-./media}:/sources:ro
     depends_on:
       worker:
         condition: service_healthy
@@ -73,7 +73,7 @@ services:
     volumes:
       - editforge_worker_data:/data
       - editforge_artifacts:/artifacts
-      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:?set EDITFORGE_SOURCE_MEDIA_HOST_DIR}:/sources:ro
+      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:-./media}:/sources:ro
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 15s

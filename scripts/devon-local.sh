@@ -165,9 +165,14 @@ ok "web and worker started"
 # ---------------------------------------------------------------------------
 step 5 "Waiting for health"
 # ---------------------------------------------------------------------------
+# Read the body whatever the status: /api/health answers 503 when the store or
+# worker is degraded, and a degraded studio that is plainly answering must not
+# be reported as one that never came up.
 HEALTH=""
 for _ in $(seq 1 40); do
-  HEALTH="$(curl -fsS "$PUBLIC_URL/api/health" 2>/dev/null)" && break
+  HEALTH="$(curl -sS "$PUBLIC_URL/api/health" 2>/dev/null)"
+  printf '%s' "$HEALTH" | grep -q '"service":"editforge"' && break
+  HEALTH=""
   sleep 3
 done
 [ -n "$HEALTH" ] || die \

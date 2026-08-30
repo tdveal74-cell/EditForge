@@ -43,6 +43,25 @@ identity-locked provider service and its required registry secret. It runs under
 its own Compose project name, so it never collides with the full stack's
 containers or volumes.
 
+### Without Docker
+
+Where Docker is unavailable, or its registry is unreachable (a sandboxed agent
+session is the usual case), the same two services run as plain Node processes:
+
+```bash
+./scripts/devon-local-nodocker.sh          # up
+./scripts/devon-local-nodocker.sh stop     # down
+```
+
+It shares `.env` with the Compose runner on purpose, so DEVON's token is the
+same whichever one brought the studio up. State goes under `.local-run/`.
+
+What you give up: container isolation, the pinned `node:20-bookworm-slim` base,
+and the named volumes. It uses whatever `ffmpeg` is on `PATH`, and without
+`ffmpeg` and `ffprobe` the worker reports degraded and `executionReady` is
+false. It exercises and verifies the lane; it is not the way to run a studio
+people depend on. For that, use the Compose runner above.
+
 Doing it by hand instead:
 
 ```bash
@@ -125,7 +144,7 @@ Unset, it goes back to `https://editforge.online/api/mcp`.
 | Symptom | Cause |
 |---|---|
 | `docker compose` exits complaining a variable is unset | one of the three tokens is missing from `.env` |
-| Health answers, `executionReady` is false | the worker did not start — `docker compose -f compose.local.yaml logs worker` |
+| Health answers, `executionReady` is false | the worker did not start, or `ffmpeg`/`ffprobe` are missing. `/api/health` answers **503** in this state, so a plain `curl -f` reports it as no answer at all — read the body. `docker compose -f compose.local.yaml logs worker`, or `.local-run/worker.log` |
 | DEVON says "EditForge URL and token are required" | `EDITFORGE_TOKEN` is unset on DEVON's side; the lane fails closed rather than calling unauthenticated |
 | A command fails naming an adapter env var | that operation is not in the local stack — see the table above |
 | MCP still reaching `editforge.online` | `EDITFORGE_MCP_URL` was not exported into the process that starts Claude Code |

@@ -16,3 +16,6 @@ __pycache__/
 
 # Private source media mounted into the local stack (compose.local.yaml).
 /media/
+
+# Local no-Docker run state (scripts/devon-local-nodocker.sh).
+/.local-run/

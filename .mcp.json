@@ -2,7 +2,7 @@
   "mcpServers": {
     "editforge": {
       "type": "http",
-      "url": "https://editforge.vercel.app/api/mcp",
+      "url": "${EDITFORGE_MCP_URL:-https://editforge.vercel.app/api/mcp}",
       "headers": {
         "Authorization": "Bearer ${EDITFORGE_MCP_TOKEN:-}"
       }

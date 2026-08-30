@@ -13,3 +13,6 @@ __pycache__/
 
 # Renders. scripts/render-node01.mjs rebuilds them from the assembly.
 /out/
+
+# Private source media mounted into the local stack (compose.local.yaml).
+/media/

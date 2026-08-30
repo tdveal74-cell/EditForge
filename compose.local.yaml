@@ -1,0 +1,102 @@
+name: editforge-local
+
+# Local DEVON operation. The control plane and the FFmpeg worker, on this
+# machine, with nothing reaching out to editforge.vercel.app.
+#
+#   docker compose -f compose.local.yaml up -d --build
+#
+# This is `compose.yaml` minus the identity-locked provider service. Everything
+# the FFmpeg worker compiles itself — trim, reframe, derive-short, speed,
+# captions, audio-mix, grade, preview and master encoding — runs here with no
+# provider credentials and no identity registry. Clone voice, full motion and
+# lip sync do not: their adapter URLs are unset, so a command that asks for one
+# fails loudly instead of being quietly skipped. Those need `compose.yaml`, a
+# consented identity registry, and a per-job ceiling.
+#
+# Deliberately a separate project name, not an override file: the production
+# stack's required secrets stay required, and the two stacks never share a
+# volume or fight over the same containers.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: infrastructure/web/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      EDITFORGE_DATA_DIR: /data
+      EDITFORGE_ACCESS_PASSWORD: ${EDITFORGE_ACCESS_PASSWORD:?set EDITFORGE_ACCESS_PASSWORD}
+      EDITFORGE_MCP_TOKEN: ${EDITFORGE_MCP_TOKEN:?set EDITFORGE_MCP_TOKEN}
+      EDITFORGE_WORKER_URL: http://worker:8787
+      EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
+      EDITFORGE_WORKER_CALLBACK_BASE_URL: http://web:3000
+      EDITFORGE_ARTIFACT_DIR: /artifacts
+      EDITFORGE_SOURCE_MEDIA_DIR: /sources
+      EDITFORGE_PUBLIC_URL: ${EDITFORGE_PUBLIC_URL:-http://localhost:3100}
+      # Studio-side providers, same as the full stack: /gen-video, /voice and
+      # /avatar read these directly. Leave them empty and the studio runs mock;
+      # the DEVON edit lane below is unaffected either way.
+      RUNWAY_API_KEY: ${RUNWAY_API_KEY:-${RUNWAYML_API_SECRET:-}}
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
+      ELEVENLABS_VOICE_ID_AUREN: ${ELEVENLABS_VOICE_ID_AUREN:-}
+      ELEVENLABS_VOICE_ID_VESPERA: ${ELEVENLABS_VOICE_ID_VESPERA:-}
+      ELEVENLABS_VOICE_ID_STOCK_NARRATOR: ${ELEVENLABS_VOICE_ID_STOCK_NARRATOR:-}
+      HEYGEN_API_KEY: ${HEYGEN_API_KEY:-}
+      HEYGEN_AVATAR_ID: ${HEYGEN_AVATAR_ID:-}
+      HEYGEN_VOICE_ID: ${HEYGEN_VOICE_ID:-}
+    ports:
+      - "${EDITFORGE_PORT:-3100}:3000"
+    volumes:
+      - editforge_local_web_data:/data
+      - editforge_local_artifacts:/artifacts
+      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:-./media}:/sources:ro
+    depends_on:
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks: [control, render]
+
+  worker:
+    build:
+      context: .
+      dockerfile: infrastructure/worker/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      EDITFORGE_WORK_DIR: /data
+      EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
+      EDITFORGE_CALLBACK_ORIGIN: http://web:3000
+      EDITFORGE_WORKER_CONCURRENCY: ${EDITFORGE_WORKER_CONCURRENCY:-1}
+      EDITFORGE_ARTIFACT_DIR: /artifacts
+      EDITFORGE_SOURCE_MEDIA_DIR: /sources
+      EDITFORGE_ARTIFACT_BASE_URL: ${EDITFORGE_PUBLIC_URL:-http://localhost:3100}/api/artifacts
+      # Nonlinear assembly stays optional and stays external. Unset means
+      # split/reorder/title/transition/assemble refuse; they do not degrade.
+      EDITFORGE_TIMELINE_ADAPTER_URL: ${EDITFORGE_TIMELINE_ADAPTER_URL:-}
+    volumes:
+      - editforge_local_worker_data:/data
+      - editforge_local_artifacts:/artifacts
+      - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:-./media}:/sources:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)})"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 20s
+    networks: [render]
+
+volumes:
+  editforge_local_web_data:
+  editforge_local_worker_data:
+  editforge_local_artifacts:
+
+networks:
+  control:
+  render:

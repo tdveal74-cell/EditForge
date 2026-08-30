@@ -105,6 +105,58 @@ describe("MCP authentication", () => {
     }
   });
 
+  it("gates the source catalogue, which is a read but not a public one", async () => {
+    // `/api/sources` answers an unauthenticated caller with a 401. The MCP
+    // surface must not be the softer way in: source hashes are metadata about
+    // media the studio deliberately does not publish.
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const openNames = open.result.tools.map((t: { name: string }) => t.name);
+    expect(openNames).not.toContain("list_sources");
+
+    const authed = await (await POST(rpc("tools/list", undefined, TOKEN))).json();
+    const authedNames = authed.result.tools.map((t: { name: string }) => t.name);
+    expect(authedNames).toContain("list_sources");
+  });
+
+  it("refuses a gated read without claiming it changes state", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const refused = await callTool("list_sources");
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("reads private data");
+    expect(refused.text).not.toContain("changes state");
+  });
+
+  it("reports an unconfigured catalogue as configured:false, not as an error", async () => {
+    // No media mounted is a normal deployment. A caller must be able to tell
+    // that apart from a catalogue it is not allowed to read.
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    delete process.env.EDITFORGE_SOURCE_MEDIA_DIR;
+    const result = await callTool("list_sources", {}, TOKEN);
+    expect(result.isError).toBe(false);
+    expect(result.parsed).toMatchObject({ configured: false, assets: [] });
+  });
+
+  it("lists a mounted asset with its content hash, not its filename", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const mediaDir = path.join(DATA_DIR, "sources");
+    await fs.mkdir(mediaDir, { recursive: true });
+    // Name the file after a hash that is not its content hash — the exact trap
+    // the description warns about.
+    await fs.writeFile(path.join(mediaDir, `${"a".repeat(64)}.MP4`), "not-really-video");
+    process.env.EDITFORGE_SOURCE_MEDIA_DIR = mediaDir;
+
+    const { parsed } = await callTool("list_sources", {}, TOKEN);
+    expect(parsed.configured).toBe(true);
+    expect(parsed.assets).toHaveLength(1);
+    const [asset] = parsed.assets;
+    expect(asset.sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(asset.sha256).not.toBe("a".repeat(64));
+    expect(asset.uri).toBe(`editforge-source:///${"a".repeat(64)}.MP4`);
+    expect(asset.byteLength).toBe("not-really-video".length);
+    delete process.env.EDITFORGE_SOURCE_MEDIA_DIR;
+  });
+
   it("offers mutating tools once the bearer token matches", async () => {
     process.env.EDITFORGE_MCP_TOKEN = TOKEN;
     const body = await (await POST(rpc("tools/list", undefined, TOKEN))).json();

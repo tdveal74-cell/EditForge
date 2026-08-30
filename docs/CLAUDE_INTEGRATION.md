@@ -33,6 +33,17 @@ that URL.
 claude mcp add --transport http editforge https://editforge.vercel.app/api/mcp
 ```
 
+**Against a local studio:** this repository's `.mcp.json` reads the address from
+`EDITFORGE_MCP_URL` and falls back to the hosted deployment when it is unset.
+Export it, with the token, before starting Claude Code:
+
+```bash
+export EDITFORGE_MCP_URL=http://localhost:3100/api/mcp
+export EDITFORGE_MCP_TOKEN=<the local studio's token>
+```
+
+`docs/LOCAL_OPERATION.md` covers bringing that studio up.
+
 ### Authentication, and why writes are gated
 
 Read tools are open. The two tools that change state — `submit_media_job` and

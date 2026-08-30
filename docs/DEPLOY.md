@@ -13,7 +13,7 @@ EditForge supports three deployment shapes:
 - Vercel hosts the control plane. A separately deployed worker is still required for
   real edit execution.
 
-The existing hosted control plane runs on Vercel at **https://editforge.vercel.app**.
+The existing hosted control plane runs on Vercel at **https://editforge.online**.
 
 **Both setup steps below are done** (2026-08-12): the project is git-connected and a
 Redis store is live. They are kept here as the record of how the deployment is wired,
@@ -83,7 +83,7 @@ redeploy of the existing build.
 ## 3. Verify
 
 ```bash
-curl -s https://editforge.vercel.app/api/health
+curl -s https://editforge.online/api/health
 ```
 
 Two fields, and both matter:

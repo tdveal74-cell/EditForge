@@ -70,6 +70,17 @@ jobs:
           EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB: "100"
         run: docker compose config --quiet
 
+      # The local DEVON stack. It is the Compose file a contributor is most
+      # likely to edit and least likely to boot, so it gets the same contract
+      # check — and with only the three tokens set, which is the whole point of
+      # it: no provider token, no identity registry.
+      - name: Local compose contract
+        env:
+          EDITFORGE_ACCESS_PASSWORD: ci-access-password
+          EDITFORGE_MCP_TOKEN: ci-mcp-token
+          EDITFORGE_WORKER_TOKEN: ci-worker-token
+        run: docker compose -f compose.local.yaml config --quiet
+
       - name: Build control plane image
         run: docker build -f infrastructure/web/Dockerfile -t editforge-web-ci .
 

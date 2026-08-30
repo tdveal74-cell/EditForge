@@ -128,31 +128,62 @@ Set on the worker and provider services, never on the control plane. See
 
 ### Secure self-hosted setup
 
-On a self-hosted EditForge server, configure Runway and ElevenLabs without
-placing either secret in shell history:
+On a self-hosted EditForge server, configure Runway, ElevenLabs and HeyGen
+without placing any secret in shell history:
 
 ```bash
 cd /opt/editforge/app
 python3 scripts/configure-provider-credentials.py
 ```
 
-If the canonical ElevenLabs voice ID is already known, validate and bind that
-exact voice instead of choosing from a display-name list:
+Runway and ElevenLabs are required. **HeyGen is optional** — leave its prompt
+blank, or pass `--skip-avatar`, and the avatar path is left alone rather than
+written half-configured.
+
+If the ids are already known, validate and bind them exactly instead of choosing
+from a display-name list:
 
 ```bash
-python3 scripts/configure-provider-credentials.py --elevenlabs-voice-id VOICE_ID
+python3 scripts/configure-provider-credentials.py \
+  --elevenlabs-voice-id VOICE_ID \
+  --heygen-avatar-id AVATAR_ID --heygen-voice-id VOICE_ID
+```
+
+Either selection can be redone later against the already stored key, without
+re-entering any secret:
+
+```bash
+python3 scripts/configure-provider-credentials.py --select-elevenlabs-voice
+python3 scripts/configure-provider-credentials.py --select-heygen-avatar
 ```
 
 The script uses hidden prompts, writes `.env` and the identity registry
 atomically with mode `0600`, verifies the private Runway character reference,
-and can select the canonical ElevenLabs voice by display name while keeping its
-internal ID out of the command line. It never prints either API key.
+and selects voices and avatar looks by display name while keeping their internal
+ids off the command line. It never prints an API key.
+
+#### The voice is bound to two places
+
+The two provider boundaries above each read the ElevenLabs voice from their own
+source: the DEVON adapter reads `elevenlabsVoiceId` from the identity registry,
+and the studio's `/voice` path reads `ELEVENLABS_VOICE_ID` from the environment.
+The script writes **both**, because writing only the registry produced a server
+whose setup reported success and whose voice page still refused for a missing
+voice id.
+
+A server configured before this was fixed has the registry entry and not the
+environment one. Re-run `--select-elevenlabs-voice` to bind it; `--check` reports
+`studioVoiceConfigured: false` until you do.
 
 Confirm only non-secret configuration state with:
 
 ```bash
 python3 scripts/configure-provider-credentials.py --check
 ```
+
+It exits non-zero if anything required is missing. HeyGen's absence is not a
+failure — but a HeyGen key with no avatar or voice id behind it is, since every
+avatar render would refuse.
 
 ## Where to set them
 

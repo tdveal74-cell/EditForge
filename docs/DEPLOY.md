@@ -4,16 +4,19 @@ EditForge supports three deployment shapes:
 
 - `compose.yaml` self-hosts the Next.js control plane, FFmpeg worker, private
   identity-locked provider adapter, durable state, and artifact volumes. This is
-  the recommended DEVON-operated shape. See
+  the recommended DEVON-operated shape, and it is what production runs on. See
   `docs/DEVON_EXECUTION.md`.
 - `compose.local.yaml` is the same stack without the identity-locked provider: the
   control plane and the FFmpeg worker on one machine, for DEVON operation that
-  never calls Vercel and cannot spend at a provider. See
+  calls no hosted studio and cannot spend at a provider. See
   `docs/LOCAL_OPERATION.md`.
 - Vercel hosts the control plane. A separately deployed worker is still required for
   real edit execution.
 
-The existing hosted control plane runs on Vercel at **https://editforge.online**.
+The production studio is self-hosted at **https://editforge.online**, on a
+Hostinger VPS. That host is not Vercel, so nothing below about git-connected
+deploys or preview builds applies to it; those describe the Vercel control plane,
+which remains at **https://editforge.vercel.app**.
 
 **Both setup steps below are done** (2026-08-12): the project is git-connected and a
 Redis store is live. They are kept here as the record of how the deployment is wired,
@@ -83,7 +86,7 @@ redeploy of the existing build.
 ## 3. Verify
 
 ```bash
-curl -s https://editforge.online/api/health
+curl -s https://editforge.vercel.app/api/health
 ```
 
 Two fields, and both matter:

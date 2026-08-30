@@ -15,7 +15,7 @@
 | DEVON edit path | `/api/edits` + `lib/editing.ts` + `lib/editstore.ts` + `worker/` — exact approved intent, immutable revision, FFmpeg/adapters, hashed receipt, retry/cancel |
 | Self-hosting | `compose.yaml` — Next.js control plane, private FFmpeg worker, durable state volumes, shared authenticated artifact store |
 | Gen-video catalogue | `lib/genvideo.ts` — editorial metadata and readiness, derived from the registry. The old `submitGenVideo`, which returned a fabricated `live-…` id for work nothing had started, is removed; execution is `lib/providers.ts` alone |
-| Deployed | Vercel production — https://editforge.online · git-connected: pushes to `main` deploy, PRs get previews |
+| Deployed | Production studio self-hosted at https://editforge.online, on a Hostinger VPS via `compose.yaml`. Vercel control plane at https://editforge.vercel.app — git-connected: pushes to `main` deploy, PRs get previews |
 | Durable store | **Live** — Redis (REST) active in production, verified 2026-08-12: `/api/health` reports `store: kv` + `storeReachable: true`, and repeat `/api/cuts` reads return identical timestamps across instances |
 | Not proven | An end-to-end **live clone/full-motion** render against the user's consented clone/voice IDs and real adapter credentials; the repo fails closed when they are absent |
 | Claude integration | MCP connector at `/api/mcp` (stateless JSON-RPC, in-app), skill at `skills/editforge/`, Claude Code plugin at `.claude-plugin/`. Read tools open; `submit_media_job` and `drive_job` require `EDITFORGE_MCP_TOKEN` and fail closed when it is unset. See `docs/CLAUDE_INTEGRATION.md` |

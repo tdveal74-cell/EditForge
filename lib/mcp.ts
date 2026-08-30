@@ -5,6 +5,7 @@ import { getCut, listCuts, probeStore } from "./store";
 import { cancelJob, completeJob, createAndQueue, getJob, listJobs, pollJob, retryJob, submitJob } from "./jobstore";
 import { PROVIDERS, credentialKeysFor, hasCredentials, providerReadiness } from "./providers";
 import { artifactStoreConfigured } from "./artifacts";
+import { listSourceAssets, sourceCatalogConfigured } from "./source-catalog";
 import { idempotencyKeyFor } from "./idempotency";
 import { listRolls, reviewRoll, selectForCut } from "./dailies";
 import { addShot, listShots, setShotStatus, shotsForCut } from "./vfxboard";
@@ -54,6 +55,13 @@ export type Tool = {
   inputSchema: Record<string, unknown>;
   /** Write tools require a configured token; without one they are not offered. */
   mutating?: boolean;
+  /**
+   * Reads that expose private data are gated too. Not every gated tool is a
+   * write: the source catalogue is metadata about media the studio deliberately
+   * does not publish, and `/api/sources` already answers it with a 401. Marking
+   * it `mutating` would have gated it correctly and described it wrongly.
+   */
+  privileged?: boolean;
   run: (args: Record<string, never> & Record<string, unknown>) => Promise<unknown>;
 };
 
@@ -152,6 +160,22 @@ export const TOOLS: Tool[] = [
         missing,
         failing: checks.filter((c) => results[c.id] === false).map((c) => c.id),
       };
+    },
+  },
+  {
+    name: "list_sources",
+    description:
+      "Inventory the private source media mounted into the studio: name, editforge-source URI, SHA-256, byte length, and modified time. Metadata only — never media bytes. Bind an edit command to the sha256 of the exact asset; a filename that looks like a hash is not the content hash.",
+    privileged: true,
+    inputSchema: obj({}),
+    run: async () => {
+      // Say "not configured" rather than throwing. A studio with no media
+      // mounted is a normal deployment, not a failure, and the caller needs to
+      // tell that apart from a catalogue it is simply not allowed to read.
+      if (!sourceCatalogConfigured()) {
+        return { configured: false, assets: [], reason: "EDITFORGE_SOURCE_MEDIA_DIR is not set on this server" };
+      }
+      return { configured: true, assets: await listSourceAssets() };
     },
   },
   {
@@ -491,7 +515,7 @@ export const TOOLS: Tool[] = [
 
 /** Tools a caller may see, given whether it authenticated. */
 export function toolsFor(authenticated: boolean): Tool[] {
-  return authenticated ? TOOLS : TOOLS.filter((t) => !t.mutating);
+  return authenticated ? TOOLS : TOOLS.filter((t) => !t.mutating && !t.privileged);
 }
 
 export function findTool(name: string, authenticated: boolean): Tool | undefined {

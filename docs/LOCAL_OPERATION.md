@@ -3,7 +3,7 @@
 **Updated:** 2026-08-30
 
 DEVON can drive the whole media execution lane on one machine, with nothing
-reaching `editforge.vercel.app`. This is the runbook for that shape.
+reaching `editforge.online`. This is the runbook for that shape.
 
 It is the same boundary as everywhere else: DEVON is the sole orchestration and
 approval authority, EditForge is the media execution engine. Running both on
@@ -118,7 +118,7 @@ export EDITFORGE_MCP_URL=http://localhost:3100/api/mcp
 export EDITFORGE_MCP_TOKEN=<the same token again>
 ```
 
-Unset, it goes back to `https://editforge.vercel.app/api/mcp`.
+Unset, it goes back to `https://editforge.online/api/mcp`.
 
 ## When it does not work
 
@@ -128,7 +128,7 @@ Unset, it goes back to `https://editforge.vercel.app/api/mcp`.
 | Health answers, `executionReady` is false | the worker did not start — `docker compose -f compose.local.yaml logs worker` |
 | DEVON says "EditForge URL and token are required" | `EDITFORGE_TOKEN` is unset on DEVON's side; the lane fails closed rather than calling unauthenticated |
 | A command fails naming an adapter env var | that operation is not in the local stack — see the table above |
-| MCP still reaching `editforge.vercel.app` | `EDITFORGE_MCP_URL` was not exported into the process that starts Claude Code |
+| MCP still reaching `editforge.online` | `EDITFORGE_MCP_URL` was not exported into the process that starts Claude Code |
 
 Stop the stack with `docker compose -f compose.local.yaml down`. Add `-v` only
 when you mean to discard the local edit state and artifacts too.

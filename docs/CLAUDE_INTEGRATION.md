@@ -21,7 +21,7 @@ actual studio.
 The server is part of the app — no separate service to run. It lives at:
 
 ```
-https://editforge.vercel.app/api/mcp
+https://editforge.online/api/mcp
 ```
 
 **Add it on claude.ai:** Settings → Connectors → Add custom connector, and paste
@@ -30,7 +30,7 @@ that URL.
 **Add it in Claude Code:**
 
 ```bash
-claude mcp add --transport http editforge https://editforge.vercel.app/api/mcp
+claude mcp add --transport http editforge https://editforge.online/api/mcp
 ```
 
 **Against a local studio:** this repository's `.mcp.json` reads the address from
@@ -72,7 +72,7 @@ Some MCP clients only accept a URL — there is no field to put an
 parameter:
 
 ```
-https://editforge.vercel.app/api/mcp?key=YOUR_TOKEN
+https://editforge.online/api/mcp?key=YOUR_TOKEN
 ```
 
 Paste that as the whole connector URL and it authenticates exactly as the
@@ -94,9 +94,12 @@ Vercel Authentication off and let the app's own gate do the work —
 turn it off without setting at least one of those first.
 
 **Client-side egress rules.** Some Claude environments only reach an allowlist of
-hosts. A `403` on `CONNECT editforge.vercel.app:443`, or a connector that reports
-a rejected `Authorization` header without the app ever logging a request, is that
-— not a bad token. Add the host to the environment's network settings.
+hosts. A `403` on `CONNECT editforge.online:443` — or on any host you point the
+connector at — or a connector that reports a rejected `Authorization` header
+without the app ever logging a request, is that, not a bad token. The refusal
+names whichever host was tried, so a corrected URL that still fails the same way
+is confirmation of the egress rule rather than evidence the URL is wrong. Add
+the host to the environment's network settings.
 
 Either way, `curl -s https://<your-deployment>/api/health` from the machine
 running the client is the fastest test: if that does not answer with EditForge's
@@ -197,7 +200,7 @@ Commands it adds:
 ## Verifying it works
 
 ```bash
-curl -s https://editforge.vercel.app/api/mcp \
+curl -s https://editforge.online/api/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | head -40
 ```
@@ -208,7 +211,7 @@ Without a bearer token you should see the read tools and **not**
 A quick end-to-end check that costs nothing:
 
 ```bash
-curl -s https://editforge.vercel.app/api/mcp \
+curl -s https://editforge.online/api/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
        "params":{"name":"check_restraint_grade","arguments":{"exposure":0.45}}}'

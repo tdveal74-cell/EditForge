@@ -13,6 +13,7 @@ import {
   toTimecode,
 } from "./handoff";
 import { SAMPLE_TIMELINE, type TimelineClip } from "./timeline";
+import { AUDIO_HIERARCHY } from "./audio";
 
 const clips: TimelineClip[] = [
   { id: "v1", label: "A-cam cold open", track: "video", startSec: 0, durationSec: 12 },
@@ -343,5 +344,20 @@ describe("path contract no longer fakes an archive gate", () => {
     const json = JSON.parse(buildPathContract({ cutId: "c1", title: "T" }));
     expect(json.rules.join(" ")).toMatch(/does not enforce/);
     expect(json.rules.join(" ")).not.toMatch(/without the \/archive checklist complete/);
+  });
+});
+
+describe("mix session realises an edited audio law", () => {
+  it("uses the hierarchy it is given, not the module constant", () => {
+    const edited = AUDIO_HIERARCHY.map((l) =>
+      l.track === "vo" ? { ...l, name: "Operator VO stem" } : l
+    );
+    const json = JSON.parse(
+      buildMixSession({ title: "Cold open", clips, target: LOUDNESS_TARGETS[0], hierarchy: edited, assemblySource: "sample assembly" })
+    );
+    expect(json.stems[0].stem).toBe("Operator VO stem");
+    expect(json.assemblySource).toBe("sample assembly");
+    const sheet = buildStemSheet({ title: "Cold open", clips, target: LOUDNESS_TARGETS[0], hierarchy: edited });
+    expect(sheet).toMatch(/Operator VO stem/);
   });
 });

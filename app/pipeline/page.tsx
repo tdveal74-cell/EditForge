@@ -63,7 +63,6 @@ export default function PipelinePage() {
                   onChange={(e) => update(s.id, { label: e.target.value })}
                   aria-label={`Stage ${s.id}`}
                 />
-                <p className="mt-1 text-[11px] text-navy/40">ref: {s.inspiredBy}</p>
                 <Textarea
                   className="mt-2 min-h-[72px]"
                   value={s.restraintNote}

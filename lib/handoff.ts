@@ -1,5 +1,5 @@
 import type { TimelineClip } from "./timeline";
-import { AUDIO_HIERARCHY } from "./audio";
+import { AUDIO_HIERARCHY, type AudioLevel } from "./audio";
 import { buildExportCommand, buildProxyCommand, canRun } from "./ffmpeg";
 import { DELIVERABLES } from "./pipeline";
 
@@ -111,13 +111,15 @@ export function buildStemSheet(opts: {
   title: string;
   clips: TimelineClip[];
   target: LoudnessTarget;
+  hierarchy?: AudioLevel[];
 }): string {
   const { title, clips, target } = opts;
+  const hierarchy = opts.hierarchy ?? AUDIO_HIERARCHY;
   const rows = [
     ["stem", "priority", "rule", "timeline_track", "clips", "duration_sec", "integrated_lufs", "true_peak_dbtp"],
   ];
 
-  for (const level of AUDIO_HIERARCHY) {
+  for (const level of hierarchy) {
     const own = clips.filter((c) => c.track === level.track);
     const seconds = own.reduce((sum, c) => sum + c.durationSec, 0);
     rows.push([
@@ -337,9 +339,12 @@ export function buildMixSession(opts: {
   title: string;
   clips: TimelineClip[];
   target: LoudnessTarget;
+  hierarchy?: AudioLevel[];
+  assemblySource?: string;
 }): string {
   const { title, clips, target } = opts;
-  const stems = AUDIO_HIERARCHY.map((level) => {
+  const hierarchy = opts.hierarchy ?? AUDIO_HIERARCHY;
+  const stems = hierarchy.map((level) => {
     const own = clips.filter((c) => c.track === level.track);
     return {
       stem: level.name,
@@ -359,6 +364,7 @@ export function buildMixSession(opts: {
         notice:
           "Mix session dump. Not Fairlight, not Pro Tools, not a mixer. Hierarchy from /audio; this file realises it.",
         title,
+        assemblySource: opts.assemblySource,
         delivery: { id: target.id, label: target.label, integratedLufs: target.integratedLufs, truePeakDbtp: target.truePeakDbtp },
         stems,
       },

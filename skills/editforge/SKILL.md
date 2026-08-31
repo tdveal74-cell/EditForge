@@ -5,7 +5,7 @@ description: Post-production finishing to the EditForge house standard — premi
 
 # EditForge — premium restraint finishing
 
-EditForge is a post-production Studio OS. Its whole opinion is one sentence:
+EditForge is a post-production control plane. Its whole opinion is one sentence:
 **protect the image rather than restage it.** Most requests to "make it look
 better" are answered by taking something away.
 

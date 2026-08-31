@@ -308,11 +308,10 @@ function clamp01(value: unknown, fallback: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-/** True when this provider has both a base endpoint and an implemented shape. */
+/** True when this provider has both a base endpoint and an implemented shape. Mock is never live. */
 export function isLiveWired(id: string): boolean {
   const p = findProvider(id);
-  if (!p) return false;
-  if (p.id === "mock") return true;
+  if (!p || p.id === "mock") return false;
   return Boolean(p.endpoint && p.wire);
 }
 

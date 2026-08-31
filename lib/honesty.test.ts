@@ -3,6 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { LANDING_CAPABILITIES } from "./landing";
 import { BOARD_MODULE_IDS, MODULE_STATUS_LABEL, STUDIO_MODULES, workingSurfaces } from "./studio";
+import { NAV_GROUPS } from "./nav";
 import { isLiveWired, liveSubmitBlocked, PROVIDERS } from "./provider-registry";
 import { GEN_PROVIDERS } from "./genvideo";
 import { SAMPLE_AVATARS } from "./avatar";
@@ -10,12 +11,13 @@ import { formatSrt, formatVtt, SAMPLE_CUES } from "./captions";
 import { SAMPLE_TITLE_CARDS } from "./titles";
 import { buildTitleSpec } from "./titles";
 import { buildPresetPack } from "./presets";
-import { buildAudioLaw } from "./audio";
+import { AUDIO_HIERARCHY, buildAudioLaw, parseAudioLevels } from "./audio";
 import { buildScriptBoard } from "./script-board";
 import { buildArchiveChecklist } from "./archive";
-import { buildExportMatrix, buildPipelineMap } from "./pipeline";
+import { buildExportMatrix, buildPipelineMap, DELIVERABLES, PIPELINE_STAGES } from "./pipeline";
+import { parseLongformProject, SAMPLE_LONGFORM } from "./longform";
 import { buildAssetIndex } from "./asset";
-import { buildCatalogExport, buildMixSession, buildNodeGraph, LOUDNESS_TARGETS } from "./handoff";
+import { buildCatalogExport, buildMixSession, buildNodeGraph, buildStemSheet, LOUDNESS_TARGETS } from "./handoff";
 import { SAMPLE_TIMELINE } from "./timeline";
 
 function src(rel: string): string {
@@ -370,5 +372,140 @@ describe("no blur in chrome", () => {
     const landing = src("app/page.tsx");
     expect(nav).not.toMatch(/backdrop-blur/);
     expect(landing).not.toMatch(/backdrop-blur/);
+  });
+});
+
+
+describe("honesty: mock is never live-wired", () => {
+  it("isLiveWired(mock) is false — mock has no endpoint and no wire", () => {
+    expect(isLiveWired("mock")).toBe(false);
+    expect(isLiveWired("runway")).toBe(true);
+    expect(isLiveWired("kling")).toBe(false);
+  });
+});
+
+describe("honesty: longform API plans edits and does not self-tick rubric", () => {
+  it("route source does not plan SAMPLE_LONGFORM or trust body.rubricPass", () => {
+    const route = src("app/api/longform/plan/route.ts");
+    expect(route).not.toMatch(/SAMPLE_LONGFORM/);
+    expect(route).not.toMatch(/Boolean\(body\.rubricPass\)/);
+    expect(route).not.toMatch(/const rubricPass = Boolean\(body/);
+    expect(route).toMatch(/parseLongformProject/);
+    expect(route).toMatch(/getCut/);
+  });
+
+  it("page posts the edited project and a cutId, not a checkbox", () => {
+    const page = src("app/longform/page.tsx");
+    expect(page).toMatch(/JSON\.stringify\(\{ project, cutId \}\)/);
+    expect(page).not.toMatch(/JSON\.stringify\(\{ rubricPass \}\)/);
+    expect(page).not.toMatch(/type="checkbox"/);
+    expect(page).toMatch(/recorded rubric pass/);
+  });
+
+  it("parser plans the submitted chapters, not the sample", () => {
+    const parsed = parseLongformProject({
+      id: "lf-edit",
+      title: "Operator rewrite",
+      chapters: [
+        {
+          id: "ch-x",
+          title: "Edited cold open",
+          startSec: 0,
+          targetDurationSec: 12,
+          script: "hello",
+          segmentSource: "nle",
+        },
+      ],
+    });
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.project.chapters[0].title).toBe("Edited cold open");
+      expect(parsed.project.title).toBe("Operator rewrite");
+      expect(parsed.project.chapters).toHaveLength(1);
+    }
+    expect(parseLongformProject({}).ok).toBe(false);
+    expect(parseLongformProject(SAMPLE_LONGFORM).ok).toBe(true);
+  });
+});
+
+describe("honesty: audio law flows into mix", () => {
+  it("audio page persists the ladder so mix can read it", () => {
+    const page = src("app/audio/page.tsx");
+    expect(page).toMatch(/\/api\/audio/);
+    expect(page).toMatch(/method: "PUT"/);
+  });
+
+  it("mix session and stem sheet realise an edited ladder, not only the constant", () => {
+    const edited = AUDIO_HIERARCHY.map((l) =>
+      l.track === "vo" ? { ...l, name: "Operator VO stem", rule: "Edited rule" } : l
+    );
+    expect(parseAudioLevels(edited).ok).toBe(true);
+    const session = buildMixSession({
+      title: "T",
+      clips: SAMPLE_TIMELINE,
+      target: LOUDNESS_TARGETS[0],
+      hierarchy: edited,
+    });
+    expect(session).toMatch(/Operator VO stem/);
+    expect(session).toMatch(/Edited rule/);
+    expect(buildStemSheet({ title: "T", clips: SAMPLE_TIMELINE, target: LOUDNESS_TARGETS[0], hierarchy: edited })).toMatch(
+      /Operator VO stem/
+    );
+    expect(src("app/api/handoff/route.ts")).toMatch(/getAudioLaw/);
+  });
+});
+
+describe("honesty: export radio changes the matrix file", () => {
+  it("two selections produce two different files", () => {
+    const a = buildExportMatrix(DELIVERABLES, "vertical-9x16");
+    const b = buildExportMatrix(DELIVERABLES, "proxy");
+    expect(a).not.toEqual(b);
+    expect(JSON.parse(a).selected).toBe("vertical-9x16");
+    expect(JSON.parse(b).selected).toBe("proxy");
+    expect(JSON.parse(a).formats.find((f: { id: string }) => f.id === "vertical-9x16").selected).toBe(true);
+  });
+
+  it("export page downloads the selected format, not a static dump", () => {
+    expect(src("app/export/page.tsx")).toMatch(/buildExportMatrix\(DELIVERABLES, format\)/);
+  });
+});
+
+describe("honesty: Hardware is not a Bridge in nav", () => {
+  it("Bridges group is NLE and Render only; Hardware lives under Reference", () => {
+    const bridges = NAV_GROUPS.find((g) => g.label === "Bridges");
+    expect(bridges?.links.map((l) => l.href)).toEqual(["/nle", "/render"]);
+    expect(bridges?.links.some((l) => l.href === "/hardware")).toBe(false);
+    const home = NAV_GROUPS.find((g) => g.links.some((l) => l.href === "/hardware"));
+    expect(home?.label).toBe("Reference");
+    expect(home?.label).not.toBe("Bridges");
+  });
+
+  it("color Ready copy is not a Resolve bridge", () => {
+    expect(STUDIO_MODULES.find((m) => m.id === "color")?.studioRole).not.toMatch(/Resolve bridge/);
+    expect(STUDIO_MODULES.find((m) => m.id === "color")?.studioRole).toMatch(/not Resolve/);
+    expect(STUDIO_MODULES.find((m) => m.id === "color")?.status).toBe("operational");
+  });
+});
+
+describe("honesty: leftover OS chrome is recut", () => {
+  it("OPERATOR, MCP, skills, health, and FLAGSHIP_SPEC do not sell Studio OS", () => {
+    expect(src("OPERATOR.md")).not.toMatch(/post-production OS\./);
+    expect(src("OPERATOR.md")).not.toMatch(/Ultra Meta Supreme Flagship AAA/);
+    expect(src("skills/editforge/SKILL.md")).not.toMatch(/post-production Studio OS/);
+    expect(src("app/api/mcp/route.ts")).not.toMatch(/post-production studio OS/);
+    expect(src("app/api/health/route.ts")).not.toMatch(/ultra-meta-supreme-flagship-aaa/);
+    expect(src("docs/FLAGSHIP_SPEC.md")).not.toMatch(/every surface in the Studio OS/);
+    expect(src("lib/jobs.ts")).not.toMatch(/Studio OS control plane/);
+  });
+});
+
+describe("honesty: pipeline does not name-drop CapCut on screen", () => {
+  it("stage cards have no inspiredBy field and the page does not print ref:", () => {
+    expect(PIPELINE_STAGES.every((s) => !("inspiredBy" in s))).toBe(true);
+    expect(src("app/pipeline/page.tsx")).not.toMatch(/inspiredBy/);
+    expect(src("app/pipeline/page.tsx")).not.toMatch(/ref: \{/);
+    expect(src("app/pipeline/page.tsx")).not.toMatch(/>ref:/);
+    const map = JSON.parse(buildPipelineMap());
+    expect(map.stages[0].inspiredBy).toBeUndefined();
   });
 });

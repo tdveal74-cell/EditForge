@@ -18,17 +18,16 @@ export type DeliverableFormat =
 export const PIPELINE_STAGES: {
   id: PipelineStage;
   label: string;
-  inspiredBy: string;
   restraintNote: string;
 }[] = [
-  { id: "ingest", label: "Ingest / bin", inspiredBy: "Premiere bins · Resolve media pool", restraintNote: "Organize only. No look change." },
-  { id: "proxy", label: "Proxy", inspiredBy: "Premiere / Resolve proxies", restraintNote: "Speed for edit. Preserve master." },
-  { id: "assembly", label: "Assembly timeline", inspiredBy: "All NLEs", restraintNote: "Structure story before grade." },
-  { id: "grade", label: "Restraint grade", inspiredBy: "DaVinci Resolve color", restraintNote: "Subtle only. No hero look." },
-  { id: "audio", label: "Sound hierarchy", inspiredBy: "Fairlight · Premiere Essential Sound", restraintNote: "VO > music > ambience. Tactile, not loud." },
-  { id: "captions", label: "Captions / text", inspiredBy: "CapCut · Descript", restraintNote: "Minimal chrome. Readable, not template spam." },
-  { id: "review", label: "Review + rubric", inspiredBy: "Studio QC", restraintNote: "Human gate before export." },
-  { id: "export", label: "Deliverables", inspiredBy: "Resolve deliver · CapCut export", restraintNote: "Rubric pass required for master." },
+  { id: "ingest", label: "Ingest / bin", restraintNote: "Organize only. No look change." },
+  { id: "proxy", label: "Proxy", restraintNote: "Speed for edit. Preserve master." },
+  { id: "assembly", label: "Assembly timeline", restraintNote: "Structure story before grade." },
+  { id: "grade", label: "Restraint grade", restraintNote: "Subtle only. No hero look." },
+  { id: "audio", label: "Sound hierarchy", restraintNote: "VO > music > ambience. Tactile, not loud." },
+  { id: "captions", label: "Captions / text", restraintNote: "Minimal chrome. Readable, not template spam." },
+  { id: "review", label: "Review + rubric", restraintNote: "Human gate before export." },
+  { id: "export", label: "Deliverables", restraintNote: "Rubric pass required for master." },
 ];
 
 export const DELIVERABLES: {
@@ -58,7 +57,6 @@ export function buildPipelineMap(
         stages: stages.map((s) => ({
           id: s.id,
           label: s.label,
-          inspiredBy: s.inspiredBy,
           restraintNote: s.restraintNote,
         })),
       },
@@ -71,6 +69,7 @@ export function buildPipelineMap(
 /** Format matrix as a file. Not a live encoder. Encode queue is /jobs. */
 export function buildExportMatrix(
   formats: typeof DELIVERABLES = DELIVERABLES,
+  selected?: DeliverableFormat,
 ): string {
   return (
     JSON.stringify(
@@ -78,12 +77,14 @@ export function buildExportMatrix(
         kind: "export-matrix",
         notice:
           "Format matrix as a file. Not a live encoder, not Resolve deliver, not CapCut. The encode queue is /jobs.",
+        selected: selected ?? null,
         formats: formats.map((d) => ({
           id: d.id,
           label: d.label,
           width: d.width,
           height: d.height,
           use: d.use,
+          selected: selected === d.id,
         })),
       },
       null,

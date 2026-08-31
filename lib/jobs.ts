@@ -1,5 +1,5 @@
 /**
- * Durable job lifecycle for Studio OS control plane.
+ * Durable job lifecycle for the control plane.
  * States: planned → authorized → queued → running → validating → completed | failed | cancelled
  */
 

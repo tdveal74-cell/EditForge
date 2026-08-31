@@ -4,6 +4,8 @@ import { listAssets } from "@/lib/catalog";
 import { shotsForCut } from "@/lib/vfxboard";
 import { SAMPLE_TIMELINE } from "@/lib/timeline";
 import type { VfxShot } from "@/lib/vfxShot";
+import { getAudioLaw } from "@/lib/audiostore";
+import type { AudioLevel } from "@/lib/audio";
 
 export const dynamic = "force-dynamic";
 
@@ -72,6 +74,7 @@ export async function GET(req: Request) {
   const clips = cut.clips ?? SAMPLE_TIMELINE;
   const assemblySource = cut.clips ? "cut assembly" : "sample assembly";
   const name = slug(cut.title) || cut.id;
+  const hierarchy = kind === "stems" || kind === "session" ? await getAudioLaw() : undefined;
 
   // Only the shot package consults the board; reading it for an EDL would be a
   // store round-trip that changes nothing in the file.
@@ -88,6 +91,7 @@ export async function GET(req: Request) {
     index: index?.map((a) => ({ name: a.name, type: a.type, location: a.location })),
     targetId: url.searchParams.get("target"),
     jobKind: url.searchParams.get("jobKind"),
+    hierarchy,
   });
   if ("error" in built) return json({ error: built.error }, 400);
 
@@ -115,6 +119,7 @@ function build(
     index?: { name: string; type: string; location?: string }[];
     targetId: string | null;
     jobKind?: string | null;
+    hierarchy?: AudioLevel[];
   }
 ): { body: string; contentType: string; filename: string } | { error: string } {
   const { cut, clips, fps, name, assemblySource } = ctx;
@@ -134,7 +139,7 @@ function build(
         return { error: `target must be one of ${LOUDNESS_TARGETS.map((t) => t.id).join(", ")}` };
       }
       return {
-        body: `${note}\n` + buildStemSheet({ title: cut.title, clips, target }),
+        body: `${note}\n` + buildStemSheet({ title: cut.title, clips, target, hierarchy: ctx.hierarchy }),
         contentType: "text/csv; charset=utf-8",
         filename: `${name}_stems_${target.id}.csv`,
       };
@@ -160,7 +165,7 @@ function build(
         return { error: `target must be one of ${LOUDNESS_TARGETS.map((t) => t.id).join(", ")}` };
       }
       return {
-        body: buildMixSession({ title: cut.title, clips, target }),
+        body: buildMixSession({ title: cut.title, clips, target, hierarchy: ctx.hierarchy, assemblySource }),
         contentType: "application/json; charset=utf-8",
         filename: `${name}_mix_session.json`,
       };

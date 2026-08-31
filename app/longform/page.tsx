@@ -1,25 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LONGFORM_TIERS, SAMPLE_LONGFORM, buildLongformBoard, totalChapterDuration, type LongFormProject } from "@/lib/longform";
 import { Button } from "@/components/ui/button";
-import { Input, Output, Textarea } from "@/components/ui/field";
+import { Input, Output, Textarea, Label, Select } from "@/components/ui/field";
 import { downloadText } from "@/lib/download";
 import { Section } from "@/components/ui/section";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
+import type { Cut } from "@/lib/store";
 
 export default function LongformPage() {
   const [project, setProject] = useState<LongFormProject>(SAMPLE_LONGFORM);
   const total = totalChapterDuration(project.chapters);
-  const [rubricPass, setRubricPass] = useState(false);
+  const [cuts, setCuts] = useState<Cut[] | null>(null);
+  const [cutId, setCutId] = useState("");
   const [out, setOut] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/cuts")
+      .then((r) => r.json())
+      .then((d) => {
+        const list: Cut[] = d.cuts ?? [];
+        setCuts(list);
+        setCutId((prev) => prev || list[0]?.id || "");
+      })
+      .catch(() => setCuts([]));
+  }, []);
+
+  const cut = cuts?.find((c) => c.id === cutId);
+  const blocked = !cut?.rubricPass;
 
   async function plan() {
     const res = await fetch("/api/longform/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rubricPass }),
+      body: JSON.stringify({ project, cutId }),
     });
     setOut(JSON.stringify(await res.json(), null, 2));
   }
@@ -29,7 +45,7 @@ export default function LongformPage() {
       <PageHeader
         eyebrow="Board"
         title="Sample stitch plan"
-        description="Edit chapters, then download the stitch plan. Not a running episode renderer. The rubric checkbox on this page is a brief for the plan — it is not a recorded ship gate."
+        description="Edit chapters, then plan those chapters. Not a running episode renderer. The stitch gate is the recorded rubric pass on a named cut — not a checkbox on this page."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
@@ -133,22 +149,36 @@ export default function LongformPage() {
         </ol>
       </Section>
 
-      <label className="mt-8 flex items-center gap-2 text-sm text-navy/70">
-        <input
-          type="checkbox"
-          className="size-4 cursor-pointer accent-amber"
-          checked={rubricPass}
-          onChange={(e) => setRubricPass(e.target.checked)}
-        />
-        Rubric pass recorded (required for master stitch)
-      </label>
+      <div className="mt-8">
+        <Label text="Cut whose rubric pass authorises the stitch">
+          <Select value={cutId} onChange={(e) => setCutId(e.target.value)}>
+            {cuts === null && <option>Loading…</option>}
+            {cuts?.length === 0 && <option value="">No cuts in the store</option>}
+            {cuts?.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.title} — {c.rubricPass ? "rubric passed" : "no rubric pass"}
+              </option>
+            ))}
+          </Select>
+        </Label>
+      </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Button type="button" onClick={plan}>
+        <Button type="button" onClick={plan} disabled={!cutId}>
           Build long-form stitch plan
         </Button>
-        {!rubricPass && (
-          <span className="text-xs text-amber-700">Stitch stays blocked until the rubric passes</span>
+        {!cutId ? (
+          <span className="text-xs text-amber-700">Select a cut.</span>
+        ) : blocked ? (
+          <span className="text-xs text-amber-700">
+            {cut
+              ? `“${cut.title}” has no recorded rubric pass — record one on /rubric.`
+              : "Select a cut."}
+          </span>
+        ) : (
+          <span className="text-xs text-navy/50">
+            Authorised by the rubric pass recorded on “{cut?.title}”.
+          </span>
         )}
       </div>
 

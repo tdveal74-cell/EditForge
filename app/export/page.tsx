@@ -54,7 +54,11 @@ export default function ExportPage() {
             type="button"
             variant="secondary"
             onClick={() =>
-              downloadText("editforge-export-matrix.json", buildExportMatrix(), "application/json")
+              downloadText(
+                `editforge-export-matrix-${format}.json`,
+                buildExportMatrix(DELIVERABLES, format),
+                "application/json",
+              )
             }
           >
             Download matrix

@@ -4,62 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
+import { MOBILE_MORE, MOBILE_PRIORITY, NAV_GROUPS } from "@/lib/nav";
 
-const groups: { label: string; links: { href: string; label: string }[] }[] = [
-  {
-    label: "Create",
-    links: [
-      { href: "/studio", label: "Studio" },
-      { href: "/pipeline", label: "Pipeline" },
-      { href: "/projects", label: "Projects" },
-      { href: "/timeline", label: "Timeline" },
-    ],
-  },
-  {
-    label: "AI media",
-    links: [
-      { href: "/voice", label: "Voice" },
-      { href: "/avatar", label: "Avatar" },
-      { href: "/gen-video", label: "Gen video" },
-      { href: "/stock", label: "Stock" },
-    ],
-  },
-  {
-    label: "Finish",
-    links: [
-      { href: "/color", label: "Grade" },
-      { href: "/longform", label: "Long-form" },
-      { href: "/rubric", label: "Rubric" },
-      { href: "/export", label: "Export" },
-    ],
-  },
-  {
-    label: "Bridges",
-    links: [
-      { href: "/nle", label: "NLE" },
-      { href: "/render", label: "Render" },
-      { href: "/hardware", label: "Hardware" },
-    ],
-  },
-];
-
-/** Visible on ~390px. Everything else lives in More so the bar cannot overflow. */
-const mobilePriority = [
-  { href: "/studio", label: "Studio" },
-  { href: "/dailies", label: "Dailies" },
-  { href: "/review", label: "Review" },
-];
-
-const mobileMore = [
-  { href: "/gen-video", label: "Gen video" },
-  { href: "/voice", label: "Voice" },
-  { href: "/avatar", label: "Avatar" },
-  { href: "/timeline", label: "Timeline" },
-  { href: "/rubric", label: "Rubric" },
-  { href: "/export", label: "Export" },
-  { href: "/jobs", label: "Jobs" },
-  { href: "/stock", label: "Stock" },
-];
 
 export function Nav() {
   const pathname = usePathname();
@@ -80,7 +26,7 @@ export function Nav() {
         </Link>
 
         <nav aria-label="Priority" className="flex min-w-0 items-center justify-end gap-0.5 lg:hidden">
-          {mobilePriority.map((l) => {
+          {MOBILE_PRIORITY.map((l) => {
             const active = pathname === l.href || pathname.startsWith(l.href + "/");
             return (
               <Link
@@ -111,7 +57,7 @@ export function Nav() {
         </nav>
 
         <nav aria-label="Studio" className="hidden flex-wrap items-center gap-x-4 gap-y-1 lg:flex">
-          {groups.map((g, gi) => (
+          {NAV_GROUPS.map((g, gi) => (
             <div key={g.label} className="flex items-center gap-x-3">
               {gi > 0 && <span aria-hidden className="h-3 w-px bg-border-strong" />}
               {g.links.map((l) => {
@@ -144,7 +90,7 @@ export function Nav() {
         >
           <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-navy/45">More</p>
           <ul className="mt-2 grid grid-cols-2 gap-1">
-            {mobileMore.map((l) => {
+            {MOBILE_MORE.map((l) => {
               const active = pathname === l.href || pathname.startsWith(l.href + "/");
               return (
                 <li key={l.href}>

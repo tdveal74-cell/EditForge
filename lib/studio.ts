@@ -59,7 +59,7 @@ export const STUDIO_MODULES: StudioModule[] = [
   { id: "script", dept: "Development", label: "Script notes", href: "/script", status: "planner", studioRole: "Edit beats, emit JSON — not a screenplay tool" },
   { id: "nle", dept: "Editorial", label: "NLE bridge", href: "/nle", status: "bridge", studioRole: "CMX3600 EDL handoff — not AAF/XML" },
   { id: "timeline", dept: "Editorial", label: "Timeline", href: "/timeline", status: "planner", studioRole: "Assembly sketch — read-only, not an NLE" },
-  { id: "color", dept: "Color", label: "Restraint grade", href: "/color", status: "operational", studioRole: "Envelope + Resolve bridge" },
+  { id: "color", dept: "Color", label: "Restraint grade", href: "/color", status: "operational", studioRole: "Restraint envelope + still preview — not Resolve" },
   { id: "audio", dept: "Sound", label: "Audio hierarchy", href: "/audio", status: "planner", studioRole: "Edit ladder rules, emit law — not Fairlight" },
   { id: "mix", dept: "Sound", label: "Mix bridge", href: "/mix", status: "bridge", studioRole: "Mix session dump — not Fairlight" },
   { id: "voice", dept: "AI Media", label: "Voice clone / TTS", href: "/voice", status: "ai-media", studioRole: "ElevenLabs wired · mock default" },

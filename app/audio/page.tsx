@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/ui/section";
 import { Waveform } from "@/components/media/Viewer";
@@ -14,8 +14,27 @@ export default function AudioPage() {
   const [hierarchy, setHierarchy] = useState<AudioLevel[]>(AUDIO_HIERARCHY);
   const law = useMemo(() => buildAudioLaw(hierarchy), [hierarchy]);
 
+  useEffect(() => {
+    fetch("/api/audio", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.levels) && d.levels.length) setHierarchy(d.levels);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  function persist(next: AudioLevel[]) {
+    void fetch("/api/audio", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ levels: next }),
+    });
+  }
+
   function update(level: number, patch: Partial<AudioLevel>) {
-    setHierarchy((list) => list.map((h) => (h.level === level ? { ...h, ...patch } : h)));
+    const next = hierarchy.map((h) => (h.level === level ? { ...h, ...patch } : h));
+    setHierarchy(next);
+    persist(next);
   }
 
   return (
@@ -23,7 +42,7 @@ export default function AudioPage() {
       <PageHeader
         eyebrow="Board"
         title="Audio ladder"
-        description="Edit the rules, then download the law. Not a mixer, not Fairlight, not Essential Sound. Mix realises this law on /mix as a session dump."
+        description="Edit the rules; they are stored and /mix realises them. Not a mixer, not Fairlight, not Essential Sound."
         actions={
           <Button type="button" onClick={() => downloadText("editforge-audio-law.json", law, "application/json")}>
             Download law

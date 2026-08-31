@@ -61,7 +61,7 @@ describe("provider readiness endpoint", () => {
     const body = await (await GET()).json();
     const mock = body.providers.find((p: { id: string }) => p.id === "mock");
     expect(mock.billable).toBe(false);
-    expect(mock.wired).toBe(true);
+    expect(mock.wired).toBe(false);
   });
 
   it("will not call a byte-returning provider billable with nowhere to keep the bytes", async () => {

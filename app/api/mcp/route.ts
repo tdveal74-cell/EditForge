@@ -74,7 +74,7 @@ export async function POST(req: Request) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: SERVER_INFO,
         instructions:
-          "EditForge is a post-production studio OS built on premium restraint: the grade protects the image rather than restaging it, and a master export is blocked until the restraint rubric passes. Call editforge_status first to see which durable store is active and whether any provider could bill real work. Prefer provider 'mock' unless the user explicitly asked for a real render.",
+          "EditForge is a post-production control plane built on premium restraint: the grade protects the image rather than restaging it, and a master export is blocked until the restraint rubric passes. Call editforge_status first to see which durable store is active and whether any provider could bill real work. Prefer provider 'mock' unless the user explicitly asked for a real render.",
       });
 
     case "notifications/initialized":

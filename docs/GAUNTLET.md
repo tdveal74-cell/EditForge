@@ -45,9 +45,9 @@ If no → continue the loop.
 
 ## EditForge current score (living)
 
-Honest recut after Round 4 (2026-08-31). A fresh independent critic scored **honesty 77/100 LOSE** against frozen Round-3 HEAD `76f67ab`. Do not rubber-stamp 76. Do not recut to 80. Do not jump to 100.
+Honest recut after Round 5 (2026-08-31). A fresh independent critic scored **honesty 78/100 LOSE** against frozen Round-4 HEAD `6d30c0f`. Do not rubber-stamp 77. Do not recut to 80. Do not jump to 100.
 
-This table is the critic’s **77**, plus notes on what this round actually closed. It is not 80. It is not 99. It is not 100.
+This table is the critic’s **78**, plus notes on what this round actually closed. It is not 80. It is not 99. It is not 100.
 
 | Surface | Score | Note |
 |---------|-------|------|
@@ -56,16 +56,16 @@ This table is the critic’s **77**, plus notes on what this round actually clos
 | Gen video | ~80 | One stage; mock default; STRENGTHS text-to-video only. Not Runway-the-product. |
 | Voice | ~80 | Listen stage is the JobRunner result. Consent gate held. |
 | Avatar | ~80 | Stage unified. Sample briefs are draft, not ready. |
-| Captions / titles / presets / audio | ~76 | Board editors: edit cues/spec/notes then emit SRT/VTT/JSON. Not CapCut / After Effects / Fairlight. |
-| Script / pipeline / archive | ~74 | Board editors: edit beats/notes/checks then emit. Still not a running pipeline or live archive. |
-| Timeline / collab / hardware / longform | ~72 | Sketch stays read-only (not an NLE). Longform chapters editable then emit. Agreement / reference download as files. |
+| Captions / titles / presets / audio | ~76 | Board editors. Audio ladder is stored; mix realises that copy. Not CapCut / After Effects / Fairlight. |
+| Script / pipeline / archive | ~74 | Board editors. Pipeline stage cards no longer print CapCut/Resolve as `ref:`. Still not a running pipeline or live archive. |
+| Timeline / collab / hardware / longform | ~72 | Sketch stays read-only (not an NLE). Longform plans the edited chapters; stitch gate is a recorded cut rubric, not a checkbox. Hardware is Reference, not a Bridge. |
 | Stock | ~80 | Licensed index, not Artlist search. |
 | Review | ~86 | Player first; portrait fit; seekable notes. |
 | Dailies | ~87 | Contact sheet + mobile approve/reject. |
 | JobRunner | ~88 | Gates on wired/credential/settings/store; mock labeled; amber only when billable. |
 | Mobile nav | ~80 | Priority strip + More. |
-| Bridges | ~72 | Still BridgePanel wrappers, not engines. Mix session dump, MAM catalog export, VFX node graph, NLE EDL, ffmpeg-plan. Not Fairlight / Drive / Fusion. Not Operational. |
-| **Overall** | **77** | Critic floor on `76f67ab`. Board editors + remaining Ready indexes recut. Did not earn 80. Did not earn 100. |
+| Bridges | ~72 | Still BridgePanel wrappers, not engines. Mix session dump reads the stored /audio law. MAM catalog export, VFX node graph, NLE EDL, ffmpeg-plan. Not Fairlight / Drive / Fusion. Not Operational. |
+| **Overall** | **78** | Critic floor on `6d30c0f`. Shared-state leftovers recut. Product depth vs leaders remains the wall under 80. Did not earn 80. Did not earn 100. |
 
 Update this table as surfaces clear higher bars. Do not recut upward without a fresh critic.
 
@@ -140,3 +140,22 @@ Shipped:
 Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, per-role auth, a live hardware inventory, Premiere/Fairlight/Fusion/DaVinci, a public-host recut.
 
 Largest remaining gap: Boards are file editors, not media products next to CapCut/Resolve. Bridges are still wrappers that emit files. Working surfaces no longer count the two indexes; product depth vs leaders is still the wall under 80. No fresh visual critic this round. Not 99.
+
+### Round 5 — 2026-08-31 (`gauntlet/to-100`)
+
+Incoming critic on frozen `6d30c0f`: honesty **78/100 LOSE**. Round 4 file claims held. Do not rubber-stamp 77. Do not recut to 80. Shipping 80 needs product depth vs CapCut/Resolve/Fairlight, not another relabel.
+
+Shipped:
+
+- `/audio` edits persist; `/mix` session dump and stem sheet realise the stored ladder, not the `AUDIO_HIERARCHY` constant.
+- `/api/longform/plan` plans the edited chapters. Rubric pass is read from a named cut; `body.rubricPass` is ignored.
+- Export radio selection is written into the downloaded matrix (`selected`).
+- OPERATOR / MCP / skills / health / FLAGSHIP_SPEC recut leftover Studio OS / `ultra-meta-supreme-flagship-aaa` chrome.
+- Nav files Hardware under Reference, not Bridges. Color studioRole is envelope + still preview, not a Resolve bridge.
+- Pipeline stage cards no longer print CapCut/Resolve as `ref:`.
+- Honesty tests fail `isLiveWired("mock")`, longform ignoring edits, audio/mix drift, Hardware-as-Bridge, leftover OS chrome, pipeline CapCut refs.
+- Overall **78**. No 80. No 100.
+
+Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, per-role auth, a live hardware inventory, Premiere/Fairlight/Fusion/DaVinci, a public-host recut, product depth next to category leaders.
+
+Largest remaining gap: Product depth vs CapCut / Resolve / Fairlight / Frame.io. Fourteen Boards are still sample-seeded file editors. Five Bridges are still wrappers. Public vercel.app is unre-cut. Not 99.

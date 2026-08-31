@@ -49,7 +49,7 @@ These are not engines. Each page emits a downloadable file via `/api/handoff`.
 
 ### Tests authored
 - [x] restraint · ffmpeg · grade · longform · jobs · genvideo · hardware
-- [x] honesty labels and live-submit gate
+- [x] honesty: shared audio/mix law, longform plans edited chapters, export selection, isLiveWired(mock) is false
 
 ### Governance (2026-08-11)
 - [x] `REPOSITORY_STATUS.md`

@@ -5,6 +5,18 @@ export type CaptionCue = {
   text: string;
 };
 
+
+/** Next cue after the last one. Empty text so the operator writes it. */
+export function newCaptionCue(after?: CaptionCue): CaptionCue {
+  const start = after && Number.isFinite(after.endSec) ? after.endSec : 0;
+  return {
+    id: `c-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e4).toString(36)}`,
+    startSec: start,
+    endSec: start + 2,
+    text: "",
+  };
+}
+
 export const SAMPLE_CUES: CaptionCue[] = [
   { id: "c1", startSec: 0, endSec: 2.5, text: "Where are we today?" },
   { id: "c2", startSec: 2.5, endSec: 6, text: "Inside the question we keep avoiding." },

@@ -5,6 +5,10 @@ export type ScriptBeat = {
   marks: string[];
 };
 
+export function newScriptBeat(): ScriptBeat {
+  return { scene: "", slug: "", note: "", marks: [] };
+}
+
 export const SAMPLE_BEATS: ScriptBeat[] = [
   {
     scene: "1A",

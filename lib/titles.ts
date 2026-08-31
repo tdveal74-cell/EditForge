@@ -7,6 +7,17 @@ export type TitleCard = {
   durationSec: number;
 };
 
+export function newTitleCard(): TitleCard {
+  return {
+    id: `t-${Date.now().toString(36)}`,
+    kind: "Lower third",
+    text: "",
+    rule: "Sparse. Hold.",
+    size: "text-base",
+    durationSec: 3,
+  };
+}
+
 export const SAMPLE_TITLE_CARDS: TitleCard[] = [
   { id: "t1", kind: "Episode title", text: "The Shadow We Share", rule: "Minimal. Hold. No kinetic spam.", size: "text-2xl", durationSec: 3 },
   { id: "t2", kind: "Lower third", text: "Auren", rule: "Sparse amber accent only if needed.", size: "text-base", durationSec: 4 },
@@ -23,7 +34,7 @@ export function buildTitleSpec(cards: TitleCard[] = SAMPLE_TITLE_CARDS): string 
       {
         kind: "title-card-spec",
         notice:
-          "Sample title cards as a spec file. Not a live compositor, not After Effects, not a rendered graphic.",
+          "Title card spec. Not a live compositor, not After Effects, not a rendered graphic.",
         cards: cards.map((c) => ({
           id: c.id,
           kind: c.kind,

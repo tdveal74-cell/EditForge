@@ -9,14 +9,14 @@ export default function Page() {
       spec={{
         title: "Mix bridge",
         description:
-          "Downloads a stem sheet CSV. Not Fairlight, not Pro Tools, not a mixer. The hierarchy on /audio is law — this file realises it.",
-        artifacts: ["stems"],
+          "Downloads a mix session dump (ladder, clips per stem, loudness) and a stem sheet CSV. Not Fairlight, not Pro Tools, not a mixer. The hierarchy on /audio is law — this file realises it.",
+        artifacts: ["session", "stems"],
         engines: ["Fairlight", "Pro Tools", "Atmos renderer"],
         handoff: [
-          { label: "Out", detail: "Stem sheet: VO, primary SFX, music bed, ambience — split at the hierarchy boundaries." },
+          { label: "Out", detail: "Mix session JSON plus stem sheet: VO, primary SFX, music bed, ambience — split at the hierarchy boundaries." },
           { label: "Targets", detail: "Dialogue anchor −16 LUFS short-form, −23 LUFS broadcast; true peak −1 dBTP." },
           { label: "Back", detail: "Printed stems plus a mixdown matched to the picture lock." },
-          { label: "Gate", detail: "Loudness audit runs before the rubric; a failing mix blocks master export." },
+          { label: "Gate", detail: "Loudness audit is the mixer's; this file does not print a mix." },
         ],
       }}
     />

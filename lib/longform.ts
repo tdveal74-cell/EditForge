@@ -70,3 +70,23 @@ export function longformStrategy(totalSec: number): string {
   if (min <= 25) return "Chapter pipeline: NLE spine + gen inserts + VO beds + stitch.";
   return "Feature length: NLE is primary; gen only for controlled inserts; farm encode required.";
 }
+
+/** Sample stitch plan as a file. Not a running episode renderer. */
+export function buildLongformBoard(project: LongFormProject = SAMPLE_LONGFORM): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "longform-stitch-plan",
+        notice:
+          "Sample stitch plan as a file. Not a running episode renderer. The page checkbox is a brief, not a recorded ship gate.",
+        id: project.id,
+        title: project.title,
+        targetDurationSec: project.targetDurationSec,
+        assembledSec: totalChapterDuration(project.chapters),
+        chapters: project.chapters,
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}

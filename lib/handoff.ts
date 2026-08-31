@@ -1,6 +1,7 @@
 import type { TimelineClip } from "./timeline";
 import { AUDIO_HIERARCHY } from "./audio";
 import { buildExportCommand, buildProxyCommand, canRun } from "./ffmpeg";
+import { DELIVERABLES } from "./pipeline";
 
 /**
  * What actually crosses a bridge.
@@ -219,8 +220,13 @@ export function buildShotPackage(opts: {
  * MAM exists to answer and a single path cannot answer it. Deterministic from the
  * cut id, so the same cut resolves to the same paths from any surface.
  */
-export function buildPathContract(opts: { cutId: string; title: string }): string {
-  const { cutId, title } = opts;
+export function buildPathContract(opts: {
+  cutId: string;
+  title: string;
+  /** Catalog names from /assets. Omitted when the index was not consulted. */
+  index?: { name: string; type: string; location?: string }[];
+}): string {
+  const { cutId, title, index } = opts;
   const key = slug(title) || slug(cutId) || "untitled";
   const base = `${cutId}/${key}`;
   return (
@@ -236,10 +242,13 @@ export function buildPathContract(opts: { cutId: string; title: string }): strin
           archive: { path: `archive/${base}/`, role: "Cold copy — 3-2-1: two media types, one geo-separated" },
         },
         rules: [
-          "Paths are canonical: the NLE links to them, it does not copy media",
-          "Nothing reaches archive without the /archive checklist complete",
-          "Checksums are written by the mover and read back before the online copy is released",
+          "Paths are canonical names, not live connections",
+          "The /archive board is a sample checklist — this file does not enforce it",
+          "Checksums are a mover's job; this file does not write them",
         ],
+        ...(index && index.length > 0
+          ? { index: index.map((a) => ({ name: a.name, type: a.type, location: a.location ?? "" })) }
+          : {}),
       },
       null,
       2
@@ -305,6 +314,7 @@ export function buildRenderPlan(opts: {
         assemblySource: opts.assemblySource,
         kind: opts.kind,
         plan,
+        matrix: DELIVERABLES.map((d) => ({ id: d.id, label: d.label, width: d.width, height: d.height })),
         allowed,
         reason: allowed
           ? opts.kind === "export"
@@ -314,6 +324,151 @@ export function buildRenderPlan(opts: {
       },
       null,
       2
+    ) + "\n"
+  );
+}
+
+
+/**
+ * Mix session dump — the ladder, the clips on each stem, the loudness law.
+ * A mixer opens this; Fairlight is not this page.
+ */
+export function buildMixSession(opts: {
+  title: string;
+  clips: TimelineClip[];
+  target: LoudnessTarget;
+}): string {
+  const { title, clips, target } = opts;
+  const stems = AUDIO_HIERARCHY.map((level) => {
+    const own = clips.filter((c) => c.track === level.track);
+    return {
+      stem: level.name,
+      priority: level.level,
+      rule: level.rule,
+      track: level.track,
+      clips: own.map((c) => ({ id: c.id, label: c.label, startSec: c.startSec, durationSec: c.durationSec })),
+      durationSec: Number(own.reduce((sum, c) => sum + c.durationSec, 0).toFixed(2)),
+      integratedLufs: level.level === 1 ? target.integratedLufs : null,
+      truePeakDbtp: target.truePeakDbtp,
+    };
+  });
+  return (
+    JSON.stringify(
+      {
+        kind: "mix-session",
+        notice:
+          "Mix session dump. Not Fairlight, not Pro Tools, not a mixer. Hierarchy from /audio; this file realises it.",
+        title,
+        delivery: { id: target.id, label: target.label, integratedLufs: target.integratedLufs, truePeakDbtp: target.truePeakDbtp },
+        stems,
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}
+
+/**
+ * Catalog export for the MAM bridge.
+ * Names and filed paths from /assets — not Drive, not S3, not Frame.io.
+ */
+export function buildCatalogExport(opts: {
+  assets: { name: string; type: string; tags?: string[]; location?: string }[];
+  title?: string;
+}): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "catalog-export",
+        notice:
+          "Catalog export of names and filed paths. Not Drive, not S3, not Frame.io. This file does not move media. The /archive board is a sample checklist — this file does not enforce it.",
+        title: opts.title || "Asset catalog",
+        assets: opts.assets.map((a) => ({
+          name: a.name,
+          type: a.type,
+          tags: a.tags ?? [],
+          location: a.location ?? "",
+        })),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}
+
+/**
+ * A compositor node graph: one Loader per plate, a Merge chain, a Saver.
+ * Frame ranges, not pixels. Not Fusion, not After Effects.
+ */
+export function buildNodeGraph(opts: {
+  title: string;
+  clips: TimelineClip[];
+  fps: Timebase;
+  board?: { id: string; desc: string; status: string; engine: string; note?: string }[];
+}): string {
+  const { title, clips, fps, board } = opts;
+  const plates = clips
+    .filter((c) => c.track === "video" && c.durationSec > 0)
+    .sort((a, b) => a.startSec - b.startSec);
+
+  const nodes: Record<string, unknown>[] = [];
+  const edges: { from: string; to: string; fromPort: string; toPort: string }[] = [];
+
+  plates.forEach((c, i) => {
+    const loaderId = `Loader_${String(i + 1).padStart(2, "0")}`;
+    nodes.push({
+      id: loaderId,
+      type: "Loader",
+      plate: c.label,
+      clipId: c.id,
+      firstFrame: toFrames(c.startSec, fps),
+      lastFrameExclusive: toFrames(c.startSec + c.durationSec, fps),
+    });
+    const mergeId = i === 0 ? "Merge_01" : `Merge_${String(i + 1).padStart(2, "0")}`;
+    if (i === 0) {
+      nodes.push({ id: mergeId, type: "Merge", note: "Background plate" });
+      edges.push({ from: loaderId, to: mergeId, fromPort: "output", toPort: "background" });
+    } else {
+      nodes.push({ id: mergeId, type: "Merge", note: "Over previous" });
+      edges.push({ from: loaderId, to: mergeId, fromPort: "output", toPort: "foreground" });
+      edges.push({
+        from: i === 1 ? "Merge_01" : `Merge_${String(i).padStart(2, "0")}`,
+        to: mergeId,
+        fromPort: "output",
+        toPort: "background",
+      });
+    }
+  });
+
+  nodes.push({
+    id: "Saver_01",
+    type: "Saver",
+    format: "EXR sequence",
+    colorSpace: "ACEScct",
+    note: "Conformed to the plate colour space",
+  });
+  if (plates.length > 0) {
+    const lastMerge = `Merge_${String(plates.length).padStart(2, "0")}`;
+    edges.push({ from: lastMerge, to: "Saver_01", fromPort: "output", toPort: "input" });
+  }
+
+  return (
+    JSON.stringify(
+      {
+        kind: "vfx-node-graph",
+        notice:
+          "Compositor node graph JSON — Loaders, Merges, Saver. Not Fusion, not After Effects, not a running comp. Frame ranges for a compositor to rebuild.",
+        title,
+        fps,
+        frameRangeConvention: "firstFrame inclusive, lastFrameExclusive exclusive",
+        nodes,
+        edges,
+        ...(board && board.length > 0
+          ? { board: board.map((b) => ({ id: b.id, desc: b.desc, status: b.status, engine: b.engine, note: b.note })) }
+          : {}),
+      },
+      null,
+      2,
     ) + "\n"
   );
 }

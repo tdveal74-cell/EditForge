@@ -7,12 +7,16 @@ import { isLiveWired, liveSubmitBlocked, PROVIDERS } from "./provider-registry";
 import { GEN_PROVIDERS } from "./genvideo";
 import { SAMPLE_AVATARS } from "./avatar";
 import { formatSrt, formatVtt, SAMPLE_CUES } from "./captions";
+import { SAMPLE_TITLE_CARDS } from "./titles";
 import { buildTitleSpec } from "./titles";
 import { buildPresetPack } from "./presets";
 import { buildAudioLaw } from "./audio";
 import { buildScriptBoard } from "./script-board";
 import { buildArchiveChecklist } from "./archive";
-import { buildPipelineMap } from "./pipeline";
+import { buildExportMatrix, buildPipelineMap } from "./pipeline";
+import { buildAssetIndex } from "./asset";
+import { buildCatalogExport, buildMixSession, buildNodeGraph, LOUDNESS_TARGETS } from "./handoff";
+import { SAMPLE_TIMELINE } from "./timeline";
 
 function src(rel: string): string {
   return readFileSync(path.join(process.cwd(), rel), "utf8");
@@ -47,11 +51,11 @@ describe("honesty: operational is never Live", () => {
 
 describe("honesty: Ready does not mean a page exists", () => {
   it("thin sample surfaces are not counted as Ready / Working", () => {
-    for (const id of ["script", "pipeline", "archive", "timeline", "collab", "hardware", "longform"]) {
+    for (const id of ["script", "pipeline", "archive", "timeline", "collab", "hardware", "longform", "assets", "export"]) {
       expect(STUDIO_MODULES.find((m) => m.id === id)?.status, id).toBe("planner");
     }
     const ids = workingSurfaces().map((m) => m.id);
-    for (const id of ["script", "pipeline", "archive", "timeline", "collab", "hardware", "longform"]) {
+    for (const id of ["script", "pipeline", "archive", "timeline", "collab", "hardware", "longform", "assets", "export"]) {
       expect(ids, id).not.toContain(id);
     }
   });
@@ -87,6 +91,8 @@ describe("honesty: board pages self-label and do not speak as product engines", 
       "hardware",
       "vfx",
       "longform",
+      "assets",
+      "export",
     ]) {
       const body = src(`app/${page}/page.tsx`);
       expect(body, page).toMatch(/eyebrow="Board"/);
@@ -187,6 +193,21 @@ describe("honesty: every bridge page emits an artifact kind", () => {
     expect(src("app/mam/page.tsx")).toMatch(/Not Drive, not S3, not Frame.io/);
     expect(src("app/vfx-engine/page.tsx")).toMatch(/Not Fusion/);
   });
+
+  it("mix emits a session dump, mam a catalog export, vfx-engine a node graph", () => {
+    expect(src("app/mix/page.tsx")).toMatch(/"session"/);
+    expect(src("app/mam/page.tsx")).toMatch(/"catalog"/);
+    expect(src("app/vfx-engine/page.tsx")).toMatch(/"graph"/);
+    expect(buildMixSession({ title: "T", clips: SAMPLE_TIMELINE, target: LOUDNESS_TARGETS[0] })).toMatch(/Not Fairlight/);
+    expect(buildCatalogExport({ assets: [{ name: "a.mov", type: "video" }] })).toMatch(/does not enforce it/);
+    expect(buildCatalogExport({ assets: [{ name: "a.mov", type: "video" }] })).not.toMatch(/without the \/archive checklist complete/);
+    expect(buildNodeGraph({ title: "T", clips: SAMPLE_TIMELINE, fps: 25 })).toMatch(/Not Fusion/);
+  });
+
+  it("MAM page does not encode a fake archive checklist gate", () => {
+    expect(src("app/mam/page.tsx")).not.toMatch(/Nothing reaches cold archive without the \/archive checklist complete/);
+    expect(src("app/mam/page.tsx")).toMatch(/does not enforce it/);
+  });
 });
 
 describe("honesty: gen-video does not sell unwired modalities", () => {
@@ -237,11 +258,69 @@ describe("honesty: chrome is not AAA Studio OS", () => {
     expect(body).not.toMatch(/- \[x\] Pipeline, projects, dailies, script/);
     expect(body).not.toMatch(/- \[x\] Export, jobs, archive, collab/);
     expect(body).toMatch(/- \[ \] Boards/);
+    expect(body).toMatch(/assets catalog index/);
+    expect(body).toMatch(/export format matrix/);
+    expect(body).not.toMatch(/- \[x\] Assets, review, rubric/);
+    expect(body).not.toMatch(/- \[x\] Export, jobs/);
   });
 
   it("studio hub does not print modules ready", () => {
     expect(src("app/studio/page.tsx")).not.toMatch(/modules ready/);
     expect(src("app/studio/page.tsx")).toMatch(/working surfaces/);
+  });
+});
+
+
+describe("honesty: board editors change content then emit", () => {
+  it("captions emits the edited cue text, not only the sample", () => {
+    const srt = formatSrt([{ id: "x", startSec: 1, endSec: 2, text: "Hello operator" }]);
+    expect(srt).toMatch(/Hello operator/);
+    expect(srt).not.toMatch(/Where are we today/);
+  });
+
+  it("captions page can add and remove cues", () => {
+    const page = src("app/captions/page.tsx");
+    expect(page).toMatch(/Add cue/);
+    expect(page).toMatch(/newCaptionCue/);
+    expect(page).toMatch(/Remove/);
+  });
+
+  it("titles page edits cards then emits the spec", () => {
+    const page = src("app/titles/page.tsx");
+    expect(page).toMatch(/useState/);
+    expect(page).toMatch(/buildTitleSpec\(cards\)/);
+    expect(page).toMatch(/Add card/);
+    const spec = buildTitleSpec([{ ...SAMPLE_TITLE_CARDS[0], text: "Edited card" }]);
+    expect(spec).toMatch(/Edited card/);
+  });
+
+  it("archive checkboxes start empty and the file can mark a check", () => {
+    expect(src("app/archive/page.tsx")).toMatch(/type="checkbox"/);
+    expect(src("app/archive/page.tsx")).toMatch(/Boxes start empty/);
+    const md = buildArchiveChecklist(undefined, { "Caption SRT beside master": true });
+    expect(md).toMatch(/- \[x\] Caption SRT beside master/);
+    expect(md).toMatch(/- \[ \] Master \+ project archive linked/);
+  });
+
+  it("assets and export are Board indexes, not Ready", () => {
+    expect(STUDIO_MODULES.find((m) => m.id === "assets")?.status).toBe("planner");
+    expect(STUDIO_MODULES.find((m) => m.id === "export")?.status).toBe("planner");
+    expect(workingSurfaces().map((m) => m.id)).not.toContain("assets");
+    expect(workingSurfaces().map((m) => m.id)).not.toContain("export");
+  });
+
+  it("assets copy does not claim Drive/S3 behind /mam", () => {
+    expect(src("app/assets/page.tsx")).not.toMatch(/Bytes live on Drive, S3, or Frame\.io behind \/mam/);
+    expect(src("app/assets/page.tsx")).toMatch(/Not Drive, not S3, not Frame\.io/);
+    expect(src("app/assets/page.tsx")).toMatch(/Download index/);
+    expect(buildAssetIndex([])).toMatch(/Not Drive, not S3, not Frame\.io/);
+  });
+
+  it("export does not speak CapCut as this product", () => {
+    expect(src("app/export/page.tsx")).not.toMatch(/Resolve deliver \+ CapCut format matrix/);
+    expect(src("app/export/page.tsx")).toMatch(/Not a live encoder/);
+    expect(src("app/export/page.tsx")).toMatch(/Download matrix/);
+    expect(buildExportMatrix()).toMatch(/not CapCut/);
   });
 });
 

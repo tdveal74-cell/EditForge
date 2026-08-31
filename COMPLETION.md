@@ -10,9 +10,9 @@ identity-, and host-dependent.
 - [x] Studio department map
 - [x] Projects, dailies
 - [x] Color
-- [ ] Boards (sample / sketch / reference — they may emit a file; they are not editors): pipeline, script, archive, captions, titles, presets, audio, vfx, timeline (read-only assembly sketch), collab (role agreement; per-role auth is not code), hardware (reference classes, not inventory), longform (sample stitch plan — the page checkbox is not a recorded ship gate)
-- [x] Assets, review, rubric (saves pass to cut)
-- [x] Export, jobs
+- [ ] Boards (file editors for their real scope, or sketch/reference — not Premiere/Fairlight/Fusion/DaVinci): pipeline, script, archive, captions (edit cues → SRT/VTT), titles (edit spec → JSON), presets, audio, vfx, timeline (read-only assembly sketch), collab (role agreement; per-role auth is not code), hardware (reference classes, not inventory), longform (edit chapters → stitch plan), assets catalog index, export format matrix
+- [x] Review, rubric (saves pass to cut)
+- [x] Jobs (ffmpeg queue)
 - [x] Flagship tokens + Nav
 - [x] Design system tokens: full token ramps, elevation, motion, a11y floor (2026-08-12)
 - [x] Shared primitives: Button · Card · Badge · PageHeader
@@ -28,9 +28,9 @@ identity-, and host-dependent.
 ### Handoff file generators
 These are not engines. Each page emits a downloadable file via `/api/handoff`.
 - [x] NLE — CMX3600 EDL (picture only; not AAF/XML)
-- [x] Mix — stem sheet CSV
-- [x] VFX engine — shot package JSON
-- [x] MAM — path contract JSON
+- [x] Mix — mix session dump JSON + stem sheet CSV (not Fairlight)
+- [x] VFX engine — node graph JSON + shot package (not Fusion)
+- [x] MAM — catalog export JSON (not Drive/S3; /archive checklist is not a gate)
 - [x] Render farm — ffmpeg plan JSON (a plan, not an encode)
 
 ### DEVON execution (2026-08-26)

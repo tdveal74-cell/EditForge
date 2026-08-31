@@ -123,3 +123,28 @@ describe("handoff download", () => {
     expect(body.reason).toMatch(/no recorded rubric pass/);
   });
 
+
+  it("serves a catalog export without a cut", async () => {
+    const res = await GET(get("kind=catalog"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Disposition")).toContain("editforge-catalog.json");
+    const body = JSON.parse(await res.text());
+    expect(body.kind).toBe("catalog-export");
+    expect(body.notice).toMatch(/does not enforce it/);
+  });
+
+  it("serves a mix session dump for a cut", async () => {
+    const res = await GET(get("kind=session&cutId=c1"));
+    expect(res.status).toBe(200);
+    const body = JSON.parse(await res.text());
+    expect(body.kind).toBe("mix-session");
+    expect(body.notice).toMatch(/Not Fairlight/);
+  });
+
+  it("serves a node graph for a cut", async () => {
+    const res = await GET(get("kind=graph&cutId=c1"));
+    expect(res.status).toBe(200);
+    const body = JSON.parse(await res.text());
+    expect(body.kind).toBe("vfx-node-graph");
+    expect(body.notice).toMatch(/Not Fusion/);
+  });

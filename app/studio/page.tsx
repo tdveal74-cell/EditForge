@@ -121,7 +121,7 @@ export default function StudioPage() {
       <section className="mt-16">
         <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/40">Department map</p>
         <p className="mt-1 max-w-xl text-xs text-navy/45">
-          Directory of surfaces — not a live status board. Ready means the surface does work (queue, review, export, grade). Board is a sample, sketch, or reference — it may emit a file; it is not an editor. Bridge hands off a file. AI media runs through JobRunner. Ready is never Live.
+          Directory of surfaces — not a live status board. Ready means the surface does work (queue, review, grade, encode). Board is a file editor for its real scope (cues → SRT, spec → JSON) or a sketch/reference — not Premiere, Fairlight, Fusion, or DaVinci. Bridge hands off a file. AI media runs through JobRunner. Ready is never Live.
         </p>
         <div className="mt-4 space-y-6">
           {Object.entries(byDept).map(([dept, mods]) => (

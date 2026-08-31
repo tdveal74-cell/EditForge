@@ -45,27 +45,27 @@ If no → continue the loop.
 
 ## EditForge current score (living)
 
-Honest recut after Round 3 (2026-08-31). A fresh independent critic scored **honesty 76/100 LOSE** against Round-2 HEAD `1cf6596`. Do not rubber-stamp 74. Do not recut to 80. Do not jump to 100.
+Honest recut after Round 4 (2026-08-31). A fresh independent critic scored **honesty 77/100 LOSE** against frozen Round-3 HEAD `76f67ab`. Do not rubber-stamp 76. Do not recut to 80. Do not jump to 100.
 
-This table is the critic’s **76**, plus notes on what this round actually closed. It is not 80. It is not 99. It is not 100.
+This table is the critic’s **77**, plus notes on what this round actually closed. It is not 80. It is not 99. It is not 100.
 
 | Surface | Score | Note |
 |---------|-------|------|
 | Landing | ~76 | Control plane, not Flagship Studio OS. Working-surfaces count from `workingSurfaces()` excludes Boards. |
-| Studio hub | ~76 | Directory, not a live status board. Ready = does work. Board = sample/sketch/reference, not an editor. |
+| Studio hub | ~76 | Directory, not a live status board. Ready = does work. Board = file editor for its real scope, or sketch/reference. |
 | Gen video | ~80 | One stage; mock default; STRENGTHS text-to-video only. Not Runway-the-product. |
 | Voice | ~80 | Listen stage is the JobRunner result. Consent gate held. |
 | Avatar | ~80 | Stage unified. Sample briefs are draft, not ready. |
-| Captions / titles / presets / audio | ~74 | Self-labeled Board. Emit files. Not product editors. |
-| Script / pipeline / archive | ~72 | Board. Pipeline now emits a stage-map file. Still not a running pipeline. |
-| Timeline / collab / hardware / longform | ~70 | Recategorized Board. Sketch / role agreement / reference classes / sample stitch plan. |
+| Captions / titles / presets / audio | ~76 | Board editors: edit cues/spec/notes then emit SRT/VTT/JSON. Not CapCut / After Effects / Fairlight. |
+| Script / pipeline / archive | ~74 | Board editors: edit beats/notes/checks then emit. Still not a running pipeline or live archive. |
+| Timeline / collab / hardware / longform | ~72 | Sketch stays read-only (not an NLE). Longform chapters editable then emit. Agreement / reference download as files. |
 | Stock | ~80 | Licensed index, not Artlist search. |
 | Review | ~86 | Player first; portrait fit; seekable notes. |
 | Dailies | ~87 | Contact sheet + mobile approve/reject. |
 | JobRunner | ~88 | Gates on wired/credential/settings/store; mock labeled; amber only when billable. |
 | Mobile nav | ~80 | Priority strip + More. |
-| Bridges | ~72 | Thin BridgePanel wrappers. Files disclose they are not Fairlight / Drive / Fusion / a farm. |
-| **Overall** | **76** | Critic floor on `1cf6596`, held after closing the named leftovers. Did not earn 80. Did not earn 100. |
+| Bridges | ~72 | Still BridgePanel wrappers, not engines. Mix session dump, MAM catalog export, VFX node graph, NLE EDL, ffmpeg-plan. Not Fairlight / Drive / Fusion. Not Operational. |
+| **Overall** | **77** | Critic floor on `76f67ab`. Board editors + remaining Ready indexes recut. Did not earn 80. Did not earn 100. |
 
 Update this table as surfaces clear higher bars. Do not recut upward without a fresh critic.
 
@@ -125,3 +125,18 @@ Shipped:
 Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, per-role auth, a live hardware inventory, an NLE on /timeline, editors on Boards.
 
 Largest remaining gap: Boards emit files but are not editors. Bridges remain thin wrappers. Remaining Ready surfaces include indexes (assets, export matrix). No fresh visual critic. Not 99.
+
+### Round 4 — 2026-08-31 (`gauntlet/to-100`)
+
+Incoming critic on frozen `76f67ab`: honesty **77/100 LOSE**. Round 3 claims held. Do not rubber-stamp 76. Do not recut to 80. Shipping 80 needs product depth, not another relabel.
+
+Shipped:
+
+- Board editors: captions add/remove cues then emit SRT/VTT; titles/presets/audio/script/pipeline/archive/longform edit then emit. Timeline stays a read-only sketch (not an NLE) and emits the sketch file. VFX tracker emits the board.
+- mix / mam / vfx-engine emit useful artifacts: mix session dump, catalog export, compositor node graph. NLE EDL and render ffmpeg-plan held. MAM no longer encodes a fake `/archive` checklist gate. Still Bridge, not Operational. Not Fairlight / Drive / Fusion.
+- Remaining Ready indexes recut: assets and export are Board. Assets copy no longer claims bytes live on Drive/S3 behind /mam. Export no longer speaks “Resolve deliver + CapCut format matrix.” Encode queue stays on /jobs.
+- Overall **77**. No 80. No 100.
+
+Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, per-role auth, a live hardware inventory, Premiere/Fairlight/Fusion/DaVinci, a public-host recut.
+
+Largest remaining gap: Boards are file editors, not media products next to CapCut/Resolve. Bridges are still wrappers that emit files. Working surfaces no longer count the two indexes; product depth vs leaders is still the wall under 80. No fresh visual critic this round. Not 99.

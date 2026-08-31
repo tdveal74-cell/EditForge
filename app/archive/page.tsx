@@ -1,40 +1,50 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { DownloadButton } from "@/components/DownloadButton";
+import { Button } from "@/components/ui/button";
+import { downloadText } from "@/lib/download";
 import { ARCHIVE_CHECKLIST, buildArchiveChecklist } from "@/lib/archive";
 
-export const metadata: Metadata = { title: "Archive" };
-
-const checklistFile = buildArchiveChecklist();
-
 export default function ArchivePage() {
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const checklistFile = useMemo(() => buildArchiveChecklist(ARCHIVE_CHECKLIST, checked), [checked]);
+
+  function toggle(item: string) {
+    setChecked((prev) => ({ ...prev, [item]: !prev[item] }));
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
         eyebrow="Board"
         title="Archive checklist"
-        description="A sample checklist, not a live archive. Boxes start empty — a printed checkmark would claim work nobody did."
+        description="A sample checklist, not a live archive. Boxes start empty — check them, then download. A printed checkmark would claim work nobody did."
         actions={
-          <DownloadButton filename="editforge-archive-checklist.md" body={checklistFile} mime="text/markdown">
+          <Button
+            type="button"
+            onClick={() => downloadText("editforge-archive-checklist.md", checklistFile, "text/markdown")}
+          >
             Download checklist
-          </DownloadButton>
+          </Button>
         }
       />
 
       <ul className="mt-10 space-y-2">
         {ARCHIVE_CHECKLIST.map((c) => (
-          <li
-            key={c.item}
-            className="flex gap-3 rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
-          >
-            <span
-              aria-hidden
-              className="mt-0.5 size-4 shrink-0 rounded-sm border border-border-strong bg-surface"
-            />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-navy">{c.item}</p>
-              <p className="mt-0.5 text-xs leading-relaxed text-navy/55">{c.why}</p>
-            </div>
+          <li key={c.item}>
+            <label className="flex cursor-pointer gap-3 rounded-card border border-border bg-surface-elevated p-4 shadow-card">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 cursor-pointer accent-amber"
+                checked={Boolean(checked[c.item])}
+                onChange={() => toggle(c.item)}
+              />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-navy">{c.item}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-navy/55">{c.why}</p>
+              </div>
+            </label>
           </li>
         ))}
       </ul>

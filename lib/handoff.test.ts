@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   LOUDNESS_TARGETS,
+  buildCatalogExport,
   buildEDL,
+  buildMixSession,
+  buildNodeGraph,
   buildPathContract,
   buildRenderPlan,
   buildShotPackage,
@@ -298,5 +301,47 @@ describe("render-farm plan", () => {
       })
     );
     expect(json.allowed).toBe(false);
+  });
+});
+
+
+
+describe("mix session dump", () => {
+  it("names itself a session dump, not Fairlight", () => {
+    const json = JSON.parse(buildMixSession({ title: "Cold open", clips, target: LOUDNESS_TARGETS[0] }));
+    expect(json.kind).toBe("mix-session");
+    expect(json.notice).toMatch(/Not Fairlight/);
+    expect(json.stems).toHaveLength(4);
+    expect(json.stems[0].clips.length).toBeGreaterThan(0);
+  });
+});
+
+describe("catalog export", () => {
+  it("exports names, not Drive, and does not encode an archive gate", () => {
+    const json = JSON.parse(buildCatalogExport({ assets: [{ name: "a.mov", type: "video", location: "online/a/" }] }));
+    expect(json.kind).toBe("catalog-export");
+    expect(json.notice).toMatch(/Not Drive, not S3, not Frame.io/);
+    expect(json.notice).toMatch(/does not enforce it/);
+    expect(JSON.stringify(json)).not.toMatch(/without the \/archive checklist complete/);
+    expect(json.assets[0].name).toBe("a.mov");
+  });
+});
+
+describe("vfx node graph", () => {
+  it("builds Loaders, Merges, and a Saver, and is not Fusion", () => {
+    const json = JSON.parse(buildNodeGraph({ title: "Cold open", clips, fps: 25 }));
+    expect(json.kind).toBe("vfx-node-graph");
+    expect(json.notice).toMatch(/Not Fusion/);
+    expect(json.nodes.some((n: { type: string }) => n.type === "Loader")).toBe(true);
+    expect(json.nodes.some((n: { type: string }) => n.type === "Saver")).toBe(true);
+    expect(json.edges.length).toBeGreaterThan(0);
+  });
+});
+
+describe("path contract no longer fakes an archive gate", () => {
+  it("says the archive checklist is a sample, not a gate", () => {
+    const json = JSON.parse(buildPathContract({ cutId: "c1", title: "T" }));
+    expect(json.rules.join(" ")).toMatch(/does not enforce/);
+    expect(json.rules.join(" ")).not.toMatch(/without the \/archive checklist complete/);
   });
 });

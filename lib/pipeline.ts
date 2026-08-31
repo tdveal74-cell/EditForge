@@ -67,3 +67,27 @@ export function buildPipelineMap(
     ) + "\n"
   );
 }
+
+/** Format matrix as a file. Not a live encoder. Encode queue is /jobs. */
+export function buildExportMatrix(
+  formats: typeof DELIVERABLES = DELIVERABLES,
+): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "export-matrix",
+        notice:
+          "Format matrix as a file. Not a live encoder, not Resolve deliver, not CapCut. The encode queue is /jobs.",
+        formats: formats.map((d) => ({
+          id: d.id,
+          label: d.label,
+          width: d.width,
+          height: d.height,
+          use: d.use,
+        })),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}

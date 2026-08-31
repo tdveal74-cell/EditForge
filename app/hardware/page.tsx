@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { INFRA_LANES, stationsByDept } from "@/lib/hardware";
+import { INFRA_LANES, buildHardwareReference, stationsByDept } from "@/lib/hardware";
+import { DownloadButton } from "@/components/DownloadButton";
 
 export const metadata: Metadata = { title: "Hardware" };
 
@@ -14,6 +15,11 @@ export default function HardwarePage() {
         eyebrow="Board"
         title="Hardware reference"
         description="A reference board, not a live inventory and not a procurement catalog. Classes per suite — compute, memory, GPU, I/O, monitoring. Classes, not SKUs: procurement picks the current generation."
+        actions={
+          <DownloadButton filename="editforge-hardware.json" body={buildHardwareReference()} mime="application/json">
+            Download reference
+          </DownloadButton>
+        }
       />
 
       <section className="mt-10">

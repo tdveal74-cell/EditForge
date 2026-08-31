@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { SAMPLE_CUES, formatSrt, formatVtt, type CaptionCue } from "@/lib/captions";
+import { SAMPLE_CUES, formatSrt, formatVtt, newCaptionCue, type CaptionCue } from "@/lib/captions";
 import { downloadText } from "@/lib/download";
 import { Button } from "@/components/ui/button";
 import { Input, Output } from "@/components/ui/field";
@@ -17,12 +17,20 @@ export default function CaptionsPage() {
     setCues((list) => list.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   }
 
+  function add() {
+    setCues((list) => [...list, newCaptionCue(list[list.length - 1])]);
+  }
+
+  function remove(id: string) {
+    setCues((list) => (list.length <= 1 ? list : list.filter((c) => c.id !== id)));
+  }
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <PageHeader
         eyebrow="Board"
         title="Caption cues"
-        description="Sample cue list you can edit and download as SRT or WebVTT. Not a live captioner, not auto-transcribe, not CapCut."
+        description="Edit cues, then download SRT or WebVTT of what you typed. Not a live captioner, not auto-transcribe, not CapCut."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => downloadText("editforge-captions.srt", srt)}>
@@ -39,7 +47,15 @@ export default function CaptionsPage() {
         }
       />
 
-      <Section title="Cues" count={cues.length} aside="Starting sample — edit then download">
+      <Section
+        title="Cues"
+        count={cues.length}
+        aside={
+          <Button type="button" size="sm" variant="secondary" onClick={add}>
+            Add cue
+          </Button>
+        }
+      >
         <ul className="space-y-2">
           {cues.map((c) => (
             <li
@@ -73,6 +89,16 @@ export default function CaptionsPage() {
                 onChange={(e) => update(c.id, { text: e.target.value })}
                 aria-label={`Cue ${c.id}`}
               />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => remove(c.id)}
+                disabled={cues.length <= 1}
+                className="shrink-0"
+              >
+                Remove
+              </Button>
             </li>
           ))}
         </ul>

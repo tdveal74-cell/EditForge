@@ -12,12 +12,19 @@ export const ARCHIVE_CHECKLIST: ArchiveCheck[] = [
   { item: "Drive / LTO path documented", why: "3-2-1 only holds if the second and third copies are written down." },
 ];
 
-export function buildArchiveChecklist(items: ArchiveCheck[] = ARCHIVE_CHECKLIST): string {
+/**
+ * Checklist as markdown. Boxes start empty unless the operator checked them.
+ * A printed checkmark would claim work nobody did.
+ */
+export function buildArchiveChecklist(
+  items: ArchiveCheck[] = ARCHIVE_CHECKLIST,
+  checked: Record<string, boolean> = {},
+): string {
   const lines = [
     "# Archive checklist",
     "# Sample board — not a live archive. Nothing here is checked until an operator checks it.",
     "",
-    ...items.map((c) => `- [ ] ${c.item}\n      ${c.why}`),
+    ...items.map((c) => `- [${checked[c.item] ? "x" : " "}] ${c.item}\n      ${c.why}`),
     "",
   ];
   return lines.join("\n");

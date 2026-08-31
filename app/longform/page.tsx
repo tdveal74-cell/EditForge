@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { LONGFORM_TIERS, SAMPLE_LONGFORM, totalChapterDuration } from "@/lib/longform";
+import { LONGFORM_TIERS, SAMPLE_LONGFORM, buildLongformBoard, totalChapterDuration, type LongFormProject } from "@/lib/longform";
 import { Button } from "@/components/ui/button";
-import { Output } from "@/components/ui/field";
+import { Input, Output, Textarea } from "@/components/ui/field";
+import { downloadText } from "@/lib/download";
 import { Section } from "@/components/ui/section";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 
 export default function LongformPage() {
-  const project = SAMPLE_LONGFORM;
+  const [project, setProject] = useState<LongFormProject>(SAMPLE_LONGFORM);
   const total = totalChapterDuration(project.chapters);
   const [rubricPass, setRubricPass] = useState(false);
   const [out, setOut] = useState<string | null>(null);
@@ -28,11 +29,23 @@ export default function LongformPage() {
       <PageHeader
         eyebrow="Board"
         title="Sample stitch plan"
-        description="A sample chapter list and a plan JSON. Not a running episode renderer. The rubric checkbox on this page is a brief for the plan — it is not a recorded ship gate."
+        description="Edit chapters, then download the stitch plan. Not a running episode renderer. The rubric checkbox on this page is a brief for the plan — it is not a recorded ship gate."
         actions={
-          <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
-            {(total / 60).toFixed(1)} min
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
+              {(total / 60).toFixed(1)} min
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                downloadText("editforge-longform-plan.json", buildLongformBoard(project), "application/json")
+              }
+            >
+              Download plan
+            </Button>
+          </div>
         }
       />
 
@@ -79,9 +92,21 @@ export default function LongformPage() {
               className="rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-medium text-navy">
-                  <span className="mr-2 font-mono tabular-nums text-navy/30">{i + 1}</span>
-                  {c.title}
+                <p className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-navy">
+                  <span className="font-mono tabular-nums text-navy/30">{i + 1}</span>
+                  <Input
+                    className="font-medium"
+                    value={c.title}
+                    onChange={(e) =>
+                      setProject((prev) => ({
+                        ...prev,
+                        chapters: prev.chapters.map((ch) =>
+                          ch.id === c.id ? { ...ch, title: e.target.value } : ch,
+                        ),
+                      }))
+                    }
+                    aria-label={`Chapter ${i + 1} title`}
+                  />
                 </p>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-[11px] tabular-nums text-navy/40">
@@ -90,7 +115,19 @@ export default function LongformPage() {
                   <Badge tone="outline">{c.segmentSource}</Badge>
                 </div>
               </div>
-              <p className="mt-1.5 text-sm text-navy/70">{c.script}</p>
+              <Textarea
+                className="mt-1.5 min-h-[72px]"
+                value={c.script}
+                onChange={(e) =>
+                  setProject((prev) => ({
+                    ...prev,
+                    chapters: prev.chapters.map((ch) =>
+                      ch.id === c.id ? { ...ch, script: e.target.value } : ch,
+                    ),
+                  }))
+                }
+                aria-label={`Chapter ${i + 1} script`}
+              />
             </li>
           ))}
         </ol>

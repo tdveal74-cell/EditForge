@@ -62,7 +62,7 @@ export default function HomePage() {
 
           <dl className="mt-12 grid max-w-lg grid-cols-3 gap-3">
             {[
-              { value: String(ready), label: "Ready modules" },
+              { value: String(ready), label: "Working surfaces" },
               { value: String(aiMedia), label: "AI media lanes" },
               { value: String(clipCount), label: "Studio reels" },
             ].map((s) => (

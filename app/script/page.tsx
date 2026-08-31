@@ -1,31 +1,29 @@
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
+import { DownloadButton } from "@/components/DownloadButton";
+import { SAMPLE_BEATS, buildScriptBoard } from "@/lib/script-board";
 
 export const metadata: Metadata = { title: "Script notes" };
 
-const beats = [
-  {
-    scene: "1A",
-    slug: "COLD OPEN — SHARED SHADOW",
-    note: "Environment establishes first. No rush to dialogue.",
-    marks: ["Establish"],
-  },
-  { scene: "1B", slug: "QUESTION", note: "Auren asks. Hold on silence.", marks: ["VO", "Hold"] },
-  { scene: "2A", slug: "ORACLE WALK", note: "Still-frame eligible at end of beat.", marks: ["Still hold"] },
-];
+const board = buildScriptBoard();
 
 export default function ScriptPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="Script"
-        title="Scene notes"
-        description="Continuity and editorial intent. Screenplay tools stay external — this is the production note layer the cut is built against."
+        eyebrow="Board"
+        title="Sample beats"
+        description="Three hardcoded continuity beats. Not a screenplay tool. Screenplay apps stay external — this is a sample note layer."
+        actions={
+          <DownloadButton filename="editforge-script-board.json" body={board} mime="application/json">
+            Download beats
+          </DownloadButton>
+        }
       />
 
       <ol className="mt-10 space-y-3">
-        {beats.map((b) => (
+        {SAMPLE_BEATS.map((b) => (
           <li
             key={b.scene}
             className="rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"

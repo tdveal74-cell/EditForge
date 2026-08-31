@@ -2,30 +2,32 @@ import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/ui/section";
 import { Waveform } from "@/components/media/Viewer";
-import { AUDIO_HIERARCHY } from "@/lib/audio";
+import { DownloadButton } from "@/components/DownloadButton";
+import { AUDIO_HIERARCHY, buildAudioLaw } from "@/lib/audio";
 import { PRIMARY_CLIP } from "@/lib/mediaLibrary";
 
 export const metadata: Metadata = { title: "Audio hierarchy" };
 
-// The ladder lives in lib/audio.ts because /mix generates the stem sheet from
-// it. A second copy here could drift, and the mix would receive a rule the
-// operator never read.
 const hierarchy = AUDIO_HIERARCHY;
+const law = buildAudioLaw();
 
 export default function AudioPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="Sound"
-        title="Audio hierarchy"
-        description="Fairlight / Essential Sound discipline — tactile, not loud. The ladder is the law: anything lower never competes with anything above it."
+        eyebrow="Board"
+        title="Audio ladder"
+        description="Sample hierarchy as a file. Not a mixer, not Fairlight, not Essential Sound. Mix realises this law on /mix as a stem sheet."
+        actions={
+          <DownloadButton filename="editforge-audio-law.json" body={law} mime="application/json">
+            Download law
+          </DownloadButton>
+        }
       />
 
-      {/* Drawn from real samples when a stem is attached. Nothing is drawn
-          from nothing — a picture of sound the operator does not have would
-          teach them to distrust the screen. */}
-      <Section title="Waveform">
+      <Section title="Attached waveform">
         <Waveform src={PRIMARY_CLIP.src} />
+        <p className="mt-2 text-xs text-navy/45">Studio reference clip — not a mix print.</p>
       </Section>
 
       <ol className="mt-10 space-y-2">
@@ -34,7 +36,6 @@ export default function AudioPage() {
             key={h.level}
             className="group relative overflow-hidden rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
           >
-            {/* Bar length encodes priority — loudest claim at the top. */}
             <span
               aria-hidden
               className={`absolute inset-y-0 left-0 ${h.weight} bg-surface-muted/70`}

@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { SAMPLE_VOICES, estimateTtsSeconds } from "@/lib/voice";
+import type { StudioJob } from "@/lib/jobs";
 import { Button } from "@/components/ui/button";
 import { Label, Select, Textarea, Output } from "@/components/ui/field";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/PageHeader";
 import { JobRunner } from "@/components/JobRunner";
+import { JobResultStage } from "@/components/JobResultStage";
 import { providerChoicesFor } from "@/lib/provider-registry";
 
 const VOICE_PROVIDERS = providerChoicesFor("voice").map((p) => ({ id: p.id, label: p.label }));
@@ -15,6 +17,7 @@ export default function VoicePage() {
   const [voiceId, setVoiceId] = useState(SAMPLE_VOICES[0].id);
   const [text, setText] = useState("Where are we today? Inside the question we keep avoiding.");
   const [out, setOut] = useState<string | null>(null);
+  const [job, setJob] = useState<StudioJob | null>(null);
   const voice = SAMPLE_VOICES.find((v) => v.id === voiceId) ?? SAMPLE_VOICES[0];
   const seconds = estimateTtsSeconds(text);
 
@@ -32,7 +35,7 @@ export default function VoicePage() {
       <PageHeader
         eyebrow="AI Media"
         title="Voice clone / TTS"
-        description="ElevenLabs-class VO. Cloned voices require consent and license — that gate is part of the plan, not an afterthought."
+        description="ElevenLabs-class VO. Cloned voices require consent and license — that gate is part of the plan, not an afterthought. Mock is the default."
         actions={
           <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
             ≈{seconds}s
@@ -41,25 +44,19 @@ export default function VoicePage() {
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-5">
-        {/* Listen / result language */}
         <section className="lg:col-span-3">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Listen</p>
-          <div className="mt-3 overflow-hidden rounded-card border border-border bg-surface-elevated shadow-card">
-            <div className="flex min-h-[12rem] flex-col items-center justify-center bg-gradient-to-b from-navy/[0.04] to-surface-muted/40 px-6 py-10">
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-navy/40">Output stage</p>
-              <p className="mt-3 max-w-sm text-center text-sm leading-relaxed text-navy/70">
-                Generated audio lands here when a provider completes. Until then this stage
-                stays empty on purpose — no fake waveforms, no implied live render.
-              </p>
-              <div className="mt-6 flex items-center gap-2">
-                <Badge tone={voice.kind === "cloned" ? "outline" : "neutral"}>{voice.kind}</Badge>
-                <span className="text-xs text-navy/50">{voice.name}</span>
-              </div>
-            </div>
-            <div className="border-t border-border-faint px-4 py-3">
-              <p className="text-sm font-medium text-navy">{voice.name}</p>
-              <p className="mt-0.5 text-xs text-navy/50">{voice.notes}</p>
-            </div>
+          <div className="mt-3">
+            <JobResultStage
+              job={job}
+              kind="audio"
+              emptyTitle="No audio yet"
+              emptyBody="One stage. A mock run records the job and produces no sound. Live ElevenLabs needs a key, a voice id, and the artifact store."
+            />
+          </div>
+          <div className="mt-3 flex items-center gap-2 px-1">
+            <Badge tone={voice.kind === "cloned" ? "outline" : "neutral"}>{voice.kind}</Badge>
+            <span className="text-xs text-navy/50">{voice.name}</span>
           </div>
 
           {voice.kind === "cloned" && (
@@ -80,7 +77,6 @@ export default function VoicePage() {
           </div>
         </section>
 
-        {/* Brief controls */}
         <section className="lg:col-span-2">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Brief</p>
           <div className="mt-3 space-y-4">
@@ -116,6 +112,8 @@ export default function VoicePage() {
                   ? "Cloned voice: attach the consent record and licence before running. The gate is the point."
                   : undefined
               }
+              hideResult
+              onJobChange={setJob}
             />
           </div>
         </section>

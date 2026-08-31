@@ -16,9 +16,9 @@ export default function PipelinePage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="Pipeline"
-        title="Production stages"
-        description="Hybrid of Resolve, Premiere, CapCut, and Descript — a finishing OS, not a full NLE. Ingest at the top, deliverable at the bottom, one gate before the end."
+        eyebrow="Board"
+        title="Stage map"
+        description="A static list of production stages. Not a running pipeline, not Resolve, Premiere, CapCut, or Descript — those stay external."
       />
 
       <ol className="relative mt-10">
@@ -27,7 +27,6 @@ export default function PipelinePage() {
           const gate = s.id === "review";
           return (
             <li key={s.id} className="relative flex gap-4 pb-3 last:pb-0">
-              {/* Spine connecting the stages into one flow. */}
               {!last && (
                 <span aria-hidden className="absolute left-[15px] top-9 bottom-0 w-px bg-border" />
               )}
@@ -45,7 +44,7 @@ export default function PipelinePage() {
               <div className="min-w-0 flex-1 rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted">
                 <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                   <h2 className="text-sm font-semibold text-navy">{s.label}</h2>
-                  <span className="text-[11px] text-navy/40">{s.inspiredBy}</span>
+                  <span className="text-[11px] text-navy/40">ref: {s.inspiredBy}</span>
                 </div>
                 <p className="mt-2 text-sm leading-relaxed text-navy/70">{s.restraintNote}</p>
                 {gate && (

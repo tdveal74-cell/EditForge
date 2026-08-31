@@ -1,14 +1,15 @@
 # EditForge — execution completion record
 
 ## Definition of done (this repo)
-Studio OS, the governed DEVON execution path, and the private provider adapter are
-code-complete. Live provider readiness remains credential-, identity-, and host-dependent.
+The governed DEVON execution path and the private provider adapter are
+code-complete. Studio OS still includes Boards (sample/planner) and Bridges (file handoff).
+Live provider readiness remains credential-, identity-, and host-dependent.
 
 ### Operational
 - [x] Studio department map
 - [x] Pipeline, projects, dailies, script
 - [x] Timeline, color
-- [ ] Audio hierarchy, captions, titles, lane presets — sample boards (planner), not product editors
+- [ ] Audio hierarchy, captions, titles, lane presets, script, pipeline, archive — Boards (sample/planner). They emit files. They are not product editors.
 - [x] Assets, review, rubric (saves pass to cut)
 - [x] Export, jobs, archive, collab
 - [x] Long-form chapters + stitch plan
@@ -68,4 +69,4 @@ and how to verify it without reading a secret — is `docs/CREDENTIALS.md`.
 npm install && npm test && npm run build && npm run dev
 ```
 
-**Status: studio and DEVON provider execution code-complete · self-hostable · live account configuration pending.**
+**Status: DEVON provider execution is code-complete. Studio surfaces still include Boards and Bridges. Not a finished AAA NLE. Live account configuration pending.**

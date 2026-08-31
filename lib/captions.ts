@@ -21,11 +21,32 @@ export function formatSrt(cues: CaptionCue[]): string {
     .join("\n");
 }
 
+/** WebVTT from the same cue list. Milliseconds use a dot, unlike SRT. */
+export function formatVtt(cues: CaptionCue[]): string {
+  const body = cues
+    .map((c) => {
+      const a = toVttTime(c.startSec);
+      const b = toVttTime(c.endSec);
+      return `${a} --> ${b}\n${c.text}\n`;
+    })
+    .join("\n");
+  return `WEBVTT\n\n${body}`;
+}
+
 function toSrtTime(sec: number): string {
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = Math.floor(sec % 60);
-  const ms = Math.floor((sec % 1) * 1000);
-  const p = (n: number, w = 2) => String(n).padStart(w, "0");
-  return `${p(h)}:${p(m)}:${p(s)},${p(ms, 3)}`;
+  return formatTime(sec, ",");
+}
+
+function toVttTime(sec: number): string {
+  return formatTime(sec, ".");
+}
+
+function formatTime(sec: number, msSep: "," | "."): string {
+  const n = Number.isFinite(sec) && sec > 0 ? sec : 0;
+  const h = Math.floor(n / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  const s = Math.floor(n % 60);
+  const ms = Math.floor((n % 1) * 1000);
+  const p = (v: number, w = 2) => String(v).padStart(w, "0");
+  return `${p(h)}:${p(m)}:${p(s)}${msSep}${p(ms, 3)}`;
 }

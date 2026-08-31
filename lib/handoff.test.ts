@@ -1,14 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   LOUDNESS_TARGETS,
+  buildCatalogExport,
   buildEDL,
+  buildMixSession,
+  buildNodeGraph,
   buildPathContract,
+  buildRenderPlan,
   buildShotPackage,
   buildStemSheet,
   toFrames,
   toTimecode,
 } from "./handoff";
 import { SAMPLE_TIMELINE, type TimelineClip } from "./timeline";
+import { AUDIO_HIERARCHY } from "./audio";
 
 const clips: TimelineClip[] = [
   { id: "v1", label: "A-cam cold open", track: "video", startSec: 0, durationSec: 12 },
@@ -163,6 +168,10 @@ describe("stem sheet", () => {
     expect(lines.find((l) => l.startsWith("Music bed"))).toContain("no independent target");
   });
 
+  it("names itself a file handoff, not Fairlight", () => {
+    expect(sheet).toMatch(/not Fairlight/);
+  });
+
   it("quotes a field containing a comma so the row does not gain a column", () => {
     const rows = sheet.split("\n").filter((l) => l && !l.startsWith("#"));
     for (const row of rows) {
@@ -183,6 +192,10 @@ describe("shot package", () => {
 
   it("states which end of the range is exclusive rather than leaving it to convention", () => {
     expect(pkg.frameRangeConvention).toMatch(/exclusive/);
+  });
+
+  it("names itself a package file, not Fusion", () => {
+    expect(pkg.notice).toMatch(/not Fusion/);
   });
 
   it("leaves no frame gap between adjacent shots", () => {
@@ -231,6 +244,10 @@ describe("path contract", () => {
     expect(Object.keys(contract.tiers)).toEqual(["online", "nearline", "archive"]);
   });
 
+  it("says the paths are invented, not Drive or S3", () => {
+    expect(contract.notice).toMatch(/Not Drive, not S3, not Frame.io/);
+  });
+
   it("is deterministic from the cut, so every surface resolves the same path", () => {
     const again = JSON.parse(buildPathContract({ cutId: "cut-abc", title: "Cold Open" }));
     expect(again).toEqual(contract);
@@ -256,3 +273,91 @@ function countCsvColumns(row: string): number {
   }
   return cols;
 }
+
+describe("render-farm plan", () => {
+  it("is a plan, not an encode, and names itself a handoff", () => {
+    const json = JSON.parse(
+      buildRenderPlan({
+        cutId: "c1",
+        title: "Cold Open",
+        kind: "proxy",
+        rubricPass: false,
+        assemblySource: "sample assembly",
+      })
+    );
+    expect(json.handoff).toBe("render-farm");
+    expect(json.notice).toMatch(/not an executed render/);
+    expect(json.plan.command).toContain("ffmpeg");
+    expect(json.allowed).toBe(true);
+  });
+
+  it("blocks export when the cut has no rubric pass", () => {
+    const json = JSON.parse(
+      buildRenderPlan({
+        cutId: "c1",
+        title: "Cold Open",
+        kind: "export",
+        rubricPass: false,
+        assemblySource: "cut assembly",
+      })
+    );
+    expect(json.allowed).toBe(false);
+  });
+});
+
+
+
+describe("mix session dump", () => {
+  it("names itself a session dump, not Fairlight", () => {
+    const json = JSON.parse(buildMixSession({ title: "Cold open", clips, target: LOUDNESS_TARGETS[0] }));
+    expect(json.kind).toBe("mix-session");
+    expect(json.notice).toMatch(/Not Fairlight/);
+    expect(json.stems).toHaveLength(4);
+    expect(json.stems[0].clips.length).toBeGreaterThan(0);
+  });
+});
+
+describe("catalog export", () => {
+  it("exports names, not Drive, and does not encode an archive gate", () => {
+    const json = JSON.parse(buildCatalogExport({ assets: [{ name: "a.mov", type: "video", location: "online/a/" }] }));
+    expect(json.kind).toBe("catalog-export");
+    expect(json.notice).toMatch(/Not Drive, not S3, not Frame.io/);
+    expect(json.notice).toMatch(/does not enforce it/);
+    expect(JSON.stringify(json)).not.toMatch(/without the \/archive checklist complete/);
+    expect(json.assets[0].name).toBe("a.mov");
+  });
+});
+
+describe("vfx node graph", () => {
+  it("builds Loaders, Merges, and a Saver, and is not Fusion", () => {
+    const json = JSON.parse(buildNodeGraph({ title: "Cold open", clips, fps: 25 }));
+    expect(json.kind).toBe("vfx-node-graph");
+    expect(json.notice).toMatch(/Not Fusion/);
+    expect(json.nodes.some((n: { type: string }) => n.type === "Loader")).toBe(true);
+    expect(json.nodes.some((n: { type: string }) => n.type === "Saver")).toBe(true);
+    expect(json.edges.length).toBeGreaterThan(0);
+  });
+});
+
+describe("path contract no longer fakes an archive gate", () => {
+  it("says the archive checklist is a sample, not a gate", () => {
+    const json = JSON.parse(buildPathContract({ cutId: "c1", title: "T" }));
+    expect(json.rules.join(" ")).toMatch(/does not enforce/);
+    expect(json.rules.join(" ")).not.toMatch(/without the \/archive checklist complete/);
+  });
+});
+
+describe("mix session realises an edited audio law", () => {
+  it("uses the hierarchy it is given, not the module constant", () => {
+    const edited = AUDIO_HIERARCHY.map((l) =>
+      l.track === "vo" ? { ...l, name: "Operator VO stem" } : l
+    );
+    const json = JSON.parse(
+      buildMixSession({ title: "Cold open", clips, target: LOUDNESS_TARGETS[0], hierarchy: edited, assemblySource: "sample assembly" })
+    );
+    expect(json.stems[0].stem).toBe("Operator VO stem");
+    expect(json.assemblySource).toBe("sample assembly");
+    const sheet = buildStemSheet({ title: "Cold open", clips, target: LOUDNESS_TARGETS[0], hierarchy: edited });
+    expect(sheet).toMatch(/Operator VO stem/);
+  });
+});

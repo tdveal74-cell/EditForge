@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ASSET_TYPES, type Asset } from "@/lib/asset";
+import { ASSET_TYPES, buildAssetIndex, type Asset } from "@/lib/asset";
+import { downloadText } from "@/lib/download";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -74,9 +75,21 @@ export default function AssetsPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="MAM"
+        eyebrow="Board"
         title="Assets"
-        description="The catalog surface. Bytes live on Drive, S3, or Frame.io behind /mam — this is the index that knows where."
+        description="A catalog index of names and filed paths. Not Drive, not S3, not Frame.io. /mam exports this index as a file — it does not connect to those stores."
+        actions={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              downloadText("editforge-asset-index.json", buildAssetIndex(assets ?? []), "application/json")
+            }
+            disabled={assets === null}
+          >
+            Download index
+          </Button>
+        }
       />
 
       <Section title="Add to the index">
@@ -122,7 +135,7 @@ export default function AssetsPage() {
           </Button>
         </div>
         <p className="mt-2 text-xs text-navy/45">
-          Paths follow the contract on <code className="rounded bg-surface-muted px-1">/mam</code>.
+          Filed paths are names you typed. /mam exports them. Neither page talks to Drive, S3, or Frame.io.
         </p>
       </Section>
 

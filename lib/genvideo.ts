@@ -13,11 +13,11 @@ export type QualityTier = "draft" | "social" | "broadcast-intent";
  * chance to disagree with the boundary that actually dispatches.
  */
 const STRENGTHS: Record<GenProvider, string> = {
-  runway: "Gen-4.5 · motion brush · restyle · extend",
-  kling: "Longer takes · strong motion coherence",
-  veo: "High fidelity · cinematic intent",
-  seedream: "Stylized · concept-heavy looks",
-  mock: "Plan + QA only — no cloud spend",
+  runway: "Text-to-video only (Gen-4.5). Motion brush, restyle, and extend are not wired.",
+  kling: "Registered — no live path implemented.",
+  veo: "Registered — no live path implemented.",
+  seedream: "Registered — no live path implemented.",
+  mock: "Plan + QA only — no cloud spend, no media.",
 };
 
 export type GenProviderInfo = {

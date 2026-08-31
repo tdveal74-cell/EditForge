@@ -35,7 +35,7 @@ export function BridgePanel({ spec }: { spec: BridgeSpec }) {
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader eyebrow="Bridge" title={spec.title} description={spec.description} />
 
-      <Section title="Engines" count={spec.engines.length}>
+      <Section title="Engines" count={spec.engines.length} aside="Destinations for the file — not live connections">
         <div className="flex flex-wrap gap-2">
           {spec.engines.map((e) => (
             <Badge key={e} tone="outline">

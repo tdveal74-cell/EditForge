@@ -135,3 +135,34 @@ export function flagshipCoverage(): { depts: string[]; complete: boolean } {
   const required = ["Editorial", "Color", "Sound", "VFX", "AI Media"];
   return { depts, complete: required.every((d) => depts.includes(d)) };
 }
+
+/** Reference classes as a file. Not a live inventory. */
+export function buildHardwareReference(
+  stations: HardwareStation[] = HARDWARE_STATIONS,
+  lanes: InfraLane[] = INFRA_LANES,
+): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "hardware-reference",
+        notice:
+          "Reference classes as a file. Not a live inventory, not SKUs, not a procurement catalog.",
+        stations: stations.map((s) => ({
+          id: s.id,
+          dept: s.dept,
+          label: s.label,
+          tier: s.tier,
+          compute: s.compute,
+          memory: s.memory,
+          gpu: s.gpu,
+          io: s.io,
+          monitoring: s.monitoring,
+          notes: s.notes,
+        })),
+        infrastructure: lanes,
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}

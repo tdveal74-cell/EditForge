@@ -1,94 +1,63 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
+import { MOBILE_MORE, MOBILE_PRIORITY, NAV_GROUPS } from "@/lib/nav";
 
-const groups: { label: string; links: { href: string; label: string }[] }[] = [
-  {
-    label: "Create",
-    links: [
-      { href: "/studio", label: "Studio" },
-      { href: "/pipeline", label: "Pipeline" },
-      { href: "/projects", label: "Projects" },
-      { href: "/timeline", label: "Timeline" },
-    ],
-  },
-  {
-    label: "AI media",
-    links: [
-      { href: "/voice", label: "Voice" },
-      { href: "/avatar", label: "Avatar" },
-      { href: "/gen-video", label: "Gen video" },
-      { href: "/stock", label: "Stock" },
-    ],
-  },
-  {
-    label: "Finish",
-    links: [
-      { href: "/color", label: "Grade" },
-      { href: "/longform", label: "Long-form" },
-      { href: "/rubric", label: "Rubric" },
-      { href: "/export", label: "Export" },
-    ],
-  },
-  {
-    label: "Bridges",
-    links: [
-      { href: "/nle", label: "NLE" },
-      { href: "/render", label: "Render" },
-      { href: "/hardware", label: "Hardware" },
-    ],
-  },
-];
-
-/** Highest-frequency operator destinations on small screens */
-const mobilePriority = [
-  { href: "/studio", label: "Studio" },
-  { href: "/gen-video", label: "Gen" },
-  { href: "/dailies", label: "Dailies" },
-  { href: "/review", label: "Review" },
-  { href: "/jobs", label: "Jobs" },
-];
 
 export function Nav() {
   const pathname = usePathname();
+  const [moreOpen, setMoreOpen] = useState(false);
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [pathname]);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface-elevated/85 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center justify-between gap-3">
-          <Link
-            href="/"
-            className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600 transition-colors duration-flagship hover:text-amber-700"
+    <header className="sticky top-0 z-40 max-w-full overflow-x-hidden border-b border-border bg-surface-elevated">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+        <Link
+          href="/"
+          className="shrink-0 text-xs font-semibold uppercase tracking-[0.14em] text-amber-600 transition-colors duration-flagship hover:text-amber-700 sm:tracking-[0.24em]"
+        >
+          EditForge
+        </Link>
+
+        <nav aria-label="Priority" className="flex min-w-0 items-center justify-end gap-0.5 lg:hidden">
+          {MOBILE_PRIORITY.map((l) => {
+            const active = pathname === l.href || pathname.startsWith(l.href + "/");
+            return (
+              <Link
+                key={l.href}
+                href={l.href}
+                aria-current={active ? "page" : undefined}
+                className={clsx(
+                  "shrink-0 rounded-control px-2 py-1.5 text-[11px] font-medium transition-colors duration-flagship",
+                  active ? "bg-navy text-surface" : "text-navy/65 hover:bg-surface-muted hover:text-navy"
+                )}
+              >
+                {l.label}
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            aria-controls="nav-more"
+            onClick={() => setMoreOpen((o) => !o)}
+            className={clsx(
+              "shrink-0 rounded-control px-2 py-1.5 text-[11px] font-medium transition-colors duration-flagship",
+              moreOpen ? "bg-navy text-surface" : "text-navy/65 hover:bg-surface-muted hover:text-navy"
+            )}
           >
-            EditForge
-          </Link>
-          {/* Mobile priority strip — product actions, not full map */}
-          <nav aria-label="Priority" className="flex items-center gap-1 sm:gap-2 lg:hidden">
-            {mobilePriority.map((l) => {
-              const active = pathname === l.href || pathname.startsWith(l.href + "/");
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  aria-current={active ? "page" : undefined}
-                  className={clsx(
-                    "rounded-control px-2.5 py-1.5 text-[11px] font-medium transition-colors duration-flagship",
-                    active
-                      ? "bg-navy text-surface"
-                      : "text-navy/65 hover:bg-surface-muted hover:text-navy"
-                  )}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+            More
+          </button>
+        </nav>
 
         <nav aria-label="Studio" className="hidden flex-wrap items-center gap-x-4 gap-y-1 lg:flex">
-          {groups.map((g, gi) => (
+          {NAV_GROUPS.map((g, gi) => (
             <div key={g.label} className="flex items-center gap-x-3">
               {gi > 0 && <span aria-hidden className="h-3 w-px bg-border-strong" />}
               {g.links.map((l) => {
@@ -113,6 +82,34 @@ export function Nav() {
           ))}
         </nav>
       </div>
+
+      {moreOpen && (
+        <div
+          id="nav-more"
+          className="border-t border-border bg-surface-elevated px-4 py-3 lg:hidden"
+        >
+          <p className="text-[10px] font-medium uppercase tracking-[0.15em] text-navy/45">More</p>
+          <ul className="mt-2 grid grid-cols-2 gap-1">
+            {MOBILE_MORE.map((l) => {
+              const active = pathname === l.href || pathname.startsWith(l.href + "/");
+              return (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    aria-current={active ? "page" : undefined}
+                    className={clsx(
+                      "block rounded-control px-3 py-2 text-sm transition-colors duration-flagship",
+                      active ? "bg-navy text-surface" : "text-navy/75 hover:bg-surface-muted hover:text-navy"
+                    )}
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
     </header>
   );
 }

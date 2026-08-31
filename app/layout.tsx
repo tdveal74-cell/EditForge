@@ -4,17 +4,17 @@ import { Nav } from "@/components/Nav";
 
 export const metadata: Metadata = {
   title: {
-    default: "EditForge — Flagship Studio OS",
+    default: "EditForge — Studio control plane",
     template: "%s · EditForge",
   },
   description:
-    "AAA flagship post-production Studio OS — departments, AI media lanes, engine bridges, rubric-gated delivery.",
+    "Post-production control plane — departments, AI media lanes, file-handoff bridges, rubric-gated delivery.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="flex min-h-screen flex-col bg-surface font-sans text-navy antialiased">
+      <body className="flex min-h-screen max-w-full flex-col overflow-x-hidden bg-surface font-sans text-navy antialiased">
         <a
           href="#main"
           className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-control focus:bg-navy focus:px-4 focus:py-2 focus:text-sm focus:text-surface"
@@ -27,7 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
         <footer className="border-t border-border bg-surface-elevated/60">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-6 py-4 text-[11px] text-navy/45">
-            <span>EditForge — flagship post-production studio OS</span>
+            <span>EditForge — studio control plane · Ready is never Live</span>
             <span>Rubric before master · consent for clones · no silent auto-ship</span>
           </div>
         </footer>

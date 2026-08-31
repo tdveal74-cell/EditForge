@@ -1,12 +1,12 @@
 # REPOSITORY_STATUS — EditForge
 
-**Updated:** 2026-08-27
+**Updated:** 2026-08-31
 
 | Field | Value |
 |-------|--------|
-| Product | EditForge — post-production Studio OS |
+| Product | EditForge — post-production control plane |
 | Canonical runtime | Next.js 15 app (`app/`, `lib/`) local + plan APIs |
-| Completion vocabulary | **code-complete** for Studio control plane and DEVON-governed execution; live provider verification remains external |
+| Completion vocabulary | control plane and DEVON path are implemented; live clone/full-motion is not proven; Boards and Bridges remain |
 | Job lifecycle | `lib/jobs.ts` — planned→authorized→queued→running→validating→completed/failed/cancelled + rubric decision record |
 | Provider boundary | `lib/providers.ts` — the one place a provider is called; the registry it dispatches on is `lib/provider-registry.ts`, shared with the UI so a picker cannot offer what the boundary refuses. Fails closed without credentials, never invents an external id, mock always labelled and returns no media |
 | Live wires | Runway gen-video (`text_to_video`/`tasks`), ElevenLabs voice (bytes back → artifact store), HeyGen avatar (`v3/videos`). Kling · Veo · Seedream registered, unimplemented, refusing. `docs/CREDENTIALS.md` is the wiring runbook |
@@ -16,7 +16,7 @@
 | Self-hosting | `compose.yaml` — Next.js control plane, private FFmpeg worker, durable state volumes, shared authenticated artifact store |
 | Gen-video catalogue | `lib/genvideo.ts` — editorial metadata and readiness, derived from the registry. The old `submitGenVideo`, which returned a fabricated `live-…` id for work nothing had started, is removed; execution is `lib/providers.ts` alone |
 | Deployed | Production studio self-hosted at https://editforge.online, on a Hostinger VPS via `compose.yaml`. Vercel control plane at https://editforge.vercel.app — git-connected: pushes to `main` deploy, PRs get previews |
-| Durable store | **Live** — Redis (REST) active in production, verified 2026-08-12: `/api/health` reports `store: kv` + `storeReachable: true`, and repeat `/api/cuts` reads return identical timestamps across instances |
+| Durable store | Split host, dated 2026-08-31: production https://editforge.online is the **file** backend (`store: file`). Vercel https://editforge.vercel.app holds **KV** when `KV_REST_API_*` / `UPSTASH_REDIS_REST_*` are present. `/api/health` reports the active backend per host. Vercel also reports `executionReady` / `artifactStore` / worker false — that host is the control plane, not the encode stack |
 | Not proven | An end-to-end **live clone/full-motion** render against the user's consented clone/voice IDs and real adapter credentials; the repo fails closed when they are absent |
 | Claude integration | MCP connector at `/api/mcp` (stateless JSON-RPC, in-app), skill at `skills/editforge/`, Claude Code plugin at `.claude-plugin/`. Read tools open; `submit_media_job` and `drive_job` require `EDITFORGE_MCP_TOKEN` and fail closed when it is unset. See `docs/CLAUDE_INTEGRATION.md` |
 | Required checks | `.github/workflows/ci.yml` |

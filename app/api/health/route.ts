@@ -16,7 +16,7 @@ export async function GET() {
       status: healthy ? "healthy" : "degraded",
       service: "editforge",
       version: "0.1.0",
-      standard: "ultra-meta-supreme-flagship-aaa",
+      standard: "navy-amber-surface",
       store: store.backend,
       storeReachable: store.reachable,
       // Names only — credential values are never read out.

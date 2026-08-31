@@ -1,57 +1,107 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
 import { Section } from "@/components/ui/section";
 import { Waveform } from "@/components/media/Viewer";
-import { AUDIO_HIERARCHY } from "@/lib/audio";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/field";
+import { downloadText } from "@/lib/download";
+import { AUDIO_HIERARCHY, buildAudioLaw, type AudioLevel } from "@/lib/audio";
 import { PRIMARY_CLIP } from "@/lib/mediaLibrary";
 
-export const metadata: Metadata = { title: "Audio hierarchy" };
-
-// The ladder lives in lib/audio.ts because /mix generates the stem sheet from
-// it. A second copy here could drift, and the mix would receive a rule the
-// operator never read.
-const hierarchy = AUDIO_HIERARCHY;
-
 export default function AudioPage() {
+  const [hierarchy, setHierarchy] = useState<AudioLevel[]>(AUDIO_HIERARCHY);
+  const [persistError, setPersistError] = useState<string | null>(null);
+  const law = useMemo(() => buildAudioLaw(hierarchy), [hierarchy]);
+
+  useEffect(() => {
+    fetch("/api/audio", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.levels) && d.levels.length) setHierarchy(d.levels);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function persist(next: AudioLevel[]) {
+    try {
+      const res = await fetch("/api/audio", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ levels: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPersistError((data as { error?: string }).error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setPersistError(null);
+    } catch (err) {
+      setPersistError((err as Error).message);
+    }
+  }
+
+  async function update(level: number, patch: Partial<AudioLevel>) {
+    const next = hierarchy.map((h) => (h.level === level ? { ...h, ...patch } : h));
+    setHierarchy(next);
+    await persist(next);
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="Sound"
-        title="Audio hierarchy"
-        description="Fairlight / Essential Sound discipline — tactile, not loud. The ladder is the law: anything lower never competes with anything above it."
+        eyebrow="Board"
+        title="Audio ladder"
+        description="Edit the rules; they are stored and /mix realises them. Not a mixer, not Fairlight, not Essential Sound."
+        actions={
+          <Button type="button" onClick={() => downloadText("editforge-audio-law.json", law, "application/json")}>
+            Download law
+          </Button>
+        }
       />
 
-      {/* Drawn from real samples when a stem is attached. Nothing is drawn
-          from nothing — a picture of sound the operator does not have would
-          teach them to distrust the screen. */}
-      <Section title="Waveform">
+      {persistError && (
+        <p className="mt-4 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Could not store the ladder: {persistError}
+        </p>
+      )}
+
+      <Section title="Attached waveform">
         <Waveform src={PRIMARY_CLIP.src} />
+        <p className="mt-2 text-xs text-navy/45">Studio reference clip — not a mix print.</p>
       </Section>
 
       <ol className="mt-10 space-y-2">
         {hierarchy.map((h) => (
           <li
             key={h.level}
-            className="group relative overflow-hidden rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
+            className="group relative overflow-hidden rounded-card border border-border bg-surface-elevated p-4 shadow-card"
           >
-            {/* Bar length encodes priority — loudest claim at the top. */}
-            <span
-              aria-hidden
-              className={`absolute inset-y-0 left-0 ${h.weight} bg-surface-muted/70`}
-            />
+            <span aria-hidden className={`absolute inset-y-0 left-0 ${h.weight} bg-surface-muted/70`} />
             <div className="relative flex items-baseline gap-3">
               <span className="text-xs font-semibold tabular-nums text-navy/35">{h.level}</span>
-              <h2 className="text-sm font-semibold text-navy">{h.name}</h2>
+              <Input
+                className="max-w-xs font-semibold"
+                value={h.name}
+                onChange={(e) => update(h.level, { name: e.target.value })}
+                aria-label={`Stem ${h.level}`}
+              />
+              <code className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] text-navy/45">{h.track}</code>
             </div>
-            <p className="relative mt-1 pl-7 text-sm text-navy/65">{h.rule}</p>
+            <Input
+              className="relative mt-2 pl-7"
+              value={h.rule}
+              onChange={(e) => update(h.level, { rule: e.target.value })}
+              aria-label={`Rule ${h.level}`}
+            />
           </li>
         ))}
       </ol>
 
       <p className="mt-8 text-xs text-navy/45">
-        Stem split and loudness targets cross to the mix stage at{" "}
-        <code className="rounded bg-surface-muted px-1 py-0.5">/mix</code>, where this ladder is generated
-        into the stem sheet a mixer works from.
+        Track names stay fixed so the mix session can count clips. Stem split and loudness targets cross to{" "}
+        <code className="rounded bg-surface-muted px-1 py-0.5">/mix</code>.
       </p>
     </main>
   );

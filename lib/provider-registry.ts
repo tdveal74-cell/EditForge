@@ -308,11 +308,10 @@ function clamp01(value: unknown, fallback: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
-/** True when this provider has both a base endpoint and an implemented shape. */
+/** True when this provider has both a base endpoint and an implemented shape. Mock is never live. */
 export function isLiveWired(id: string): boolean {
   const p = findProvider(id);
-  if (!p) return false;
-  if (p.id === "mock") return true;
+  if (!p || p.id === "mock") return false;
   return Boolean(p.endpoint && p.wire);
 }
 
@@ -410,4 +409,45 @@ export function providerReadiness(
     settingsMissing,
     ready: spec.id !== "mock" && wired && credentialSet && storeOk && settingsMissing.length === 0,
   };
+}
+
+/** What the picker knows about a provider — the /api/providers payload. */
+export type PickerReadiness = {
+  id: string;
+  billable: boolean;
+  wired: boolean;
+  credentialSet?: boolean;
+  settingsMissing?: string[];
+  requiresArtifactStore?: boolean;
+};
+
+/**
+ * Whether the UI may submit a live run for this picker choice.
+ *
+ * Mock is always allowed (and produces no media). A live provider is blocked
+ * when it is unwired, missing credentials or settings, or needs an artifact
+ * store that is not configured. Returns a reason, or null when submit is ok.
+ */
+export function liveSubmitBlocked(
+  chosen: PickerReadiness | undefined,
+  artifactStore: boolean
+): string | null {
+  if (!chosen || chosen.id === "mock") return null;
+  if (!chosen.wired) {
+    return "No live path implemented for this provider yet — it will refuse rather than pretend.";
+  }
+  if (chosen.credentialSet === false) {
+    return "Credential is not set, so this will refuse rather than run.";
+  }
+  if (chosen.requiresArtifactStore && !artifactStore) {
+    return "This provider answers with the media itself and the artifact store is not configured, so there is nowhere to keep it.";
+  }
+  if ((chosen.settingsMissing?.length ?? 0) > 0) {
+    const missing = chosen.settingsMissing ?? [];
+    return `${missing.join(" and ")} ${missing.length > 1 ? "are" : "is"} not set — this will refuse until configured.`;
+  }
+  if (!chosen.billable) {
+    return "This provider is not ready to run live yet.";
+  }
+  return null;
 }

@@ -1,43 +1,19 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { STUDIO_MODULES } from "@/lib/studio";
+import { LANDING_CAPABILITIES } from "@/lib/landing";
+import { STUDIO_MODULES, workingSurfaces } from "@/lib/studio";
 import { PRIMARY_CLIP, REFERENCE_STILL, videos } from "@/lib/mediaLibrary";
 
-const capabilities = [
-  {
-    title: "Generative video",
-    body: "Kling · Veo · Runway · Seedream-class output under a real quality bar.",
-    href: "/gen-video",
-  },
-  {
-    title: "Voice & avatar",
-    body: "Consent-gated clone lanes with simulated labels when anything is mocked.",
-    href: "/voice",
-  },
-  {
-    title: "Dailies & review",
-    body: "Look first. Approve with reason. Nothing enters a cut unreviewed.",
-    href: "/dailies",
-  },
-  {
-    title: "Rubric before master",
-    body: "The ship gate is code, not convention. No silent export.",
-    href: "/rubric",
-  },
-];
-
 export default function HomePage() {
-  const operational = STUDIO_MODULES.filter((m) => m.status === "operational").length;
+  const ready = workingSurfaces().length;
   const aiMedia = STUDIO_MODULES.filter((m) => m.status === "ai-media").length;
   const clipCount = videos().length;
 
   return (
     <main>
-      {/* Hero — media first */}
       <section className="relative overflow-hidden border-b border-border">
         <div className="absolute inset-0">
-          {/* Real studio media as the hero language */}
           <video
             className="h-full w-full object-cover opacity-[0.22]"
             autoPlay
@@ -52,18 +28,18 @@ export default function HomePage() {
           <div className="absolute inset-0 bg-gradient-to-b from-surface/40 via-surface/80 to-surface" />
         </div>
 
-        <div className="relative mx-auto max-w-6xl px-6 pb-16 pt-20 sm:pb-24 sm:pt-28">
+        <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-6 sm:pb-24 sm:pt-28">
           <p className="text-xs font-medium uppercase tracking-[0.24em] text-amber-600">
-            EditForge · Flagship Studio OS
+            EditForge · control plane
           </p>
           <h1 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight text-navy sm:text-5xl md:text-[3.25rem] md:leading-[1.08]">
             Make the cut.
             <span className="mt-1 block text-navy/75">Ship only what earns the rubric.</span>
           </h1>
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-navy/70 sm:text-base">
-            Post-production OS for commercials, Shorts, Reels, and long-form.
+            Post-production control plane for commercials, Shorts, Reels, and long-form.
             Generative lanes, dailies, grade, and delivery — with restraint as house law
-            and a human gate before master.
+            and a human gate before master. Captions, titles, audio, and longform persist; other boards still seed. Bridges emit files. Ready is never Live.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-3">
@@ -86,13 +62,13 @@ export default function HomePage() {
 
           <dl className="mt-12 grid max-w-lg grid-cols-3 gap-3">
             {[
-              { value: String(operational), label: "Operational" },
-              { value: String(aiMedia), label: "AI media" },
+              { value: String(ready), label: "Working surfaces" },
+              { value: String(aiMedia), label: "AI media lanes" },
               { value: String(clipCount), label: "Studio reels" },
             ].map((s) => (
               <div
                 key={s.label}
-                className="rounded-card border border-border-faint bg-surface-elevated/70 px-3 py-3 backdrop-blur-sm"
+                className="rounded-card border border-border-faint bg-surface-elevated px-3 py-3"
               >
                 <dd className="text-xl font-semibold tabular-nums text-navy sm:text-2xl">{s.value}</dd>
                 <dt className="mt-0.5 text-[10px] uppercase tracking-wide text-navy/45 sm:text-[11px]">
@@ -104,15 +80,14 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Capability strip — media product language */}
       <section className="border-b border-border/60 bg-surface-muted/40 py-16">
-        <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">What you run</p>
           <h2 className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
-            Creation, review, and delivery in one operating surface
+            What is wired, what is a board, what is a file
           </h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {capabilities.map((c) => (
+            {LANDING_CAPABILITIES.map((c) => (
               <Link key={c.title} href={c.href} className="group">
                 <Card className="h-full p-5 transition-all duration-flagship ease-flagship group-hover:-translate-y-0.5 group-hover:shadow-lifted">
                   <h3 className="text-sm font-semibold text-navy">{c.title}</h3>
@@ -124,9 +99,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Media proof strip */}
       <section className="py-16">
-        <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <div className="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div className="max-w-xl">
               <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Studio media</p>
@@ -136,7 +110,7 @@ export default function HomePage() {
               <p className="mt-3 text-sm leading-relaxed text-navy/65">
                 Contact sheets, grade references, and players are built against actual
                 footage — not empty states. Simulated generations stay labeled. Live
-                work stays gated.
+                provider work stays gated.
               </p>
             </div>
             <Link href="/dailies">
@@ -148,9 +122,9 @@ export default function HomePage() {
 
           <div className="mt-8 grid gap-3 sm:grid-cols-3">
             <div className="overflow-hidden rounded-card border border-border bg-surface-elevated shadow-card sm:col-span-2">
-              <div className="relative aspect-video bg-navy/5">
+              <div className="relative flex max-h-[28rem] items-center justify-center bg-navy/5">
                 <video
-                  className="h-full w-full object-cover"
+                  className="max-h-[28rem] w-full object-contain"
                   controls
                   playsInline
                   preload="metadata"
@@ -182,9 +156,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* House law — secondary, not the hero */}
       <section className="border-t border-border/60 bg-surface-muted/30 py-14">
-        <div className="mx-auto max-w-6xl px-6">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">House law</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-3">
             {[

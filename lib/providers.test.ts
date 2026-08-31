@@ -127,7 +127,7 @@ describe("provider boundary", () => {
     expect(isLiveWired("runway")).toBe(true);
     expect(isLiveWired("elevenlabs")).toBe(true);
     expect(isLiveWired("heygen")).toBe(true);
-    expect(isLiveWired("mock")).toBe(true);
+    expect(isLiveWired("mock")).toBe(false);
     expect(isLiveWired("kling")).toBe(false);
     expect(isLiveWired("nope")).toBe(false);
   });

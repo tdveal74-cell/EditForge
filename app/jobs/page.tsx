@@ -9,6 +9,7 @@ import { Label, Select, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { StatusLabel, toneFor, toneForJob } from "@/components/ui/status-dot";
 import { PageHeader } from "@/components/PageHeader";
+import { HostNotice } from "@/components/HostNotice";
 
 export default function JobsPage() {
   const [kind, setKind] = useState<"proxy" | "export">("proxy");
@@ -74,6 +75,7 @@ export default function JobsPage() {
         title="Transcode plans"
         description="Plans only — nothing here auto-executes. The farm runs a plan after a human confirms, and export-class work needs a rubric pass first."
       />
+      <HostNotice />
 
       <div className="mt-10 flex flex-wrap items-end gap-4">
         <div className="w-36">
@@ -86,19 +88,25 @@ export default function JobsPage() {
         </div>
         <div className="w-64">
           <Label text="Cut">
-            <Select
-              value={cutId}
-              onChange={(e) => setCutId(e.target.value)}
-              disabled={kind === "proxy"}
-            >
-              {cuts === null && <option>Loading…</option>}
-              {cuts?.length === 0 && <option value="">No cuts in the store</option>}
-              {cuts?.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.title} — {c.rubricPass ? "rubric passed" : "no rubric pass"}
-                </option>
-              ))}
-            </Select>
+            {cuts === null ? (
+              <p className="text-sm text-navy/50">Loading cuts…</p>
+            ) : cuts.length === 0 ? (
+              <p className="rounded-control border border-dashed border-border px-3 py-2 text-sm text-navy/50">
+                No cuts in the store yet.
+              </p>
+            ) : (
+              <Select
+                value={cutId}
+                onChange={(e) => setCutId(e.target.value)}
+                disabled={kind === "proxy"}
+              >
+                {cuts.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.title} — {c.rubricPass ? "rubric passed" : "no rubric pass"}
+                  </option>
+                ))}
+              </Select>
+            )}
           </Label>
         </div>
         <Button type="button" onClick={plan} className="mb-0.5" disabled={kind === "export" && !cutId}>
@@ -117,7 +125,8 @@ export default function JobsPage() {
       <Section title="Provider runs" count={live?.length}>
         <div className="mb-3 flex items-center gap-3">
           <p className="text-xs text-navy/50">
-            Real records from the durable store — what the AI media pages actually submitted.
+            Real records from the durable store. Mock jobs never produce media; a mock left in
+            running needs a poll and will settle with no file.
           </p>
           <Button type="button" size="sm" variant="ghost" onClick={load} className="ml-auto">
             Refresh
@@ -137,11 +146,7 @@ export default function JobsPage() {
         )}
 
         {live === null && (
-          <div className="space-y-2" aria-hidden>
-            {[0, 1].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-card border border-border bg-surface-muted/50" />
-            ))}
-          </div>
+          <p className="text-sm text-navy/50">Loading provider runs…</p>
         )}
 
         <ul className="space-y-2">
@@ -167,6 +172,9 @@ export default function JobsPage() {
                     {j.mode === "live" ? "live" : "mock"}
                   </Badge>
                 )}
+                {j.mode === "mock" && (j.status === "running" || j.status === "queued") && (
+                  <span>mock does not finish on its own — poll to settle, no media</span>
+                )}
                 {j.attempts > 1 && <span>attempt {j.attempts}</span>}
               </div>
             </li>
@@ -174,7 +182,7 @@ export default function JobsPage() {
         </ul>
       </Section>
 
-      <Section title="Planned queue" count={JOB_STUBS.length}>
+      <Section title="Sample plans (not a live queue)" count={JOB_STUBS.length}>
         <ul className="space-y-2">
           {JOB_STUBS.map((j) => (
             <li

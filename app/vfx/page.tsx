@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { SHOT_STATUSES, type ShotStatus, type VfxShot } from "@/lib/vfxShot";
+import { SHOT_STATUSES, buildVfxBoardFile, type ShotStatus, type VfxShot } from "@/lib/vfxShot";
+import { downloadText } from "@/lib/download";
 import type { Cut } from "@/lib/store";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusLabel, toneFor } from "@/components/ui/status-dot";
@@ -74,9 +75,21 @@ export default function VfxPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="VFX"
+        eyebrow="Board"
         title="Shot board"
-        description="Tracker only. Heavy comp stays in Fusion, After Effects, or 3D — the shot package crossing at /vfx-engine carries this board's state."
+        description="A shot tracker, not a compositor. Add and move shots, then download the board. Heavy comp stays in Fusion, After Effects, or 3D — the node graph at /vfx-engine is a file, not Fusion."
+        actions={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              downloadText("editforge-vfx-board.json", buildVfxBoardFile(shots ?? []), "application/json")
+            }
+            disabled={shots === null}
+          >
+            Download board
+          </Button>
+        }
       />
 
       <Section title="Add a shot">

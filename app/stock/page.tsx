@@ -85,14 +85,7 @@ export default function StockPage() {
         </div>
 
         {items === null ? (
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="h-36 animate-pulse rounded-card border border-border bg-surface-muted/50"
-              />
-            ))}
-          </div>
+          <p className="mt-4 text-sm text-navy/50">Loading library…</p>
         ) : items.length === 0 ? (
           <div className="mt-4 rounded-card border border-border-faint bg-surface-muted/40 px-5 py-10 text-center">
             <p className="text-sm text-navy/70">No cleared assets yet.</p>

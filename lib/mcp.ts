@@ -22,6 +22,7 @@ import {
 } from "./handoff";
 import { SAMPLE_TIMELINE } from "./timeline";
 import type { JobKind } from "./jobs";
+import { getAudioLaw } from "./audiostore";
 
 /**
  * EditForge as an MCP server.
@@ -483,7 +484,7 @@ export const TOOLS: Tool[] = [
           return {
             filename: `${slug(cut.title) || cut.id}_stems_${target.id}.csv`,
             assemblySource,
-            content: buildStemSheet({ title: cut.title, clips, target }),
+            content: buildStemSheet({ title: cut.title, clips, target, hierarchy: await getAudioLaw() }),
           };
         }
 

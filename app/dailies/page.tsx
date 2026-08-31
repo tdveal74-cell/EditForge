@@ -149,24 +149,25 @@ export default function DailiesPage() {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <Button
                     type="button"
+                    variant={r.status === "approved" ? "secondary" : "primary"}
                     className="min-h-11 w-full"
-                    disabled={busy === r.id}
+                    disabled={busy === r.id || r.status === "approved"}
                     onClick={() =>
                       act(r.id, { action: "review", decision: "approve", note: notes[r.id] })
                     }
                   >
-                    Approve
+                    {r.status === "approved" ? "Approved" : "Approve"}
                   </Button>
                   <Button
                     type="button"
-                    variant="secondary"
+                    variant={r.status === "rejected" ? "ghost" : "secondary"}
                     className="min-h-11 w-full"
-                    disabled={busy === r.id}
+                    disabled={busy === r.id || r.status === "rejected"}
                     onClick={() =>
                       act(r.id, { action: "review", decision: "reject", note: notes[r.id] })
                     }
                   >
-                    Reject
+                    {r.status === "rejected" ? "Rejected" : "Reject"}
                   </Button>
                   <Button
                     type="button"

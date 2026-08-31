@@ -3,24 +3,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JobKind, JobStatus, StudioJob } from "@/lib/jobs";
 import { idempotencyKeyFor } from "@/lib/idempotency";
-import { isPlayableAudio, isPlayableVideo } from "@/lib/media";
+import { liveSubmitBlocked, type PickerReadiness } from "@/lib/provider-registry";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label, Select } from "@/components/ui/field";
 import { StatusDot, toneForJob } from "@/components/ui/status-dot";
+import { HostNotice } from "@/components/HostNotice";
+import { JobResultStage, stageKindForJob } from "@/components/JobResultStage";
 
 export type ProviderChoice = { id: string; label: string };
 
-type ProviderReadiness = {
-  id: string;
-  billable: boolean;
-  wired: boolean;
+type ProviderReadiness = PickerReadiness & {
   envKey?: string;
   envKeys?: string[];
-  credentialSet?: boolean;
-  /** Env this provider still needs beyond its API key, e.g. an avatar look id. */
-  settingsMissing?: string[];
-  requiresArtifactStore?: boolean;
 };
 
 type Props = {
@@ -32,6 +27,12 @@ type Props = {
   options?: Record<string, unknown>;
   requiresRubricPass?: boolean;
   blockedReason?: string;
+  /** Parent owns the media well (gen-video / voice / avatar). */
+  hideResult?: boolean;
+  onJobChange?: (job: StudioJob | null) => void;
+  /** Controlled provider. Defaults to mock when omitted. */
+  providerId?: string;
+  onProviderChange?: (id: string) => void;
 };
 
 const SETTLED: JobStatus[] = ["completed", "failed", "cancelled", "validating"];
@@ -47,8 +48,15 @@ export function JobRunner({
   options,
   requiresRubricPass,
   blockedReason,
+  hideResult,
+  onJobChange,
+  providerId,
+  onProviderChange,
 }: Props) {
-  const [provider, setProvider] = useState(providers[0]?.id ?? "mock");
+  const [internalProvider, setInternalProvider] = useState(
+    providers.find((p) => p.id === "mock")?.id ?? providers[0]?.id ?? "mock"
+  );
+  const provider = providerId ?? internalProvider;
   const [job, setJob] = useState<StudioJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +70,15 @@ export function JobRunner({
       alive.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    onJobChange?.(job);
+  }, [job, onJobChange]);
+
+  function chooseProvider(id: string) {
+    onProviderChange?.(id);
+    if (providerId === undefined) setInternalProvider(id);
+  }
 
   useEffect(() => {
     void (async () => {
@@ -81,8 +98,18 @@ export function JobRunner({
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
   const missingSettings = chosen?.settingsMissing ?? [];
+  const readyLoaded = Object.keys(readiness).length > 0;
+  const liveBlocked =
+    provider !== "mock" && readyLoaded
+      ? liveSubmitBlocked(chosen ?? { id: provider, billable: false, wired: false }, artifactStore)
+      : null;
+  const liveReady = provider !== "mock" && !liveBlocked && Boolean(chosen?.billable);
 
   async function run() {
+    if (liveBlocked) {
+      setError(liveBlocked);
+      return;
+    }
     setBusy(true);
     setError(null);
     setPolls(0);
@@ -149,19 +176,20 @@ export function JobRunner({
 
   const tracking = job !== null && !SETTLED.includes(job.status);
   const stalled = tracking && polls >= MAX_POLLS;
+  const submitDisabled =
+    busy || tracking || Boolean(blockedReason) || !prompt.trim() || Boolean(liveBlocked);
 
   return (
     <section className="mt-6 rounded-card border border-border bg-surface-elevated p-5">
+      <HostNotice />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <Label text="Run against" className="min-w-48 flex-1">
-          <Select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={tracking}>
+          <Select value={provider} onChange={(e) => chooseProvider(e.target.value)} disabled={tracking}>
             {providers.map((p) => {
               const r = readiness[p.id];
-              // "live" has to mean runnable, not merely credentialled: a
-              // provider whose key is set but whose look id is not would other-
-              // wise be offered as live and refuse on click.
+              // "live" has to mean runnable, not merely credentialled.
               const ready = Boolean(r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
-              const mark = !r ? "" : ready ? " · live" : p.id === "mock" ? "" : " · unavailable";
+              const mark = !r ? "" : ready ? " · live" : p.id === "mock" ? " · mock" : " · unavailable";
               return (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -173,19 +201,19 @@ export function JobRunner({
         </Label>
         <Button
           type="button"
-          variant="accent"
+          variant={liveReady ? "accent" : "primary"}
           className="min-h-11 w-full sm:w-auto"
           onClick={run}
-          disabled={busy || tracking || Boolean(blockedReason) || !prompt.trim()}
+          disabled={submitDisabled}
         >
-          {busy && !job ? "Submitting…" : "Run job"}
+          {busy && !job ? "Submitting…" : provider === "mock" ? "Run mock" : liveBlocked ? "Live unavailable" : "Run job"}
         </Button>
       </div>
 
       {chosen && (
         <p className="mt-2.5 text-xs">
-          {chosen.billable && missingSettings.length === 0 ? (
-            <span className="text-amber-700">
+          {liveReady ? (
+            <span className="text-navy/70">
               Live provider — running this bills real work against {chosen.envKey}.
             </span>
           ) : chosen.id === "mock" ? (
@@ -205,8 +233,6 @@ export function JobRunner({
               is nowhere to keep it. It will refuse rather than spend.
             </span>
           ) : missingSettings.length > 0 ? (
-            // Without this, a HeyGen render refused for a missing look id reads
-            // as a bad API key — the one thing that is not wrong.
             <span className="text-navy/50">
               The key is set, but {missingSettings.join(" and ")}{" "}
               {missingSettings.length > 1 ? "are" : "is"} not — this will refuse until{" "}
@@ -236,55 +262,19 @@ export function JobRunner({
         </p>
       )}
 
+      {!hideResult && job && (job.status === "completed" || job.status === "validating") && (
+        <div className="mt-4">
+          <JobResultStage
+            job={job}
+            kind={stageKindForJob(kind)}
+            emptyTitle="Result"
+            emptyBody="The job result lands here."
+          />
+        </div>
+      )}
+
       {job && (
         <div className="mt-4 space-y-3">
-          {/* Result stage */}
-          {(job.status === "completed" || job.status === "validating") && (
-            <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
-              <div className="flex min-h-[8rem] flex-col items-center justify-center bg-navy/[0.03] px-4 py-8">
-                {job.result ? (
-                  <>
-                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">
-                      Result ready
-                    </p>
-                    {/* Play it here. A finished VO that can only be opened in
-                        another tab is a link, not a result — and judging a take
-                        is the whole reason to come back to this page. */}
-                    {isPlayableAudio(job.result) ? (
-                      <audio className="mt-3 w-full max-w-md" controls preload="metadata" src={job.result} />
-                    ) : isPlayableVideo(job.result) ? (
-                      <video
-                        className="mt-3 max-h-64 w-full max-w-md rounded-control bg-navy/5"
-                        controls
-                        preload="metadata"
-                        src={job.result}
-                      />
-                    ) : null}
-                    <a
-                      href={job.result}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="mt-3 max-w-full break-all font-mono text-xs text-navy underline underline-offset-2"
-                    >
-                      {job.result}
-                    </a>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">
-                      {job.status === "validating" ? "Awaiting human accept" : "Lifecycle complete"}
-                    </p>
-                    <p className="mt-2 max-w-sm text-center text-sm text-navy/65">
-                      {job.mode === "mock"
-                        ? "Mock path — no media file was produced. The job record is real."
-                        : "Provider finished. Open the result when a URL is present."}
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
           <div className="rounded-control border border-border-faint bg-surface p-4">
             <div className="flex flex-wrap items-center gap-2.5">
               <StatusDot tone={toneForJob(job.status)} />

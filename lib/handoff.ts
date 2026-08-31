@@ -1,5 +1,7 @@
 import type { TimelineClip } from "./timeline";
-import { AUDIO_HIERARCHY } from "./audio";
+import { AUDIO_HIERARCHY, type AudioLevel } from "./audio";
+import { buildExportCommand, buildProxyCommand, canRun } from "./ffmpeg";
+import { DELIVERABLES } from "./pipeline";
 
 /**
  * What actually crosses a bridge.
@@ -109,13 +111,15 @@ export function buildStemSheet(opts: {
   title: string;
   clips: TimelineClip[];
   target: LoudnessTarget;
+  hierarchy?: AudioLevel[];
 }): string {
   const { title, clips, target } = opts;
+  const hierarchy = opts.hierarchy ?? AUDIO_HIERARCHY;
   const rows = [
     ["stem", "priority", "rule", "timeline_track", "clips", "duration_sec", "integrated_lufs", "true_peak_dbtp"],
   ];
 
-  for (const level of AUDIO_HIERARCHY) {
+  for (const level of hierarchy) {
     const own = clips.filter((c) => c.track === level.track);
     const seconds = own.reduce((sum, c) => sum + c.durationSec, 0);
     rows.push([
@@ -132,7 +136,12 @@ export function buildStemSheet(opts: {
     ]);
   }
 
-  return [`# STEM SHEET — ${sanitizeComment(title)}`, `# DELIVERY: ${target.label}`, ...rows.map(toCsvRow)].join("\n") + "\n";
+  return [
+    `# STEM SHEET — ${sanitizeComment(title)}`,
+    `# NOTICE: File handoff — not Fairlight, not Pro Tools, not a mixer. Hierarchy from /audio.`,
+    `# DELIVERY: ${target.label}`,
+    ...rows.map(toCsvRow),
+  ].join("\n") + "\n";
 }
 
 export type LoudnessTarget = {
@@ -187,6 +196,8 @@ export function buildShotPackage(opts: {
     JSON.stringify(
       {
         title,
+        notice:
+          "Shot package JSON — not Fusion, not After Effects, not a compositor. Frame ranges for a compositor to open.",
         fps,
         frameRangeConvention: "firstFrame inclusive, lastFrameExclusive exclusive",
         colorSpace,
@@ -211,8 +222,13 @@ export function buildShotPackage(opts: {
  * MAM exists to answer and a single path cannot answer it. Deterministic from the
  * cut id, so the same cut resolves to the same paths from any surface.
  */
-export function buildPathContract(opts: { cutId: string; title: string }): string {
-  const { cutId, title } = opts;
+export function buildPathContract(opts: {
+  cutId: string;
+  title: string;
+  /** Catalog names from /assets. Omitted when the index was not consulted. */
+  index?: { name: string; type: string; location?: string }[];
+}): string {
+  const { cutId, title, index } = opts;
   const key = slug(title) || slug(cutId) || "untitled";
   const base = `${cutId}/${key}`;
   return (
@@ -220,16 +236,21 @@ export function buildPathContract(opts: { cutId: string; title: string }): strin
       {
         cutId,
         title,
+        notice:
+          "Path contract JSON with invented canonical paths. Not Drive, not S3, not Frame.io. This file names the tiers; it does not move media.",
         tiers: {
           online: { path: `online/${base}/`, role: "Working media on shared storage — edit and grade read from here" },
           nearline: { path: `nearline/${base}/`, role: "Completed masters, retrievable in minutes" },
           archive: { path: `archive/${base}/`, role: "Cold copy — 3-2-1: two media types, one geo-separated" },
         },
         rules: [
-          "Paths are canonical: the NLE links to them, it does not copy media",
-          "Nothing reaches archive without the /archive checklist complete",
-          "Checksums are written by the mover and read back before the online copy is released",
+          "Paths are canonical names, not live connections",
+          "The /archive board is a sample checklist — this file does not enforce it",
+          "Checksums are a mover's job; this file does not write them",
         ],
+        ...(index && index.length > 0
+          ? { index: index.map((a) => ({ name: a.name, type: a.type, location: a.location ?? "" })) }
+          : {}),
       },
       null,
       2
@@ -260,4 +281,200 @@ export function slug(text: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+
+/**
+ * The ffmpeg plan that crosses the render-farm bridge.
+ *
+ * A plan, not an encode. The farm (or a local worker) runs it after a human
+ * confirms. Export-class plans stay blocked in the file itself when the cut
+ * has no recorded rubric pass — the download is still the artifact.
+ */
+export function buildRenderPlan(opts: {
+  cutId: string;
+  title: string;
+  kind: "proxy" | "export";
+  inputPath?: string;
+  outputPath?: string;
+  rubricPass: boolean;
+  assemblySource: string;
+}): string {
+  const inputPath = opts.inputPath || "input.mp4";
+  const outputPath = opts.outputPath || (opts.kind === "export" ? "master.mp4" : "proxy.mp4");
+  const plan =
+    opts.kind === "export" ? buildExportCommand(inputPath, outputPath) : buildProxyCommand(inputPath, outputPath);
+  const allowed = opts.kind === "export" ? canRun(plan, opts.rubricPass) : true;
+  return (
+    JSON.stringify(
+      {
+        handoff: "render-farm",
+        notice:
+          "This file is a plan for the encode farm, not an executed render and not an engine. The farm runs it after a human confirms.",
+        cutId: opts.cutId,
+        title: opts.title,
+        assemblySource: opts.assemblySource,
+        kind: opts.kind,
+        plan,
+        matrix: DELIVERABLES.map((d) => ({ id: d.id, label: d.label, width: d.width, height: d.height })),
+        allowed,
+        reason: allowed
+          ? opts.kind === "export"
+            ? `Authorised by the recorded rubric pass on "${opts.title}" — run after human confirm`
+            : "Proxy — ungated. The farm runs this after a human confirms"
+          : `Blocked: "${opts.title}" has no recorded rubric pass`,
+      },
+      null,
+      2
+    ) + "\n"
+  );
+}
+
+
+/**
+ * Mix session dump — the ladder, the clips on each stem, the loudness law.
+ * A mixer opens this; Fairlight is not this page.
+ */
+export function buildMixSession(opts: {
+  title: string;
+  clips: TimelineClip[];
+  target: LoudnessTarget;
+  hierarchy?: AudioLevel[];
+  assemblySource?: string;
+}): string {
+  const { title, clips, target } = opts;
+  const hierarchy = opts.hierarchy ?? AUDIO_HIERARCHY;
+  const stems = hierarchy.map((level) => {
+    const own = clips.filter((c) => c.track === level.track);
+    return {
+      stem: level.name,
+      priority: level.level,
+      rule: level.rule,
+      track: level.track,
+      clips: own.map((c) => ({ id: c.id, label: c.label, startSec: c.startSec, durationSec: c.durationSec })),
+      durationSec: Number(own.reduce((sum, c) => sum + c.durationSec, 0).toFixed(2)),
+      integratedLufs: level.level === 1 ? target.integratedLufs : null,
+      truePeakDbtp: target.truePeakDbtp,
+    };
+  });
+  return (
+    JSON.stringify(
+      {
+        kind: "mix-session",
+        notice:
+          "Mix session dump. Not Fairlight, not Pro Tools, not a mixer. Hierarchy from /audio; this file realises it.",
+        title,
+        assemblySource: opts.assemblySource,
+        delivery: { id: target.id, label: target.label, integratedLufs: target.integratedLufs, truePeakDbtp: target.truePeakDbtp },
+        stems,
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}
+
+/**
+ * Catalog export for the MAM bridge.
+ * Names and filed paths from /assets — not Drive, not S3, not Frame.io.
+ */
+export function buildCatalogExport(opts: {
+  assets: { name: string; type: string; tags?: string[]; location?: string }[];
+  title?: string;
+}): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "catalog-export",
+        notice:
+          "Catalog export of names and filed paths. Not Drive, not S3, not Frame.io. This file does not move media. The /archive board is a sample checklist — this file does not enforce it.",
+        title: opts.title || "Asset catalog",
+        assets: opts.assets.map((a) => ({
+          name: a.name,
+          type: a.type,
+          tags: a.tags ?? [],
+          location: a.location ?? "",
+        })),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}
+
+/**
+ * A compositor node graph: one Loader per plate, a Merge chain, a Saver.
+ * Frame ranges, not pixels. Not Fusion, not After Effects.
+ */
+export function buildNodeGraph(opts: {
+  title: string;
+  clips: TimelineClip[];
+  fps: Timebase;
+  board?: { id: string; desc: string; status: string; engine: string; note?: string }[];
+}): string {
+  const { title, clips, fps, board } = opts;
+  const plates = clips
+    .filter((c) => c.track === "video" && c.durationSec > 0)
+    .sort((a, b) => a.startSec - b.startSec);
+
+  const nodes: Record<string, unknown>[] = [];
+  const edges: { from: string; to: string; fromPort: string; toPort: string }[] = [];
+
+  plates.forEach((c, i) => {
+    const loaderId = `Loader_${String(i + 1).padStart(2, "0")}`;
+    nodes.push({
+      id: loaderId,
+      type: "Loader",
+      plate: c.label,
+      clipId: c.id,
+      firstFrame: toFrames(c.startSec, fps),
+      lastFrameExclusive: toFrames(c.startSec + c.durationSec, fps),
+    });
+    const mergeId = i === 0 ? "Merge_01" : `Merge_${String(i + 1).padStart(2, "0")}`;
+    if (i === 0) {
+      nodes.push({ id: mergeId, type: "Merge", note: "Background plate" });
+      edges.push({ from: loaderId, to: mergeId, fromPort: "output", toPort: "background" });
+    } else {
+      nodes.push({ id: mergeId, type: "Merge", note: "Over previous" });
+      edges.push({ from: loaderId, to: mergeId, fromPort: "output", toPort: "foreground" });
+      edges.push({
+        from: i === 1 ? "Merge_01" : `Merge_${String(i).padStart(2, "0")}`,
+        to: mergeId,
+        fromPort: "output",
+        toPort: "background",
+      });
+    }
+  });
+
+  nodes.push({
+    id: "Saver_01",
+    type: "Saver",
+    format: "EXR sequence",
+    colorSpace: "ACEScct",
+    note: "Conformed to the plate colour space",
+  });
+  if (plates.length > 0) {
+    const lastMerge = `Merge_${String(plates.length).padStart(2, "0")}`;
+    edges.push({ from: lastMerge, to: "Saver_01", fromPort: "output", toPort: "input" });
+  }
+
+  return (
+    JSON.stringify(
+      {
+        kind: "vfx-node-graph",
+        notice:
+          "Compositor node graph JSON — Loaders, Merges, Saver. Not Fusion, not After Effects, not a running comp. Frame ranges for a compositor to rebuild.",
+        title,
+        fps,
+        frameRangeConvention: "firstFrame inclusive, lastFrameExclusive exclusive",
+        nodes,
+        edges,
+        ...(board && board.length > 0
+          ? { board: board.map((b) => ({ id: b.id, desc: b.desc, status: b.status, engine: b.engine, note: b.note })) }
+          : {}),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
 }

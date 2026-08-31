@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { LANDING_CAPABILITIES } from "./landing";
-import { BOARD_MODULE_IDS, MODULE_STATUS_LABEL, STUDIO_MODULES } from "./studio";
+import { BOARD_MODULE_IDS, MODULE_STATUS_LABEL, STUDIO_MODULES, workingSurfaces } from "./studio";
 import { isLiveWired, liveSubmitBlocked, PROVIDERS } from "./provider-registry";
 import { GEN_PROVIDERS } from "./genvideo";
 import { SAMPLE_AVATARS } from "./avatar";
@@ -12,6 +12,7 @@ import { buildPresetPack } from "./presets";
 import { buildAudioLaw } from "./audio";
 import { buildScriptBoard } from "./script-board";
 import { buildArchiveChecklist } from "./archive";
+import { buildPipelineMap } from "./pipeline";
 
 function src(rel: string): string {
   return readFileSync(path.join(process.cwd(), rel), "utf8");
@@ -45,9 +46,13 @@ describe("honesty: operational is never Live", () => {
 });
 
 describe("honesty: Ready does not mean a page exists", () => {
-  it("script, pipeline, and archive are not counted as Ready", () => {
-    for (const id of ["script", "pipeline", "archive"]) {
-      expect(STUDIO_MODULES.find((m) => m.id === id)?.status).toBe("planner");
+  it("thin sample surfaces are not counted as Ready / Working", () => {
+    for (const id of ["script", "pipeline", "archive", "timeline", "collab", "hardware", "longform"]) {
+      expect(STUDIO_MODULES.find((m) => m.id === id)?.status, id).toBe("planner");
+    }
+    const ids = workingSurfaces().map((m) => m.id);
+    for (const id of ["script", "pipeline", "archive", "timeline", "collab", "hardware", "longform"]) {
+      expect(ids, id).not.toContain(id);
     }
   });
 
@@ -55,12 +60,34 @@ describe("honesty: Ready does not mean a page exists", () => {
     const page = src("app/page.tsx");
     expect(page).not.toMatch(/Ready modules/);
     expect(page).toMatch(/Working surfaces/);
+    expect(page).toMatch(/workingSurfaces/);
+  });
+
+  it("landing does not sell Flagship Studio OS", () => {
+    const page = src("app/page.tsx");
+    expect(page).not.toMatch(/Flagship Studio OS/);
+    expect(page).not.toMatch(/Post-production OS/);
+    expect(page).not.toMatch(/one operating surface/);
+    expect(page).toMatch(/control plane/);
   });
 });
 
 describe("honesty: board pages self-label and do not speak as product engines", () => {
-  it("captions, titles, presets, audio, script, pipeline, archive eyebrows say Board", () => {
-    for (const page of ["captions", "titles", "presets", "audio", "script", "pipeline", "archive"]) {
+  it("board pages self-label Board, including timeline, collab, and hardware", () => {
+    for (const page of [
+      "captions",
+      "titles",
+      "presets",
+      "audio",
+      "script",
+      "pipeline",
+      "archive",
+      "timeline",
+      "collab",
+      "hardware",
+      "vfx",
+      "longform",
+    ]) {
       const body = src(`app/${page}/page.tsx`);
       expect(body, page).toMatch(/eyebrow="Board"/);
     }
@@ -86,6 +113,12 @@ describe("honesty: board pages self-label and do not speak as product engines", 
     expect(body).not.toMatch(/>✓</);
     expect(body).toMatch(/Boxes start empty/);
   });
+
+  it("timeline, collab, and hardware name themselves as sketch / agreement / reference", () => {
+    expect(src("app/timeline/page.tsx")).toMatch(/Not an NLE/);
+    expect(src("app/collab/page.tsx")).toMatch(/Per-role access is not enforced/);
+    expect(src("app/hardware/page.tsx")).toMatch(/not a live inventory/);
+  });
 });
 
 describe("honesty: board artifacts are real files", () => {
@@ -105,6 +138,12 @@ describe("honesty: board artifacts are real files", () => {
     expect(buildScriptBoard()).toMatch(/Not a screenplay tool/);
     expect(buildArchiveChecklist()).toMatch(/- \[ \]/);
     expect(buildArchiveChecklist()).toMatch(/not a live archive/i);
+    expect(buildPipelineMap()).toMatch(/Not a running pipeline/);
+  });
+
+  it("pipeline page actually emits the map file", () => {
+    expect(src("app/pipeline/page.tsx")).toMatch(/Download map/);
+    expect(src("app/pipeline/page.tsx")).toMatch(/buildPipelineMap/);
   });
 });
 
@@ -141,6 +180,12 @@ describe("honesty: every bridge page emits an artifact kind", () => {
       const body = src(`app/${page}/page.tsx`);
       expect(body).toMatch(/artifacts:/);
     }
+  });
+
+  it("mix, mam, and vfx-engine pages do not claim to be the engine", () => {
+    expect(src("app/mix/page.tsx")).toMatch(/Not Fairlight/);
+    expect(src("app/mam/page.tsx")).toMatch(/Not Drive, not S3, not Frame.io/);
+    expect(src("app/vfx-engine/page.tsx")).toMatch(/Not Fusion/);
   });
 });
 
@@ -183,6 +228,20 @@ describe("honesty: chrome is not AAA Studio OS", () => {
     expect(layout).not.toMatch(/AAA flagship/);
     expect(readme).not.toMatch(/Ultra Meta Supreme AAA/);
     expect(readme).not.toMatch(/Flagship production studio OS/);
+  });
+
+  it("COMPLETION does not check Boards as Operational or claim code-complete", () => {
+    const body = src("COMPLETION.md");
+    expect(body).not.toMatch(/code-complete/);
+    expect(body).not.toMatch(/Flagship Studio OS/);
+    expect(body).not.toMatch(/- \[x\] Pipeline, projects, dailies, script/);
+    expect(body).not.toMatch(/- \[x\] Export, jobs, archive, collab/);
+    expect(body).toMatch(/- \[ \] Boards/);
+  });
+
+  it("studio hub does not print modules ready", () => {
+    expect(src("app/studio/page.tsx")).not.toMatch(/modules ready/);
+    expect(src("app/studio/page.tsx")).toMatch(/working surfaces/);
   });
 });
 

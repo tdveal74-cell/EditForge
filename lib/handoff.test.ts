@@ -164,6 +164,10 @@ describe("stem sheet", () => {
     expect(lines.find((l) => l.startsWith("Music bed"))).toContain("no independent target");
   });
 
+  it("names itself a file handoff, not Fairlight", () => {
+    expect(sheet).toMatch(/not Fairlight/);
+  });
+
   it("quotes a field containing a comma so the row does not gain a column", () => {
     const rows = sheet.split("\n").filter((l) => l && !l.startsWith("#"));
     for (const row of rows) {
@@ -184,6 +188,10 @@ describe("shot package", () => {
 
   it("states which end of the range is exclusive rather than leaving it to convention", () => {
     expect(pkg.frameRangeConvention).toMatch(/exclusive/);
+  });
+
+  it("names itself a package file, not Fusion", () => {
+    expect(pkg.notice).toMatch(/not Fusion/);
   });
 
   it("leaves no frame gap between adjacent shots", () => {
@@ -230,6 +238,10 @@ describe("path contract", () => {
 
   it("names three tiers separately — one path cannot say where a master is", () => {
     expect(Object.keys(contract.tiers)).toEqual(["online", "nearline", "archive"]);
+  });
+
+  it("says the paths are invented, not Drive or S3", () => {
+    expect(contract.notice).toMatch(/Not Drive, not S3, not Frame.io/);
   });
 
   it("is deterministic from the cut, so every surface resolves the same path", () => {

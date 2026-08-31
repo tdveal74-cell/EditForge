@@ -4,7 +4,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { HostNotice } from "@/components/HostNotice";
-import { MODULE_STATUS_LABEL, MODULE_STATUS_TONE, modulesByDept, STUDIO_MODULES } from "@/lib/studio";
+import { MODULE_STATUS_LABEL, MODULE_STATUS_TONE, modulesByDept, workingSurfaces } from "@/lib/studio";
 import { PRIMARY_CLIP, REFERENCE_STILL } from "@/lib/mediaLibrary";
 
 export const metadata: Metadata = { title: "Studio" };
@@ -20,14 +20,14 @@ const createLanes = [
 
 export default function StudioPage() {
   const byDept = modulesByDept();
-  const ready = STUDIO_MODULES.filter((m) => m.status === "operational").length;
+  const ready = workingSurfaces().length;
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
         eyebrow="Studio"
-        title="Production OS"
-        description="Create, review, and ship from one surface. Media first. Gates intact."
+        title="Studio"
+        description="Create, review, and ship from one surface. Media first. Gates intact. The map below is a directory, not a live status board."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/gen-video">
@@ -52,7 +52,7 @@ export default function StudioPage() {
             <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">In motion</p>
             <h2 className="mt-1 text-lg font-semibold text-navy">Recent studio media</h2>
           </div>
-          <p className="text-xs tabular-nums text-navy/40">{ready} modules ready</p>
+          <p className="text-xs tabular-nums text-navy/40">{ready} working surfaces</p>
         </div>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -121,7 +121,7 @@ export default function StudioPage() {
       <section className="mt-16">
         <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/40">Department map</p>
         <p className="mt-1 max-w-xl text-xs text-navy/45">
-          Directory of surfaces — not a live status board. Ready means the surface does work (queue, review, export, grade). Board is a sample or planner. Bridge hands off a file. AI media runs through JobRunner. Ready is never Live.
+          Directory of surfaces — not a live status board. Ready means the surface does work (queue, review, export, grade). Board is a sample, sketch, or reference — it may emit a file; it is not an editor. Bridge hands off a file. AI media runs through JobRunner. Ready is never Live.
         </p>
         <div className="mt-4 space-y-6">
           {Object.entries(byDept).map(([dept, mods]) => (

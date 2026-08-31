@@ -1,6 +1,6 @@
-# EditForge Flagship Studio OS
+# EditForge control plane
 
-Studio OS: departments + AI media + engine bridges.
+Departments, AI media lanes, and file-handoff bridges. Ready is never Live. Boards are samples. Bridges emit files.
 
 | Need | EditForge | Engine |
 |------|-----------|--------|

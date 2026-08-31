@@ -9,10 +9,10 @@ import { Section } from "@/components/ui/section";
 export type ArtifactKind = "edl" | "stems" | "shots" | "paths" | "plan";
 
 const COPY: Record<ArtifactKind, { file: string; what: string }> = {
-  edl: { file: "CMX3600 EDL", what: "Picture conform list. Loads in Resolve, Premiere, or Final Cut." },
-  stems: { file: "Stem sheet (CSV)", what: "One row per level of the audio ladder, with the delivery target." },
-  shots: { file: "Shot package (JSON)", what: "Frame ranges and colour space for comp and 3D." },
-  paths: { file: "Path contract (JSON)", what: "Canonical online, nearline, and archive paths for this cut." },
+  edl: { file: "CMX3600 EDL", what: "Picture conform list. A file for Resolve, Premiere, or Final Cut — this page does not run them." },
+  stems: { file: "Stem sheet (CSV)", what: "One row per audio-ladder level. Not Fairlight, not a mixer." },
+  shots: { file: "Shot package (JSON)", what: "Frame ranges and colour space. Not Fusion, not a compositor." },
+  paths: { file: "Path contract (JSON)", what: "Invented canonical paths. Not Drive, not S3, not Frame.io." },
   plan: {
     file: "FFmpeg plan (JSON)",
     what: "The encode command for the farm. A plan, not a render — the farm executes after a human confirms.",

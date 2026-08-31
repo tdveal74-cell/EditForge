@@ -26,9 +26,9 @@ export default function LongformPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="Long-form"
-        title="Episode / feature render"
-        description="Gen models make short clips. Long-form is chapters → segments → stitch → grade → rubric → master. The stitch is where it becomes one piece."
+        eyebrow="Board"
+        title="Sample stitch plan"
+        description="A sample chapter list and a plan JSON. Not a running episode renderer. The rubric checkbox on this page is a brief for the plan — it is not a recorded ship gate."
         actions={
           <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
             {(total / 60).toFixed(1)} min

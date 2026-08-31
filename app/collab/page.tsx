@@ -64,9 +64,9 @@ export default function CollabPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="Studio"
-        title="Collaboration"
-        description="Roles for handoff, and the short list of things the studio actually refuses. The ship decision has exactly one owner by agreement; the gates below hold by code."
+        eyebrow="Board"
+        title="Role agreement"
+        description="A working-agreement board, not a permissions product. Per-role access is not enforced. The ship decision has one owner by agreement; the gates below hold by code."
       />
 
       <Section title="What is enforced">

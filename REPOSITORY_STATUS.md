@@ -4,9 +4,9 @@
 
 | Field | Value |
 |-------|--------|
-| Product | EditForge — post-production Studio OS |
+| Product | EditForge — post-production control plane |
 | Canonical runtime | Next.js 15 app (`app/`, `lib/`) local + plan APIs |
-| Completion vocabulary | **code-complete** for Studio control plane and DEVON-governed execution; live provider verification remains external |
+| Completion vocabulary | control plane and DEVON path are implemented; live clone/full-motion is not proven; Boards and Bridges remain |
 | Job lifecycle | `lib/jobs.ts` — planned→authorized→queued→running→validating→completed/failed/cancelled + rubric decision record |
 | Provider boundary | `lib/providers.ts` — the one place a provider is called; the registry it dispatches on is `lib/provider-registry.ts`, shared with the UI so a picker cannot offer what the boundary refuses. Fails closed without credentials, never invents an external id, mock always labelled and returns no media |
 | Live wires | Runway gen-video (`text_to_video`/`tasks`), ElevenLabs voice (bytes back → artifact store), HeyGen avatar (`v3/videos`). Kling · Veo · Seedream registered, unimplemented, refusing. `docs/CREDENTIALS.md` is the wiring runbook |

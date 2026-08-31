@@ -9,7 +9,7 @@ export default function Page() {
       spec={{
         title: "VFX engine bridge",
         description:
-          "Shot packages out to comp and 3D. The tracking board stays on /vfx — this bridge only moves the work.",
+          "Downloads a shot package JSON. Not Fusion, not After Effects, not a compositor. The tracking board stays on /vfx — this file only names the shots.",
         artifacts: ["shots"],
         engines: ["Fusion", "After Effects", "Houdini / Blender"],
         handoff: [

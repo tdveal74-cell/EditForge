@@ -45,26 +45,27 @@ If no → continue the loop.
 
 ## EditForge current score (living)
 
-Honest recut after Round 2 (2026-08-31). A fresh independent critic scored **honesty 74/100 LOSE** against the Round-1 tree. Round-1 file claims (Ready ≠ Live, landing wired-only, EDL-only NLE, no blur, mobile nav, stock as licensed index) still hold. The Round-1 **~80 overall** does not.
+Honest recut after Round 3 (2026-08-31). A fresh independent critic scored **honesty 76/100 LOSE** against Round-2 HEAD `1cf6596`. Do not rubber-stamp 74. Do not recut to 80. Do not jump to 100.
 
-This table is the critic’s 74, plus notes on what Round 2 actually closed. It is not 80. It is not 99. It is not 100.
+This table is the critic’s **76**, plus notes on what this round actually closed. It is not 80. It is not 99. It is not 100.
 
 | Surface | Score | Note |
 |---------|-------|------|
-| Landing | ~76 | Working-surfaces count (not “Ready modules”). Still a control-plane hero, not a competitor landing. |
-| Studio hub | ~76 | Taxonomy copy: Ready = does work; Board = sample; Bridge = file. Map is still a directory. |
-| Gen video | ~84 | One stage; mock default; STRENGTHS no longer sell motion-brush/restyle/extend as wired. |
-| Voice | ~85 | Listen stage is the JobRunner result. Consent gate held. |
-| Avatar | ~85 | Stage unified. Sample briefs are draft, not ready. |
-| Captions / titles / presets / audio | ~74 | Self-labeled Board. Emit SRT/VTT, spec, preset, audio-law files. Not product editors. |
-| Script / pipeline / archive | ~70 | Recategorized Board. Sample beats, static stage map, empty checklist. |
+| Landing | ~76 | Control plane, not Flagship Studio OS. Working-surfaces count from `workingSurfaces()` excludes Boards. |
+| Studio hub | ~76 | Directory, not a live status board. Ready = does work. Board = sample/sketch/reference, not an editor. |
+| Gen video | ~80 | One stage; mock default; STRENGTHS text-to-video only. Not Runway-the-product. |
+| Voice | ~80 | Listen stage is the JobRunner result. Consent gate held. |
+| Avatar | ~80 | Stage unified. Sample briefs are draft, not ready. |
+| Captions / titles / presets / audio | ~74 | Self-labeled Board. Emit files. Not product editors. |
+| Script / pipeline / archive | ~72 | Board. Pipeline now emits a stage-map file. Still not a running pipeline. |
+| Timeline / collab / hardware / longform | ~70 | Recategorized Board. Sketch / role agreement / reference classes / sample stitch plan. |
 | Stock | ~80 | Licensed index, not Artlist search. |
 | Review | ~86 | Player first; portrait fit; seekable notes. |
 | Dailies | ~87 | Contact sheet + mobile approve/reject. |
 | JobRunner | ~88 | Gates on wired/credential/settings/store; mock labeled; amber only when billable. |
 | Mobile nav | ~80 | Priority strip + More. |
-| Bridges | ~78 | File handoff wrappers (EDL / stems / shots / paths / ffmpeg-plan). Not engines. |
-| **Overall** | **74** | Critic floor. Round 2 closed the named honesty gaps. Did not earn 80. |
+| Bridges | ~72 | Thin BridgePanel wrappers. Files disclose they are not Fairlight / Drive / Fusion / a farm. |
+| **Overall** | **76** | Critic floor on `1cf6596`, held after closing the named leftovers. Did not earn 80. Did not earn 100. |
 
 Update this table as surfaces clear higher bars. Do not recut upward without a fresh critic.
 
@@ -106,4 +107,21 @@ Shipped:
 
 Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, a 80 or 100 overall.
 
-Largest remaining gap: Ready still covers thin working surfaces (collab, hardware, timeline sketch). Boards emit files but are not editors. Bridges are thin wrappers. No fresh visual critic this round. Not 99.
+Largest remaining gap (closed in Round 3 taxonomy, still true as product): Boards emit files but are not editors. Bridges are thin wrappers. No fresh visual critic this round. Not 99.
+
+### Round 3 — 2026-08-31 (`gauntlet/to-100`)
+
+Incoming critic on `1cf6596`: honesty **76/100 LOSE**. Do not rubber-stamp 74. Do not recut to 80.
+
+Shipped:
+
+- Timeline, collab, hardware, and longform recategorized Board. Pages self-label. Timeline is a read-only assembly sketch, not an NLE. Collab is a role-agreement board; per-role auth is not code. Hardware is reference classes, not a live inventory. Longform is a sample stitch plan; the page checkbox is not a recorded ship gate.
+- Landing dropped “Flagship Studio OS” / “Post-production OS” / “one operating surface.” Hero is a control plane. Working-surfaces count from `workingSurfaces()` only.
+- Pipeline emits a stage-map JSON. VFX eyebrow is Board (tracker, not a compositor).
+- COMPLETION no longer `[x]` Boards as Operational and no longer says code-complete. `docs/STUDIO_OS.md` and `REPOSITORY_STATUS.md` recut the Flagship / code-complete chrome.
+- mix / mam / vfx-engine copy and the downloaded files themselves: not Fairlight, not Drive/S3/Frame.io, not Fusion.
+- Overall **76**. No 80. No 100.
+
+Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, per-role auth, a live hardware inventory, an NLE on /timeline, editors on Boards.
+
+Largest remaining gap: Boards emit files but are not editors. Bridges remain thin wrappers. Remaining Ready surfaces include indexes (assets, export matrix). No fresh visual critic. Not 99.

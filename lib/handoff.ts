@@ -133,7 +133,12 @@ export function buildStemSheet(opts: {
     ]);
   }
 
-  return [`# STEM SHEET — ${sanitizeComment(title)}`, `# DELIVERY: ${target.label}`, ...rows.map(toCsvRow)].join("\n") + "\n";
+  return [
+    `# STEM SHEET — ${sanitizeComment(title)}`,
+    `# NOTICE: File handoff — not Fairlight, not Pro Tools, not a mixer. Hierarchy from /audio.`,
+    `# DELIVERY: ${target.label}`,
+    ...rows.map(toCsvRow),
+  ].join("\n") + "\n";
 }
 
 export type LoudnessTarget = {
@@ -188,6 +193,8 @@ export function buildShotPackage(opts: {
     JSON.stringify(
       {
         title,
+        notice:
+          "Shot package JSON — not Fusion, not After Effects, not a compositor. Frame ranges for a compositor to open.",
         fps,
         frameRangeConvention: "firstFrame inclusive, lastFrameExclusive exclusive",
         colorSpace,
@@ -221,6 +228,8 @@ export function buildPathContract(opts: { cutId: string; title: string }): strin
       {
         cutId,
         title,
+        notice:
+          "Path contract JSON with invented canonical paths. Not Drive, not S3, not Frame.io. This file names the tiers; it does not move media.",
         tiers: {
           online: { path: `online/${base}/`, role: "Working media on shared storage — edit and grade read from here" },
           nearline: { path: `nearline/${base}/`, role: "Completed masters, retrievable in minutes" },

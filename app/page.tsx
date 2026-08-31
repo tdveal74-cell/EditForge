@@ -2,11 +2,11 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { LANDING_CAPABILITIES } from "@/lib/landing";
-import { STUDIO_MODULES } from "@/lib/studio";
+import { STUDIO_MODULES, workingSurfaces } from "@/lib/studio";
 import { PRIMARY_CLIP, REFERENCE_STILL, videos } from "@/lib/mediaLibrary";
 
 export default function HomePage() {
-  const ready = STUDIO_MODULES.filter((m) => m.status === "operational").length;
+  const ready = workingSurfaces().length;
   const aiMedia = STUDIO_MODULES.filter((m) => m.status === "ai-media").length;
   const clipCount = videos().length;
 
@@ -30,16 +30,16 @@ export default function HomePage() {
 
         <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-20 sm:px-6 sm:pb-24 sm:pt-28">
           <p className="text-xs font-medium uppercase tracking-[0.24em] text-amber-600">
-            EditForge · Flagship Studio OS
+            EditForge · control plane
           </p>
           <h1 className="mt-4 max-w-3xl text-balance text-4xl font-semibold tracking-tight text-navy sm:text-5xl md:text-[3.25rem] md:leading-[1.08]">
             Make the cut.
             <span className="mt-1 block text-navy/75">Ship only what earns the rubric.</span>
           </h1>
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-navy/70 sm:text-base">
-            Post-production OS for commercials, Shorts, Reels, and long-form.
+            Post-production control plane for commercials, Shorts, Reels, and long-form.
             Generative lanes, dailies, grade, and delivery — with restraint as house law
-            and a human gate before master.
+            and a human gate before master. Boards are samples. Bridges emit files. Ready is never Live.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-3">
@@ -84,7 +84,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">What you run</p>
           <h2 className="mt-2 max-w-2xl text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
-            Creation, review, and delivery in one operating surface
+            What is wired, what is a board, what is a file
           </h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {LANDING_CAPABILITIES.map((c) => (

@@ -44,3 +44,26 @@ export const DELIVERABLES: {
   { id: "web-720", label: "Web 720p", width: 1280, height: 720, use: "Lightweight review" },
   { id: "proxy", label: "Edit proxy", width: 1280, height: 720, use: "Internal edit only" },
 ];
+
+/** Sample stage map as a file. Not a running pipeline. */
+export function buildPipelineMap(
+  stages: typeof PIPELINE_STAGES = PIPELINE_STAGES,
+): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "pipeline-stage-map",
+        notice:
+          "Sample stage map. Not a running pipeline, not Resolve, Premiere, CapCut, or Descript.",
+        stages: stages.map((s) => ({
+          id: s.id,
+          label: s.label,
+          inspiredBy: s.inspiredBy,
+          restraintNote: s.restraintNote,
+        })),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}

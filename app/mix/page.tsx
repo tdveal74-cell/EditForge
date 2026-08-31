@@ -9,7 +9,7 @@ export default function Page() {
       spec={{
         title: "Mix bridge",
         description:
-          "Stem sheet and loudness targets for the mix stage. The hierarchy set on /audio is law — the mix realises it, it does not renegotiate it.",
+          "Downloads a stem sheet CSV. Not Fairlight, not Pro Tools, not a mixer. The hierarchy on /audio is law — this file realises it.",
         artifacts: ["stems"],
         engines: ["Fairlight", "Pro Tools", "Atmos renderer"],
         handoff: [

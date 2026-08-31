@@ -74,9 +74,9 @@ export default function VfxPage() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="VFX"
+        eyebrow="Board"
         title="Shot board"
-        description="Tracker only. Heavy comp stays in Fusion, After Effects, or 3D — the shot package crossing at /vfx-engine carries this board's state."
+        description="A shot tracker, not a compositor. Heavy comp stays in Fusion, After Effects, or 3D — the shot package crossing at /vfx-engine carries this board's state."
       />
 
       <Section title="Add a shot">

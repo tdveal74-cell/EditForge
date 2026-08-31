@@ -9,7 +9,7 @@ export default function Page() {
       spec={{
         title: "MAM bridge",
         description:
-          "Where the media actually lives. /assets is the catalog surface; this bridge is the storage contract behind it.",
+          "Downloads a path-contract JSON with invented canonical paths. Not Drive, not S3, not Frame.io. /assets is the catalog; this file only names the tiers.",
         artifacts: ["paths"],
         engines: ["Google Drive", "Amazon S3", "Frame.io"],
         handoff: [

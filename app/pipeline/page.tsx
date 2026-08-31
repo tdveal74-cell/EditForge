@@ -1,9 +1,12 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { PageHeader } from "@/components/PageHeader";
-import { PIPELINE_STAGES } from "@/lib/pipeline";
+import { DownloadButton } from "@/components/DownloadButton";
+import { PIPELINE_STAGES, buildPipelineMap } from "@/lib/pipeline";
 
 export const metadata: Metadata = { title: "Pipeline" };
+
+const map = buildPipelineMap();
 
 const next = [
   { href: "/timeline", label: "Timeline" },
@@ -18,7 +21,12 @@ export default function PipelinePage() {
       <PageHeader
         eyebrow="Board"
         title="Stage map"
-        description="A static list of production stages. Not a running pipeline, not Resolve, Premiere, CapCut, or Descript — those stay external."
+        description="A static list of production stages as a file. Not a running pipeline, not Resolve, Premiere, CapCut, or Descript — those stay external."
+        actions={
+          <DownloadButton filename="editforge-pipeline.json" body={map} mime="application/json">
+            Download map
+          </DownloadButton>
+        }
       />
 
       <ol className="relative mt-10">

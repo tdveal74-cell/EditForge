@@ -43,6 +43,10 @@ export const BOARD_MODULE_IDS = [
   "presets",
   "audio",
   "vfx",
+  "timeline",
+  "collab",
+  "hardware",
+  "longform",
 ] as const;
 
 export const STUDIO_MODULES: StudioModule[] = [
@@ -51,14 +55,14 @@ export const STUDIO_MODULES: StudioModule[] = [
   { id: "dailies", dept: "Production", label: "Dailies", href: "/dailies", status: "operational", studioRole: "Day roll queue" },
   { id: "script", dept: "Development", label: "Script notes", href: "/script", status: "planner", studioRole: "Sample beats — not a screenplay tool" },
   { id: "nle", dept: "Editorial", label: "NLE bridge", href: "/nle", status: "bridge", studioRole: "CMX3600 EDL handoff — not AAF/XML" },
-  { id: "timeline", dept: "Editorial", label: "Timeline", href: "/timeline", status: "operational", studioRole: "Assembly sketch" },
+  { id: "timeline", dept: "Editorial", label: "Timeline", href: "/timeline", status: "planner", studioRole: "Assembly sketch — read-only, not an NLE" },
   { id: "color", dept: "Color", label: "Restraint grade", href: "/color", status: "operational", studioRole: "Envelope + Resolve bridge" },
   { id: "audio", dept: "Sound", label: "Audio hierarchy", href: "/audio", status: "planner", studioRole: "Ladder as a file — mix realises it" },
   { id: "mix", dept: "Sound", label: "Mix bridge", href: "/mix", status: "bridge", studioRole: "Stem sheet file — not Fairlight" },
   { id: "voice", dept: "AI Media", label: "Voice clone / TTS", href: "/voice", status: "ai-media", studioRole: "ElevenLabs wired · mock default" },
   { id: "avatar", dept: "AI Media", label: "Avatar / talking head", href: "/avatar", status: "ai-media", studioRole: "HeyGen wired · mock default" },
   { id: "gen-video", dept: "AI Media", label: "Gen video", href: "/gen-video", status: "ai-media", studioRole: "Runway text-to-video · others refuse" },
-  { id: "longform", dept: "Deliverables", label: "Long-form render", href: "/longform", status: "operational", studioRole: "Chapters · stitch · episode master" },
+  { id: "longform", dept: "Deliverables", label: "Long-form render", href: "/longform", status: "planner", studioRole: "Sample stitch plan — not a running episode renderer" },
   { id: "stock", dept: "Library", label: "Stock library", href: "/stock", status: "operational", studioRole: "Licensed index — not live Artlist search" },
   { id: "captions", dept: "Finishing", label: "Captions", href: "/captions", status: "planner", studioRole: "SRT / VTT from a sample cue list" },
   { id: "titles", dept: "Finishing", label: "Titles", href: "/titles", status: "planner", studioRole: "Title card spec from sample cards" },
@@ -73,8 +77,8 @@ export const STUDIO_MODULES: StudioModule[] = [
   { id: "render", dept: "Deliverables", label: "Render farm", href: "/render", status: "bridge", studioRole: "ffmpeg-plan JSON — farm executes elsewhere" },
   { id: "presets", dept: "Brand", label: "Lane presets", href: "/presets", status: "planner", studioRole: "Lane restraint JSON" },
   { id: "archive", dept: "Archive", label: "Archive", href: "/archive", status: "planner", studioRole: "Checklist board — not a live archive" },
-  { id: "collab", dept: "Studio", label: "Collaboration", href: "/collab", status: "operational", studioRole: "Roles" },
-  { id: "hardware", dept: "Infrastructure", label: "Hardware reference", href: "/hardware", status: "operational", studioRole: "Suite specs · storage · farm" },
+  { id: "collab", dept: "Studio", label: "Collaboration", href: "/collab", status: "planner", studioRole: "Role agreement — per-role auth is not code" },
+  { id: "hardware", dept: "Infrastructure", label: "Hardware reference", href: "/hardware", status: "planner", studioRole: "Reference classes — not a live inventory" },
 ];
 
 export function modulesByDept(): Record<string, StudioModule[]> {
@@ -83,4 +87,9 @@ export function modulesByDept(): Record<string, StudioModule[]> {
     (map[m.dept] ||= []).push(m);
   }
   return map;
+}
+
+/** Surfaces that do operator work (queue, review, export, grade). Never Boards or Bridges. */
+export function workingSurfaces(): StudioModule[] {
+  return STUDIO_MODULES.filter((m) => m.status === "operational");
 }

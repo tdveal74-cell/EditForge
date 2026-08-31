@@ -2,21 +2,20 @@
 
 ## Definition of done (this repo)
 The governed DEVON execution path and the private provider adapter are
-code-complete. Studio OS still includes Boards (sample/planner) and Bridges (file handoff).
-Live provider readiness remains credential-, identity-, and host-dependent.
+implemented. They are not a finished Studio OS. Boards (sample/planner/sketch)
+and Bridges (file handoff) remain. Live provider readiness remains credential-,
+identity-, and host-dependent.
 
 ### Operational
 - [x] Studio department map
-- [x] Pipeline, projects, dailies, script
-- [x] Timeline, color
-- [ ] Audio hierarchy, captions, titles, lane presets, script, pipeline, archive — Boards (sample/planner). They emit files. They are not product editors.
+- [x] Projects, dailies
+- [x] Color
+- [ ] Boards (sample / sketch / reference — they may emit a file; they are not editors): pipeline, script, archive, captions, titles, presets, audio, vfx, timeline (read-only assembly sketch), collab (role agreement; per-role auth is not code), hardware (reference classes, not inventory), longform (sample stitch plan — the page checkbox is not a recorded ship gate)
 - [x] Assets, review, rubric (saves pass to cut)
-- [x] Export, jobs, archive, collab
-- [x] Long-form chapters + stitch plan
+- [x] Export, jobs
 - [x] Flagship tokens + Nav
-- [x] AAA design system: full token ramps, elevation, motion, a11y floor (2026-08-12)
+- [x] Design system tokens: full token ramps, elevation, motion, a11y floor (2026-08-12)
 - [x] Shared primitives: Button · Card · Badge · PageHeader
-- [x] Hardware reference tier: `lib/hardware.ts` · `/hardware` · `docs/HARDWARE.md`
 
 ### AI media
 - [x] Voice — ElevenLabs wired end to end: `xi-api-key`, studio-voice → provider-voice resolution, returned bytes stored in the artifact store as the job's result
@@ -69,4 +68,4 @@ and how to verify it without reading a secret — is `docs/CREDENTIALS.md`.
 npm install && npm test && npm run build && npm run dev
 ```
 
-**Status: DEVON provider execution is code-complete. Studio surfaces still include Boards and Bridges. Not a finished AAA NLE. Live account configuration pending.**
+**Status: DEVON adapter path is implemented; live clone/full-motion is not proven. Studio still includes Boards and Bridges. Not a finished NLE. Not a product Studio OS.**

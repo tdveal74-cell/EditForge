@@ -11,9 +11,9 @@ export default function HardwarePage() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-12">
       <PageHeader
-        eyebrow="Infrastructure"
-        title="Flagship hardware reference"
-        description="Reference classes per suite — compute, memory, GPU, I/O, and the monitoring chain each department signs off on. Classes, not SKUs: procurement picks the current generation."
+        eyebrow="Board"
+        title="Hardware reference"
+        description="A reference board, not a live inventory and not a procurement catalog. Classes per suite — compute, memory, GPU, I/O, monitoring. Classes, not SKUs: procurement picks the current generation."
       />
 
       <section className="mt-10">

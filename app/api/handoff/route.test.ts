@@ -102,3 +102,24 @@ describe("handoff download", () => {
     expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 });
+
+  it("serves an ffmpeg plan as a named JSON attachment", async () => {
+    const res = await GET(get("kind=plan&cutId=c1&jobKind=proxy"));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Content-Type")).toContain("application/json");
+    expect(res.headers.get("Content-Disposition")).toContain("cold_open_ffmpeg_proxy.json");
+    const body = JSON.parse(await res.text());
+    expect(body.handoff).toBe("render-farm");
+    expect(body.plan.command).toContain("ffmpeg");
+    expect(body.allowed).toBe(true);
+  });
+
+  it("export plans stay blocked in the file when the cut has no rubric pass", async () => {
+    const res = await GET(get("kind=plan&cutId=c1&jobKind=export"));
+    expect(res.status).toBe(200);
+    const body = JSON.parse(await res.text());
+    expect(body.kind).toBe("export");
+    expect(body.allowed).toBe(false);
+    expect(body.reason).toMatch(/no recorded rubric pass/);
+  });
+

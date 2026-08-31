@@ -9,6 +9,24 @@ export type StudioModule = {
   studioRole: string;
 };
 
+/**
+ * Hub badges. Operational means the surface is ready to use — never "Live".
+ * Live is reserved for a real provider run (JobRunner / job.mode).
+ */
+export const MODULE_STATUS_LABEL: Record<ModuleStatus, string> = {
+  operational: "Ready",
+  planner: "Board",
+  bridge: "Bridge",
+  "ai-media": "AI media",
+};
+
+export const MODULE_STATUS_TONE: Record<ModuleStatus, "neutral" | "outline" | "accent" | "quiet"> = {
+  operational: "neutral",
+  planner: "quiet",
+  bridge: "outline",
+  "ai-media": "accent",
+};
+
 export const STUDIO_MODULES: StudioModule[] = [
   { id: "pipeline", dept: "Production", label: "Pipeline", href: "/pipeline", status: "operational", studioRole: "Stage map ingest → deliver" },
   { id: "projects", dept: "Production", label: "Projects / bins", href: "/projects", status: "operational", studioRole: "Cut tracking" },
@@ -17,15 +35,15 @@ export const STUDIO_MODULES: StudioModule[] = [
   { id: "nle", dept: "Editorial", label: "NLE bridge", href: "/nle", status: "bridge", studioRole: "Resolve · Premiere · FCP handoff" },
   { id: "timeline", dept: "Editorial", label: "Timeline", href: "/timeline", status: "operational", studioRole: "Assembly sketch" },
   { id: "color", dept: "Color", label: "Restraint grade", href: "/color", status: "operational", studioRole: "Envelope + Resolve bridge" },
-  { id: "audio", dept: "Sound", label: "Audio hierarchy", href: "/audio", status: "operational", studioRole: "VO / music / SFX law" },
+  { id: "audio", dept: "Sound", label: "Audio hierarchy", href: "/audio", status: "planner", studioRole: "VO / music / SFX law — sample board" },
   { id: "mix", dept: "Sound", label: "Mix bridge", href: "/mix", status: "bridge", studioRole: "Fairlight · Pro Tools stems" },
   { id: "voice", dept: "AI Media", label: "Voice clone / TTS", href: "/voice", status: "ai-media", studioRole: "ElevenLabs-class VO" },
   { id: "avatar", dept: "AI Media", label: "Avatar / talking head", href: "/avatar", status: "ai-media", studioRole: "HeyGen talking head" },
-  { id: "gen-video", dept: "AI Media", label: "Gen video", href: "/gen-video", status: "ai-media", studioRole: "Kling · Veo · Runway · Seedream" },
+  { id: "gen-video", dept: "AI Media", label: "Gen video", href: "/gen-video", status: "ai-media", studioRole: "Runway wired · others refuse" },
   { id: "longform", dept: "Deliverables", label: "Long-form render", href: "/longform", status: "operational", studioRole: "Chapters · stitch · episode master" },
-  { id: "stock", dept: "Library", label: "Stock library", href: "/stock", status: "bridge", studioRole: "Artlist-class music · SFX · footage" },
-  { id: "captions", dept: "Finishing", label: "Captions", href: "/captions", status: "operational", studioRole: "SRT lane" },
-  { id: "titles", dept: "Finishing", label: "Titles", href: "/titles", status: "operational", studioRole: "Minimal cards" },
+  { id: "stock", dept: "Library", label: "Stock library", href: "/stock", status: "operational", studioRole: "Licensed index — not live Artlist search" },
+  { id: "captions", dept: "Finishing", label: "Captions", href: "/captions", status: "planner", studioRole: "SRT sample board" },
+  { id: "titles", dept: "Finishing", label: "Titles", href: "/titles", status: "planner", studioRole: "Minimal card board" },
   { id: "vfx", dept: "VFX", label: "VFX board", href: "/vfx", status: "planner", studioRole: "Shot tracker" },
   { id: "vfx-engine", dept: "VFX", label: "VFX engine bridge", href: "/vfx-engine", status: "bridge", studioRole: "Fusion · AE · 3D" },
   { id: "assets", dept: "MAM", label: "Assets", href: "/assets", status: "operational", studioRole: "Catalog index" },
@@ -34,8 +52,8 @@ export const STUDIO_MODULES: StudioModule[] = [
   { id: "rubric", dept: "QC", label: "Rubric", href: "/rubric", status: "operational", studioRole: "Ship gate" },
   { id: "export", dept: "Deliverables", label: "Export", href: "/export", status: "operational", studioRole: "Format matrix" },
   { id: "jobs", dept: "Deliverables", label: "Transcode", href: "/jobs", status: "operational", studioRole: "ffmpeg plans" },
-  { id: "render", dept: "Deliverables", label: "Render farm", href: "/render", status: "bridge", studioRole: "Cloud / worker encode" },
-  { id: "presets", dept: "Brand", label: "Lane presets", href: "/presets", status: "operational", studioRole: "TSWS lanes" },
+  { id: "render", dept: "Deliverables", label: "Render farm", href: "/render", status: "bridge", studioRole: "Plan handoff — farm executes elsewhere" },
+  { id: "presets", dept: "Brand", label: "Lane presets", href: "/presets", status: "planner", studioRole: "TSWS lane notes" },
   { id: "archive", dept: "Archive", label: "Archive", href: "/archive", status: "operational", studioRole: "Cold checklist" },
   { id: "collab", dept: "Studio", label: "Collaboration", href: "/collab", status: "operational", studioRole: "Roles" },
   { id: "hardware", dept: "Infrastructure", label: "Hardware reference", href: "/hardware", status: "operational", studioRole: "Suite specs · storage · farm" },

@@ -6,13 +6,17 @@ import { LOUDNESS_TARGETS, TIMEBASES } from "@/lib/handoff";
 import { Label, Select } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 
-export type ArtifactKind = "edl" | "stems" | "shots" | "paths";
+export type ArtifactKind = "edl" | "stems" | "shots" | "paths" | "plan";
 
 const COPY: Record<ArtifactKind, { file: string; what: string }> = {
   edl: { file: "CMX3600 EDL", what: "Picture conform list. Loads in Resolve, Premiere, or Final Cut." },
   stems: { file: "Stem sheet (CSV)", what: "One row per level of the audio ladder, with the delivery target." },
   shots: { file: "Shot package (JSON)", what: "Frame ranges and colour space for comp and 3D." },
   paths: { file: "Path contract (JSON)", what: "Canonical online, nearline, and archive paths for this cut." },
+  plan: {
+    file: "FFmpeg plan (JSON)",
+    what: "The encode command for the farm. A plan, not a render — the farm executes after a human confirms.",
+  },
 };
 
 /**
@@ -28,6 +32,7 @@ export function HandoffArtifacts({ kinds }: { kinds: ArtifactKind[] }) {
   const [cutId, setCutId] = useState("");
   const [fps, setFps] = useState(25);
   const [target, setTarget] = useState(LOUDNESS_TARGETS[0].id);
+  const [jobKind, setJobKind] = useState<"proxy" | "export">("proxy");
 
   useEffect(() => {
     fetch("/api/cuts", { cache: "no-store" })
@@ -43,16 +48,21 @@ export function HandoffArtifacts({ kinds }: { kinds: ArtifactKind[] }) {
   const cut = cuts?.find((c) => c.id === cutId);
   const needsFps = kinds.some((k) => k === "edl" || k === "shots");
   const needsTarget = kinds.includes("stems");
+  const needsJobKind = kinds.includes("plan");
 
   function href(kind: ArtifactKind): string {
     const q = new URLSearchParams({ kind, cutId });
     if (kind === "edl" || kind === "shots") q.set("fps", String(fps));
     if (kind === "stems") q.set("target", target);
+    if (kind === "plan") q.set("jobKind", jobKind);
     return `/api/handoff?${q.toString()}`;
   }
 
   return (
     <Section title="Take the handoff">
+      <p className="mb-4 text-xs leading-relaxed text-navy/55">
+        Files leave EditForge. The engine on the far side owns pixels. This is a handoff, not a live engine.
+      </p>
       <div className="flex flex-wrap items-end gap-4">
         <div className="min-w-[16rem] flex-1">
           <Label text="Cut">
@@ -95,6 +105,17 @@ export function HandoffArtifacts({ kinds }: { kinds: ArtifactKind[] }) {
             </Label>
           </div>
         )}
+
+        {needsJobKind && (
+          <div className="w-40">
+            <Label text="Plan kind">
+              <Select value={jobKind} onChange={(e) => setJobKind(e.target.value as "proxy" | "export")}>
+                <option value="proxy">proxy</option>
+                <option value="export">export</option>
+              </Select>
+            </Label>
+          </div>
+        )}
       </div>
 
       {cuts?.length === 0 ? (
@@ -107,6 +128,7 @@ export function HandoffArtifacts({ kinds }: { kinds: ArtifactKind[] }) {
             <li key={k}>
               <a
                 href={cutId ? href(k) : undefined}
+                download
                 aria-disabled={!cutId}
                 className={`block rounded-card border p-4 shadow-card transition-all duration-flagship ease-flagship ${
                   cutId
@@ -122,9 +144,6 @@ export function HandoffArtifacts({ kinds }: { kinds: ArtifactKind[] }) {
         </ul>
       )}
 
-      {/* An EDL of a cut with no assembly of its own is an EDL of the sample
-          assembly. Say it here as well as in the file, so nobody discovers it
-          after conforming. */}
       {cut && !cut.clips && (
         <p className="mt-3 text-xs text-navy/45">
           “{cut.title}” has no assembly of its own yet, so these are built from the sample assembly. Each

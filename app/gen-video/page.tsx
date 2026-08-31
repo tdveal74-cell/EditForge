@@ -39,7 +39,7 @@ export default function GenVideoPage() {
       <PageHeader
         eyebrow="AI Media"
         title="Generative video"
-        description="Kling · Veo · Runway · Seedream-class output. EditForge holds the brief and the quality bar; providers render pixels. Rubric before master."
+        description="Runway is wired for text-to-video. Kling, Veo, and Seedream stay registered and refuse until implemented. EditForge holds the brief and the quality bar. Rubric before master."
       />
 
       {/* Media-first split: preview language on the left, controls on the right */}
@@ -62,7 +62,7 @@ export default function GenVideoPage() {
             <div className="border-t border-border-faint px-4 py-3">
               <p className="text-sm font-medium text-navy">Studio reference</p>
               <p className="mt-0.5 text-xs text-navy/50">
-                Live generations appear here when a provider returns media. Mock runs stay labeled.
+                Completed provider media would appear here. Until then this is studio reference — not a generation.
               </p>
             </div>
           </div>

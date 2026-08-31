@@ -1,4 +1,4 @@
-import { buildEDL, buildPathContract, buildShotPackage, buildStemSheet, LOUDNESS_TARGETS, slug, TIMEBASES, type Timebase } from "@/lib/handoff";
+import { buildEDL, buildPathContract, buildRenderPlan, buildShotPackage, buildStemSheet, LOUDNESS_TARGETS, slug, TIMEBASES, type Timebase } from "@/lib/handoff";
 import { getCut } from "@/lib/store";
 import { shotsForCut } from "@/lib/vfxboard";
 import { SAMPLE_TIMELINE } from "@/lib/timeline";
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
  * middleware applies to this path like any other.
  */
 
-const KINDS = ["edl", "stems", "shots", "paths"] as const;
+const KINDS = ["edl", "stems", "shots", "paths", "plan"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(v: string): v is Kind {
@@ -69,6 +69,7 @@ export async function GET(req: Request) {
     assemblySource,
     board,
     targetId: url.searchParams.get("target"),
+    jobKind: url.searchParams.get("jobKind"),
   });
   if ("error" in built) return json({ error: built.error }, 400);
 
@@ -87,13 +88,14 @@ export async function GET(req: Request) {
 function build(
   kind: Kind,
   ctx: {
-    cut: { id: string; title: string };
+    cut: { id: string; title: string; rubricPass?: boolean };
     clips: typeof SAMPLE_TIMELINE;
     fps: Timebase;
     name: string;
     assemblySource: string;
     board?: VfxShot[];
     targetId: string | null;
+    jobKind?: string | null;
   }
 ): { body: string; contentType: string; filename: string } | { error: string } {
   const { cut, clips, fps, name, assemblySource } = ctx;
@@ -132,6 +134,21 @@ function build(
         contentType: "application/json; charset=utf-8",
         filename: `${name}_paths.json`,
       };
+
+    case "plan": {
+      const jobKind = ctx.jobKind === "export" ? "export" : "proxy";
+      return {
+        body: buildRenderPlan({
+          cutId: cut.id,
+          title: cut.title,
+          kind: jobKind,
+          rubricPass: Boolean(ctx.cut.rubricPass),
+          assemblySource,
+        }),
+        contentType: "application/json; charset=utf-8",
+        filename: `${name}_ffmpeg_${jobKind}.json`,
+      };
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import {
   LOUDNESS_TARGETS,
   buildEDL,
   buildPathContract,
+  buildRenderPlan,
   buildShotPackage,
   buildStemSheet,
   toFrames,
@@ -256,3 +257,34 @@ function countCsvColumns(row: string): number {
   }
   return cols;
 }
+
+describe("render-farm plan", () => {
+  it("is a plan, not an encode, and names itself a handoff", () => {
+    const json = JSON.parse(
+      buildRenderPlan({
+        cutId: "c1",
+        title: "Cold Open",
+        kind: "proxy",
+        rubricPass: false,
+        assemblySource: "sample assembly",
+      })
+    );
+    expect(json.handoff).toBe("render-farm");
+    expect(json.notice).toMatch(/not an executed render/);
+    expect(json.plan.command).toContain("ffmpeg");
+    expect(json.allowed).toBe(true);
+  });
+
+  it("blocks export when the cut has no rubric pass", () => {
+    const json = JSON.parse(
+      buildRenderPlan({
+        cutId: "c1",
+        title: "Cold Open",
+        kind: "export",
+        rubricPass: false,
+        assemblySource: "cut assembly",
+      })
+    );
+    expect(json.allowed).toBe(false);
+  });
+});

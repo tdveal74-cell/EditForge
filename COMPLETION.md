@@ -7,9 +7,10 @@ code-complete. Live provider readiness remains credential-, identity-, and host-
 ### Operational
 - [x] Studio department map
 - [x] Pipeline, projects, dailies, script
-- [x] Timeline, color, audio, captions, titles
+- [x] Timeline, color
+- [ ] Audio hierarchy, captions, titles, lane presets — sample boards (planner), not product editors
 - [x] Assets, review, rubric (saves pass to cut)
-- [x] Export, jobs, presets, archive, collab
+- [x] Export, jobs, archive, collab
 - [x] Long-form chapters + stitch plan
 - [x] Flagship tokens + Nav
 - [x] AAA design system: full token ramps, elevation, motion, a11y floor (2026-08-12)
@@ -22,10 +23,15 @@ code-complete. Live provider readiness remains credential-, identity-, and host-
 - [x] Gen video — Runway wired (`text_to_video` / `tasks`, aspect and duration translated and bounded); Kling · Veo · Seedream registered and refusing until implemented
 - [x] Control-plane artifact store (`lib/artifacts.ts` + `/api/artifacts/[name]`), content-addressed, audio and video
 - [x] One readiness answer across `/api/providers`, `/api/health`, `editforge_status` and the picker: wired · credentialSet · settingsMissing · billable
-- [x] Stock (Artlist-class index)
+- [x] Stock licensed index (file-an-asset; Artlist/Epidemic search is not wired)
 
-### Bridges
-- [x] NLE · mix · VFX engine · MAM · render farm
+### Handoff file generators
+These are not engines. Each page emits a downloadable file via `/api/handoff`.
+- [x] NLE — CMX3600 EDL (picture only; not AAF/XML)
+- [x] Mix — stem sheet CSV
+- [x] VFX engine — shot package JSON
+- [x] MAM — path contract JSON
+- [x] Render farm — ffmpeg plan JSON (a plan, not an encode)
 
 ### DEVON execution (2026-08-26)
 - [x] Exact-intent DEVON command contract and operation scopes
@@ -43,6 +49,7 @@ code-complete. Live provider readiness remains credential-, identity-, and host-
 
 ### Tests authored
 - [x] restraint · ffmpeg · grade · longform · jobs · genvideo · hardware
+- [x] honesty labels and live-submit gate
 
 ### Governance (2026-08-11)
 - [x] `REPOSITORY_STATUS.md`

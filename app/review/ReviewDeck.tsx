@@ -50,8 +50,14 @@ export function ReviewDeck({ notes, src }: { notes: Note[]; src?: string }) {
     <>
       <div className="mt-10">
         {src && isPlayableVideo(src) ? (
-          <div className="overflow-hidden rounded-card border border-border bg-navy">
-            <video ref={video} src={src} controls preload="metadata" className="block aspect-video w-full" />
+          <div className="flex max-h-[70vh] items-center justify-center overflow-hidden rounded-card border border-border bg-navy">
+            <video
+              ref={video}
+              src={src}
+              controls
+              preload="metadata"
+              className="max-h-[70vh] w-full object-contain"
+            />
           </div>
         ) : (
           <MediaEmpty

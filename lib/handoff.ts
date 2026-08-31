@@ -1,5 +1,6 @@
 import type { TimelineClip } from "./timeline";
 import { AUDIO_HIERARCHY } from "./audio";
+import { buildExportCommand, buildProxyCommand, canRun } from "./ffmpeg";
 
 /**
  * What actually crosses a bridge.
@@ -260,4 +261,50 @@ export function slug(text: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "");
+}
+
+
+/**
+ * The ffmpeg plan that crosses the render-farm bridge.
+ *
+ * A plan, not an encode. The farm (or a local worker) runs it after a human
+ * confirms. Export-class plans stay blocked in the file itself when the cut
+ * has no recorded rubric pass — the download is still the artifact.
+ */
+export function buildRenderPlan(opts: {
+  cutId: string;
+  title: string;
+  kind: "proxy" | "export";
+  inputPath?: string;
+  outputPath?: string;
+  rubricPass: boolean;
+  assemblySource: string;
+}): string {
+  const inputPath = opts.inputPath || "input.mp4";
+  const outputPath = opts.outputPath || (opts.kind === "export" ? "master.mp4" : "proxy.mp4");
+  const plan =
+    opts.kind === "export" ? buildExportCommand(inputPath, outputPath) : buildProxyCommand(inputPath, outputPath);
+  const allowed = opts.kind === "export" ? canRun(plan, opts.rubricPass) : true;
+  return (
+    JSON.stringify(
+      {
+        handoff: "render-farm",
+        notice:
+          "This file is a plan for the encode farm, not an executed render and not an engine. The farm runs it after a human confirms.",
+        cutId: opts.cutId,
+        title: opts.title,
+        assemblySource: opts.assemblySource,
+        kind: opts.kind,
+        plan,
+        allowed,
+        reason: allowed
+          ? opts.kind === "export"
+            ? `Authorised by the recorded rubric pass on "${opts.title}" — run after human confirm`
+            : "Proxy — ungated. The farm runs this after a human confirms"
+          : `Blocked: "${opts.title}" has no recorded rubric pass`,
+      },
+      null,
+      2
+    ) + "\n"
+  );
 }

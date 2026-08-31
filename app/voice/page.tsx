@@ -52,7 +52,7 @@ export default function VoicePage() {
                 stays empty on purpose — no fake waveforms, no implied live render.
               </p>
               <div className="mt-6 flex items-center gap-2">
-                <Badge tone={voice.kind === "cloned" ? "accent" : "neutral"}>{voice.kind}</Badge>
+                <Badge tone={voice.kind === "cloned" ? "outline" : "neutral"}>{voice.kind}</Badge>
                 <span className="text-xs text-navy/50">{voice.name}</span>
               </div>
             </div>

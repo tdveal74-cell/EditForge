@@ -45,18 +45,44 @@ If no → continue the loop.
 
 ## EditForge current score (living)
 
+Honest recut after Round 1 (2026-08-31). The previous ~89 table was not supportable: a living critic scored **68**, then a visual pass on vercel.app scored **81**. This table is the floor after honesty + mobile-nav + gate work — not 99.
+
 | Surface | Score | Note |
 |---------|-------|------|
-| Landing | ~90 | Media hero + proof strip |
-| Studio hub | ~88 | In-motion + create lanes + map |
-| Gen video | ~86 | Media-first split |
-| Voice | ~86 | Listen stage + consent gate |
-| Avatar | ~86 | Stage + projects + brief |
-| Stock | ~87 | Library grid first, license hard-required |
-| Review | ~88 | Player + seekable notes |
-| Dailies | ~89 | Contact sheet + mobile-first approve/reject |
-| JobRunner | ~90 | Result stage + mobile actions + honesty |
-| Mobile nav | ~84 | Priority strip |
-| **Overall** | **~89** | Climbing toward 99 |
+| Landing | ~78 | Honest gen copy; labeled stats; no blur; media hero |
+| Studio hub | ~76 | Ready / Board / Bridge — map de-emphasized; in-motion first |
+| Gen video | ~82 | Reference labeled; JobRunner gates live submit |
+| Voice | ~84 | Listen stage + consent; mock default; missing settings named |
+| Avatar | ~84 | Stage honest; live CTA disabled without credentials |
+| Stock | ~80 | Licensed index, not Artlist search; calm empty |
+| Review | ~86 | Player first; portrait fit; seekable notes |
+| Dailies | ~87 | Contact sheet + mobile approve/reject; approved state differentiated |
+| JobRunner | ~88 | Gates on wired/credential/settings/store; mock labeled |
+| Mobile nav | ~80 | Priority strip + More; no side-scroll (was 68 live) |
+| Bridges | ~80 | EDL / stems / shots / paths / ffmpeg-plan files |
+| **Overall** | **~80** | Honesty floor held. Not 99. Not the old 89. |
 
 Update this table as surfaces clear higher bars.
+
+---
+
+## Round ledger
+
+### Round 1 — 2026-08-31 (`gauntlet/to-100`)
+
+Critics this round: honesty **68/100**, live visual (vercel.app) **81/100**.
+
+Shipped:
+
+- Operational hubs never say Live. Ready / Board / Bridge / AI media only. Sample boards (captions, titles, presets, audio) are Board.
+- Landing does not name unwired providers as output. Stats have units. No backdrop-blur.
+- Mobile nav: three priority links + More. Header cannot overflow ~390px.
+- JobRunner: mock default; live submit disabled when unwired, credential missing, settings missing, or artifact store required and absent. Amber fill only when a live run is actually billable.
+- NLE handoff is CMX3600 EDL only (no AAF/XML claim).
+- Render farm downloads an ffmpeg-plan JSON. Bridges stay checked only because they emit files.
+- Health: control-plane vs self-host surfaced on studio, jobs, JobRunner.
+- Review portrait fit; dailies approved state; rubric empty-state; stock calm loading; jobs loading without fake cut names.
+
+Not claimed: Kling/Veo/Seedream wires, live clone, Vercel executionReady, Artlist search.
+
+Largest remaining gap: creation surfaces still split a reference clip from the JobRunner result, and captions/titles/presets/audio remain sample boards.

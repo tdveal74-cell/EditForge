@@ -1,28 +1,65 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SAMPLE_CUES, formatSrt, formatVtt, newCaptionCue, type CaptionCue } from "@/lib/captions";
 import { downloadText } from "@/lib/download";
+import { PRIMARY_CLIP } from "@/lib/mediaLibrary";
 import { Button } from "@/components/ui/button";
 import { Input, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { PageHeader } from "@/components/PageHeader";
+import { CaptionStage } from "@/components/media/CaptionStage";
 
 export default function CaptionsPage() {
   const [cues, setCues] = useState<CaptionCue[]>(SAMPLE_CUES);
+  const [persistError, setPersistError] = useState<string | null>(null);
   const srt = useMemo(() => formatSrt(cues), [cues]);
   const vtt = useMemo(() => formatVtt(cues), [cues]);
 
-  function update(id: string, patch: Partial<CaptionCue>) {
-    setCues((list) => list.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  useEffect(() => {
+    fetch("/api/captions", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.cues) && d.cues.length) setCues(d.cues);
+      })
+      .catch(() => undefined);
+  }, []);
+
+  async function persist(next: CaptionCue[]) {
+    try {
+      const res = await fetch("/api/captions", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cues: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPersistError((data as { error?: string }).error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setPersistError(null);
+    } catch (err) {
+      setPersistError((err as Error).message);
+    }
   }
 
-  function add() {
-    setCues((list) => [...list, newCaptionCue(list[list.length - 1])]);
+  async function update(id: string, patch: Partial<CaptionCue>) {
+    const next = cues.map((c) => (c.id === id ? { ...c, ...patch } : c));
+    setCues(next);
+    await persist(next);
   }
 
-  function remove(id: string) {
-    setCues((list) => (list.length <= 1 ? list : list.filter((c) => c.id !== id)));
+  async function add() {
+    const next = [...cues, newCaptionCue(cues[cues.length - 1])];
+    setCues(next);
+    await persist(next);
+  }
+
+  async function remove(id: string) {
+    if (cues.length <= 1) return;
+    const next = cues.filter((c) => c.id !== id);
+    setCues(next);
+    await persist(next);
   }
 
   return (
@@ -30,7 +67,7 @@ export default function CaptionsPage() {
       <PageHeader
         eyebrow="Board"
         title="Caption cues"
-        description="Edit cues, then download SRT or WebVTT of what you typed. Not a live captioner, not auto-transcribe, not CapCut."
+        description="Edit cues on the picture, then download SRT or WebVTT of what you typed. Stored. Not a live captioner, not auto-transcribe, not CapCut."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button type="button" onClick={() => downloadText("editforge-captions.srt", srt)}>
@@ -46,6 +83,16 @@ export default function CaptionsPage() {
           </div>
         }
       />
+
+      {persistError && (
+        <p className="mt-4 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Could not store cues: {persistError}
+        </p>
+      )}
+
+      <Section title="On the picture">
+        <CaptionStage src={PRIMARY_CLIP.src} cues={cues} label={PRIMARY_CLIP.label} />
+      </Section>
 
       <Section
         title="Cues"

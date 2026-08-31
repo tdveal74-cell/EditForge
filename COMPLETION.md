@@ -2,7 +2,7 @@
 
 ## Definition of done (this repo)
 The governed DEVON execution path and the private provider adapter are
-implemented. They are not a finished Studio OS. Boards (sample/planner/sketch)
+implemented. They are not a finished Studio OS. Boards (file editors / sketches; captions, titles, audio, and longform persist)
 and Bridges (file handoff) remain. Live provider readiness remains credential-,
 identity-, and host-dependent.
 
@@ -36,7 +36,7 @@ These are not engines. Each page emits a downloadable file via `/api/handoff`.
 ### DEVON execution (2026-08-26)
 - [x] Exact-intent DEVON command contract and operation scopes
 - [x] Durable idempotent edit execution and immutable revision ids
-- [x] Long-form, short-form, and full-motion micro-drama routing
+- [ ] Long-form stitch is a Board (stored chapters → plan); /longform is a Board, not DEVON episode routing
 - [x] Clone/voice/version/consent identity lock
 - [x] FFmpeg/FFprobe worker with source and artifact SHA-256 checks
 - [x] Voice, motion, lip-sync, and nonlinear timeline adapter seams
@@ -49,7 +49,7 @@ These are not engines. Each page emits a downloadable file via `/api/handoff`.
 
 ### Tests authored
 - [x] restraint · ffmpeg · grade · longform · jobs · genvideo · hardware
-- [x] honesty: shared audio/mix law, longform plans edited chapters, export selection, isLiveWired(mock) is false
+- [x] honesty: stored captions/titles/longform, mix renders getAudioLaw, toneFor ready/live not done, isLiveWired(mock) is false
 
 ### Governance (2026-08-11)
 - [x] `REPOSITORY_STATUS.md`

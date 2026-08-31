@@ -7,7 +7,9 @@ const DATA_DIR = path.join(process.cwd(), ".data-test-handoff");
 process.env.EDITFORGE_DATA_DIR = DATA_DIR;
 
 const { GET } = await import("./route");
+const { PUT } = await import("@/app/api/audio/route");
 const { upsertCut } = await import("@/lib/store");
+const { AUDIO_HIERARCHY } = await import("@/lib/audio");
 
 function get(query: string) {
   return new Request(`http://localhost/api/handoff?${query}`);
@@ -17,6 +19,7 @@ const now = new Date().toISOString();
 
 beforeEach(async () => {
   await fs.rm(path.join(DATA_DIR, "cuts.json"), { force: true });
+  await fs.rm(path.join(DATA_DIR, "audio-law.json"), { force: true });
   await upsertCut({ id: "c1", title: "Cold Open", status: "review", createdAt: now, updatedAt: now });
 });
 
@@ -148,3 +151,25 @@ describe("handoff download", () => {
     expect(body.kind).toBe("vfx-node-graph");
     expect(body.notice).toMatch(/Not Fusion/);
   });
+
+describe("PUT /api/audio then GET /api/handoff session", () => {
+  it("realises the stored ladder, not AUDIO_HIERARCHY", async () => {
+    const edited = AUDIO_HIERARCHY.map((l) =>
+      l.track === "vo" ? { ...l, name: "Roundtrip VO stem", rule: "Keep the question audible" } : l
+    );
+    const put = await PUT(
+      new Request("http://localhost/api/audio", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ levels: edited }),
+      })
+    );
+    expect(put.status).toBe(200);
+    const res = await GET(get("kind=session&cutId=c1"));
+    expect(res.status).toBe(200);
+    const body = JSON.parse(await res.text());
+    expect(JSON.stringify(body)).toMatch(/Roundtrip VO stem/);
+    expect(JSON.stringify(body)).toMatch(/Keep the question audible/);
+    expect(JSON.stringify(body)).not.toMatch(/VO \/ dialogue/);
+  });
+});

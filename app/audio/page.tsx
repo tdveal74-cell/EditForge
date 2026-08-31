@@ -12,6 +12,7 @@ import { PRIMARY_CLIP } from "@/lib/mediaLibrary";
 
 export default function AudioPage() {
   const [hierarchy, setHierarchy] = useState<AudioLevel[]>(AUDIO_HIERARCHY);
+  const [persistError, setPersistError] = useState<string | null>(null);
   const law = useMemo(() => buildAudioLaw(hierarchy), [hierarchy]);
 
   useEffect(() => {
@@ -23,18 +24,28 @@ export default function AudioPage() {
       .catch(() => undefined);
   }, []);
 
-  function persist(next: AudioLevel[]) {
-    void fetch("/api/audio", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ levels: next }),
-    });
+  async function persist(next: AudioLevel[]) {
+    try {
+      const res = await fetch("/api/audio", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ levels: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPersistError((data as { error?: string }).error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setPersistError(null);
+    } catch (err) {
+      setPersistError((err as Error).message);
+    }
   }
 
-  function update(level: number, patch: Partial<AudioLevel>) {
+  async function update(level: number, patch: Partial<AudioLevel>) {
     const next = hierarchy.map((h) => (h.level === level ? { ...h, ...patch } : h));
     setHierarchy(next);
-    persist(next);
+    await persist(next);
   }
 
   return (
@@ -49,6 +60,12 @@ export default function AudioPage() {
           </Button>
         }
       />
+
+      {persistError && (
+        <p className="mt-4 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Could not store the ladder: {persistError}
+        </p>
+      )}
 
       <Section title="Attached waveform">
         <Waveform src={PRIMARY_CLIP.src} />

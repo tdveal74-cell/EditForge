@@ -27,7 +27,7 @@ export default function StudioPage() {
       <PageHeader
         eyebrow="Studio"
         title="Studio"
-        description="Create, review, and ship from one surface. Media first. Gates intact. The map below is a directory, not a live status board."
+        description="Working surfaces, boards, and bridges — not one NLE. Media first. Gates intact. The map below is a directory, not a live status board."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link href="/gen-video">

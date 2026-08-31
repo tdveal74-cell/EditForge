@@ -1,6 +1,6 @@
 # EditForge
 
-Post-production control plane. Ready is never Live. Boards are samples. Bridges emit files.
+Post-production control plane. Ready is never Live. Captions, titles, audio, and longform persist. Other boards still seed. Bridges emit files.
 
 Departments · long-form stitch · gen video · voice · avatar · stock · rubric ship gate.
 

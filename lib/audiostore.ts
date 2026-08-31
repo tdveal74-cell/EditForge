@@ -27,7 +27,8 @@ const ladder = durableCollection<StoredAudioLevel>({
 
 export async function getAudioLaw(): Promise<AudioLevel[]> {
   const rows = await ladder.list();
-  if (rows.length !== AUDIO_HIERARCHY.length) return AUDIO_HIERARCHY;
+  // Seed already wrote the ladder. Returning AUDIO_HIERARCHY here would hide a
+  // stored edit (or a short store) behind the constant mix used to realise.
   return rows
     .slice()
     .sort((a, b) => a.level - b.level)

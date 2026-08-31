@@ -50,3 +50,18 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+@keyframes title-in-motion {
+  from {
+    opacity: 0.55;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.title-in-motion {
+  animation: title-in-motion var(--title-duration, 3s) cubic-bezier(0.2, 0, 0, 1) both;
+}

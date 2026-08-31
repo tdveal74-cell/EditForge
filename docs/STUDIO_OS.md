@@ -1,6 +1,6 @@
 # EditForge control plane
 
-Departments, AI media lanes, and file-handoff bridges. Ready is never Live. Boards are samples. Bridges emit files.
+Departments, AI media lanes, and file-handoff bridges. Ready is never Live. Captions, titles, audio, and longform persist. Other boards still seed. Bridges emit files.
 
 | Need | EditForge | Engine |
 |------|-----------|--------|

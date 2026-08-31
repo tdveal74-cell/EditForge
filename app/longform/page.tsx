@@ -16,6 +16,16 @@ export default function LongformPage() {
   const [cuts, setCuts] = useState<Cut[] | null>(null);
   const [cutId, setCutId] = useState("");
   const [out, setOut] = useState<string | null>(null);
+  const [persistError, setPersistError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/longform", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.project?.chapters?.length) setProject(d.project);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     fetch("/api/cuts")
@@ -27,6 +37,29 @@ export default function LongformPage() {
       })
       .catch(() => setCuts([]));
   }, []);
+
+  async function persist(next: LongFormProject) {
+    try {
+      const res = await fetch("/api/longform", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project: next }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setPersistError((data as { error?: string }).error ?? `HTTP ${res.status}`);
+        return;
+      }
+      setPersistError(null);
+    } catch (err) {
+      setPersistError((err as Error).message);
+    }
+  }
+
+  async function patchProject(next: LongFormProject) {
+    setProject(next);
+    await persist(next);
+  }
 
   const cut = cuts?.find((c) => c.id === cutId);
   const blocked = !cut?.rubricPass;
@@ -44,8 +77,8 @@ export default function LongformPage() {
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
         eyebrow="Board"
-        title="Sample stitch plan"
-        description="Edit chapters, then plan those chapters. Not a running episode renderer. The stitch gate is the recorded rubric pass on a named cut — not a checkbox on this page."
+        title="Stitch plan"
+        description="Edit stored chapters, then plan those chapters. Not a running episode renderer. The stitch gate is the recorded rubric pass on a named cut — not a checkbox on this page."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
@@ -65,9 +98,20 @@ export default function LongformPage() {
         }
       />
 
+      {persistError && (
+        <p className="mt-4 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          Could not store chapters: {persistError}
+        </p>
+      )}
+
       <Section title="Project">
         <div className="rounded-card border border-border bg-surface-elevated p-4 shadow-card">
-          <p className="text-sm font-semibold text-navy">{project.title}</p>
+          <Input
+            className="font-semibold"
+            value={project.title}
+            onChange={(e) => void patchProject({ ...project, title: e.target.value })}
+            aria-label="Long-form title"
+          />
           <dl className="mt-3 grid grid-cols-3 gap-3">
             {[
               { k: "Target", v: `${(project.targetDurationSec / 60).toFixed(0)} min` },
@@ -114,12 +158,12 @@ export default function LongformPage() {
                     className="font-medium"
                     value={c.title}
                     onChange={(e) =>
-                      setProject((prev) => ({
-                        ...prev,
-                        chapters: prev.chapters.map((ch) =>
+                      void patchProject({
+                        ...project,
+                        chapters: project.chapters.map((ch) =>
                           ch.id === c.id ? { ...ch, title: e.target.value } : ch,
                         ),
-                      }))
+                      })
                     }
                     aria-label={`Chapter ${i + 1} title`}
                   />
@@ -135,12 +179,12 @@ export default function LongformPage() {
                 className="mt-1.5 min-h-[72px]"
                 value={c.script}
                 onChange={(e) =>
-                  setProject((prev) => ({
-                    ...prev,
-                    chapters: prev.chapters.map((ch) =>
+                  void patchProject({
+                    ...project,
+                    chapters: project.chapters.map((ch) =>
                       ch.id === c.id ? { ...ch, script: e.target.value } : ch,
                     ),
-                  }))
+                  })
                 }
                 aria-label={`Chapter ${i + 1} script`}
               />

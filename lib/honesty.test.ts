@@ -19,6 +19,7 @@ import { parseLongformProject, SAMPLE_LONGFORM } from "./longform";
 import { buildAssetIndex } from "./asset";
 import { buildCatalogExport, buildMixSession, buildNodeGraph, buildStemSheet, LOUDNESS_TARGETS } from "./handoff";
 import { SAMPLE_TIMELINE } from "./timeline";
+import { toneFor } from "@/components/ui/status-dot";
 
 function src(rel: string): string {
   return readFileSync(path.join(process.cwd(), rel), "utf8");
@@ -183,11 +184,15 @@ describe("honesty: NLE is EDL, not AAF/XML", () => {
 });
 
 describe("honesty: every bridge page emits an artifact kind", () => {
-  it("nle, mix, mam, render, and vfx-engine declare artifacts", () => {
-    for (const page of ["nle", "mix", "mam", "render", "vfx-engine"]) {
+  it("nle, mam, render, and vfx-engine declare artifacts; mix renders getAudioLaw", () => {
+    for (const page of ["nle", "mam", "render", "vfx-engine"]) {
       const body = src(`app/${page}/page.tsx`);
       expect(body).toMatch(/artifacts:/);
     }
+    expect(src("app/mix/page.tsx")).toMatch(/getAudioLaw/);
+    expect(src("app/mix/page.tsx")).toMatch(/artifacts=/);
+    expect(src("app/mix/page.tsx")).not.toMatch(/BridgePanel/);
+    expect(STUDIO_MODULES.find((m) => m.id === "mix")?.status).toBe("bridge");
   });
 
   it("mix, mam, and vfx-engine pages do not claim to be the engine", () => {
@@ -264,6 +269,8 @@ describe("honesty: chrome is not AAA Studio OS", () => {
     expect(body).toMatch(/export format matrix/);
     expect(body).not.toMatch(/- \[x\] Assets, review, rubric/);
     expect(body).not.toMatch(/- \[x\] Export, jobs/);
+    expect(body).not.toMatch(/- \[x\] Long-form, short-form, and full-motion micro-drama routing/);
+    expect(body).toMatch(/\/longform is a Board/);
   });
 
   it("studio hub does not print modules ready", () => {
@@ -433,6 +440,9 @@ describe("honesty: audio law flows into mix", () => {
     const page = src("app/audio/page.tsx");
     expect(page).toMatch(/\/api\/audio/);
     expect(page).toMatch(/method: "PUT"/);
+    expect(page).toMatch(/await fetch\("\/api\/audio"/);
+    expect(page).not.toMatch(/void fetch\(/);
+    expect(src("lib/audiostore.ts")).not.toMatch(/return AUDIO_HIERARCHY/);
   });
 
   it("mix session and stem sheet realise an edited ladder, not only the constant", () => {
@@ -478,6 +488,10 @@ describe("honesty: Hardware is not a Bridge in nav", () => {
     const home = NAV_GROUPS.find((g) => g.links.some((l) => l.href === "/hardware"));
     expect(home?.label).toBe("Reference");
     expect(home?.label).not.toBe("Bridges");
+    const create = NAV_GROUPS.find((g) => g.label === "Create");
+    expect(create?.links.map((l) => l.href)).toEqual(["/studio", "/projects", "/dailies", "/review"]);
+    expect(create?.links.map((l) => l.href)).not.toContain("/pipeline");
+    expect(create?.links.map((l) => l.href)).not.toContain("/timeline");
   });
 
   it("color Ready copy is not a Resolve bridge", () => {
@@ -495,6 +509,7 @@ describe("honesty: leftover OS chrome is recut", () => {
     expect(src("app/api/mcp/route.ts")).not.toMatch(/post-production studio OS/);
     expect(src("app/api/health/route.ts")).not.toMatch(/ultra-meta-supreme-flagship-aaa/);
     expect(src("docs/FLAGSHIP_SPEC.md")).not.toMatch(/every surface in the Studio OS/);
+    expect(src("docs/FLAGSHIP_SPEC.md").split("\n")[0]).not.toMatch(/AAA/);
     expect(src("lib/jobs.ts")).not.toMatch(/Studio OS control plane/);
   });
 });
@@ -507,5 +522,67 @@ describe("honesty: pipeline does not name-drop CapCut on screen", () => {
     expect(src("app/pipeline/page.tsx")).not.toMatch(/>ref:/);
     const map = JSON.parse(buildPipelineMap());
     expect(map.stages[0].inspiredBy).toBeUndefined();
+  });
+});
+
+describe("honesty: leftover operator lies this round", () => {
+  it("landing, README, and STUDIO_OS do not say Boards are samples once boards persist", () => {
+    expect(src("app/page.tsx")).not.toMatch(/Boards are samples/);
+    expect(src("README.md")).not.toMatch(/Boards are samples/);
+    expect(src("docs/STUDIO_OS.md")).not.toMatch(/Boards are samples/);
+    expect(src("app/page.tsx")).toMatch(/persist/);
+  });
+
+  it("studio hub does not claim one surface", () => {
+    expect(src("app/studio/page.tsx")).not.toMatch(/one surface/);
+    expect(src("app/studio/page.tsx")).toMatch(/not one NLE/);
+  });
+
+  it("toneFor does not map ready or live to done", () => {
+    expect(toneFor("ready")).not.toBe("done");
+    expect(toneFor("live")).not.toBe("done");
+    expect(toneFor("live")).toBe("active");
+    expect(toneFor("completed")).toBe("done");
+    expect(toneFor("approved")).toBe("done");
+  });
+
+  it("living GAUNTLET overall is 79, and gen/voice/avatar are not scored as category leaders", () => {
+    const body = src("docs/GAUNTLET.md");
+    expect(body).toMatch(/\*\*Overall\*\* \| \*\*79\*\*/);
+    expect(body).not.toMatch(/\*\*Overall\*\* \| \*\*78\*\*/);
+    const living = body.split("## EditForge current score (living)")[1].split("## Round ledger")[0];
+    expect(living).not.toMatch(/Gen video \| ~80/);
+    expect(living).not.toMatch(/Voice \| ~80/);
+    expect(living).not.toMatch(/Avatar \| ~80/);
+  });
+});
+
+describe("honesty: captions titles longform persist and are media", () => {
+  it("captions overlay the studio clip and persist", () => {
+    const page = src("app/captions/page.tsx");
+    expect(page).toMatch(/PRIMARY_CLIP/);
+    expect(page).toMatch(/CaptionStage/);
+    expect(page).toMatch(/method: "PUT"/);
+    expect(page).toMatch(/await fetch\("\/api\/captions"/);
+    expect(src("components/media/CaptionStage.tsx")).toMatch(/cueAtTime/);
+    expect(src("components/media/CaptionStage.tsx")).toMatch(/data-caption-overlay/);
+  });
+
+  it("titles preview is type in motion on the frame and persist", () => {
+    const page = src("app/titles/page.tsx");
+    expect(page).toMatch(/TitleMotion/);
+    expect(page).toMatch(/PRIMARY_CLIP/);
+    expect(page).toMatch(/method: "PUT"/);
+    expect(page).not.toMatch(/bg-navy px-6 py-8/);
+    expect(src("components/media/TitleMotion.tsx")).toMatch(/el\.animate/);
+    expect(src("components/media/TitleMotion.tsx")).toMatch(/typedPrefix/);
+  });
+
+  it("longform hydrates stored chapters, not only the sample seed", () => {
+    const page = src("app/longform/page.tsx");
+    expect(page).toMatch(/\/api\/longform/);
+    expect(page).toMatch(/method: "PUT"/);
+    expect(page).not.toMatch(/title="Sample stitch plan"/);
+    expect(page).toMatch(/Stitch plan/);
   });
 });

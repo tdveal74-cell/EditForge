@@ -9,9 +9,9 @@ export const NAV_GROUPS: { label: string; links: { href: string; label: string }
     label: "Create",
     links: [
       { href: "/studio", label: "Studio" },
-      { href: "/pipeline", label: "Pipeline" },
       { href: "/projects", label: "Projects" },
-      { href: "/timeline", label: "Timeline" },
+      { href: "/dailies", label: "Dailies" },
+      { href: "/review", label: "Review" },
     ],
   },
   {
@@ -41,7 +41,11 @@ export const NAV_GROUPS: { label: string; links: { href: string; label: string }
   },
   {
     label: "Reference",
-    links: [{ href: "/hardware", label: "Hardware" }],
+    links: [
+      { href: "/hardware", label: "Hardware" },
+      { href: "/pipeline", label: "Pipeline" },
+      { href: "/timeline", label: "Timeline" },
+    ],
   },
 ];
 

@@ -45,27 +45,27 @@ If no → continue the loop.
 
 ## EditForge current score (living)
 
-Honest recut after Round 5 (2026-08-31). A fresh independent critic scored **honesty 78/100 LOSE** against frozen Round-4 HEAD `6d30c0f`. Do not rubber-stamp 77. Do not recut to 80. Do not jump to 100.
+Honest recut after Round 6 (2026-08-31). A fresh independent critic scored **honesty 79/100 LOSE** against frozen Round-5 HEAD `3cda75e`. Do not rubber-stamp 78. Product depth vs category leaders remains the wall (~50).
 
-This table is the critic’s **78**, plus notes on what this round actually closed. It is not 80. It is not 99. It is not 100.
+This table is the critic’s **79**, plus notes on what this round actually closed. It is not a win. Gen / voice / avatar were not deepened this round.
 
 | Surface | Score | Note |
 |---------|-------|------|
-| Landing | ~76 | Control plane, not Flagship Studio OS. Working-surfaces count from `workingSurfaces()` excludes Boards. |
-| Studio hub | ~76 | Directory, not a live status board. Ready = does work. Board = file editor for its real scope, or sketch/reference. |
-| Gen video | ~80 | One stage; mock default; STRENGTHS text-to-video only. Not Runway-the-product. |
-| Voice | ~80 | Listen stage is the JobRunner result. Consent gate held. |
-| Avatar | ~80 | Stage unified. Sample briefs are draft, not ready. |
-| Captions / titles / presets / audio | ~76 | Board editors. Audio ladder is stored; mix realises that copy. Not CapCut / After Effects / Fairlight. |
-| Script / pipeline / archive | ~74 | Board editors. Pipeline stage cards no longer print CapCut/Resolve as `ref:`. Still not a running pipeline or live archive. |
-| Timeline / collab / hardware / longform | ~72 | Sketch stays read-only (not an NLE). Longform plans the edited chapters; stitch gate is a recorded cut rubric, not a checkbox. Hardware is Reference, not a Bridge. |
-| Stock | ~80 | Licensed index, not Artlist search. |
+| Landing | ~76 | Control plane. Captions, titles, audio, and longform persist; other boards still seed. |
+| Studio hub | ~76 | Directory of working surfaces, boards, and bridges — not one NLE. |
+| Gen video | ~74 | One stage; mock default; text-to-video only. Not Runway-the-product. Not deepened this round. |
+| Voice | ~74 | Listen stage is the JobRunner result. Consent gate held. Not deepened this round. |
+| Avatar | ~74 | Stage unified. Sample briefs are draft, not ready. Not deepened this round. |
+| Captions / titles / presets / audio | ~78 | Captions overlay the reference clip and persist. Titles type in motion on the frame and persist. Audio ladder stored. Not a live captioner / After Effects / Fairlight. |
+| Script / pipeline / archive | ~74 | Board editors. Still not a running pipeline or live archive. |
+| Timeline / collab / hardware / longform | ~74 | Sketch stays read-only (not an NLE). Longform hydrates stored chapters. Hardware is Reference, not a Bridge. |
+| Stock | ~79 | Licensed index, not Artlist search. |
 | Review | ~86 | Player first; portrait fit; seekable notes. |
 | Dailies | ~87 | Contact sheet + mobile approve/reject. |
 | JobRunner | ~88 | Gates on wired/credential/settings/store; mock labeled; amber only when billable. |
-| Mobile nav | ~80 | Priority strip + More. |
-| Bridges | ~72 | Still BridgePanel wrappers, not engines. Mix session dump reads the stored /audio law. MAM catalog export, VFX node graph, NLE EDL, ffmpeg-plan. Not Fairlight / Drive / Fusion. Not Operational. |
-| **Overall** | **78** | Critic floor on `6d30c0f`. Shared-state leftovers recut. Product depth vs leaders remains the wall under 80. Did not earn 80. Did not earn 100. |
+| Mobile nav | ~79 | Priority strip + More. |
+| Bridges | ~73 | Mix desk renders getAudioLaw(); still Bridge, not Operational. Other four remain BridgePanel wrappers. Not Fairlight / Drive / Fusion. |
+| **Overall** | **79** | Critic floor on `3cda75e`. Captions/titles/longform persist. Mix shows the stored ladder. Leftover lies recut. Product depth vs leaders remains the wall. |
 
 Update this table as surfaces clear higher bars. Do not recut upward without a fresh critic.
 
@@ -159,3 +159,19 @@ Shipped:
 Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, per-role auth, a live hardware inventory, Premiere/Fairlight/Fusion/DaVinci, a public-host recut, product depth next to category leaders.
 
 Largest remaining gap: Product depth vs CapCut / Resolve / Fairlight / Frame.io. Fourteen Boards are still sample-seeded file editors. Five Bridges are still wrappers. Public vercel.app is unre-cut. Not 99.
+
+### Round 6 — 2026-08-31 (`gauntlet/to-100`)
+
+Incoming critic on frozen `3cda75e`: honesty **79/100 LOSE**. Named leftover wiring held. Product depth vs leaders is the wall. Do not rubber-stamp 78.
+
+Shipped:
+
+- Captions, titles, and longform persist through store + API, same pattern as /audio. Captions overlay the studio reference clip. Titles preview is type in motion (Web Animations + CSS) on the frame. Longform hydrates stored chapters.
+- Mix is a Bridge desk of getAudioLaw() — not a 24-line BridgePanel, not Fairlight, not Operational. Session/stems still realise that copy.
+- Audio persist is awaited with an error surface. getAudioLaw no longer silently substitutes AUDIO_HIERARCHY after a real store. PUT /api/audio then GET /api/handoff session is tested.
+- Landing / README / STUDIO_OS recut "Boards are samples." Studio recut "one surface." toneFor no longer maps ready/live to done. FLAGSHIP_SPEC title recut. Nav Create leads with working surfaces, not Pipeline/Timeline. COMPLETION no longer checks DEVON long-form routing while /longform is a Board.
+- Living overall **79**. Gen / voice / avatar recut off the previous overclaim; those lanes were not deepened.
+
+Not claimed: Kling/Veo/Seedream wires, live clone, Artlist search, AAF/XML, per-role auth, a live hardware inventory, Premiere/Fairlight/Fusion/DaVinci, a public-host recut, product depth next to category leaders.
+
+Largest remaining gap: Product depth vs category leaders (~50). Ten Boards still seed. Four Bridges remain wrappers. Public vercel.app is unre-cut (main, not this SHA).

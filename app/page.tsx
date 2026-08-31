@@ -39,7 +39,7 @@ export default function HomePage() {
           <p className="mt-5 max-w-xl text-[15px] leading-relaxed text-navy/70 sm:text-base">
             Post-production control plane for commercials, Shorts, Reels, and long-form.
             Generative lanes, dailies, grade, and delivery — with restraint as house law
-            and a human gate before master. Boards are samples. Bridges emit files. Ready is never Live.
+            and a human gate before master. Captions, titles, audio, and longform persist; other boards still seed. Bridges emit files. Ready is never Live.
           </p>
 
           <div className="mt-9 flex flex-wrap gap-3">

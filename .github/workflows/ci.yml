@@ -74,6 +74,19 @@ jobs:
           EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB: "100"
         run: docker compose config --quiet
 
+      - name: Hostinger compose contract
+        env:
+          EDITFORGE_ACCESS_PASSWORD: ci-access-password
+          EDITFORGE_SESSION_SECRET: ci-session-secret
+          EDITFORGE_MCP_TOKEN: ci-mcp-token
+          EDITFORGE_WORKER_TOKEN: ci-worker-token
+          EDITFORGE_PROVIDER_TOKEN: ci-provider-token
+          EDITFORGE_PUBLIC_URL: https://editforge.example
+          EDITFORGE_IDENTITY_REGISTRY_FILE: ./provider/identity-registry.example.json
+          EDITFORGE_RUNWAY_CHARACTER_FILE: ./provider/identity-registry.example.json
+          EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB: "100"
+        run: docker compose -f compose.hostinger.yaml config --quiet
+
       # The local DEVON stack. It is the Compose file a contributor is most
       # likely to edit and least likely to boot, so it gets the same contract
       # check, with only the four access credentials set, which is the point of

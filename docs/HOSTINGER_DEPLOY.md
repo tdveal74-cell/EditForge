@@ -1,12 +1,12 @@
 # Hostinger production tag swap
 
-Production is `https://editforge.online` on a Hostinger VPS running
-`compose.hostinger.yaml`. Images are immutable GHCR tags. This repo does not
-auto-deploy that host on merge.
+Production is `https://editforge.online` on a Hostinger VPS. Live compose on
+the box is `compose.yaml` with GHCR image pins. This repo does not auto-deploy
+that host on merge.
 
-The GitHub Action `Deploy EditForge to Hostinger` is the Grok-reachable
-deploy path. It SSHs to the VPS and runs `scripts/hostinger-tag-swap.sh`.
-There is no Hostinger connector on Grok.
+One door for every agent that already has GitHub: workflow
+`Deploy EditForge to Hostinger`. Grok, Claude Code, and Codex all dispatch that
+job. Do not give each agent a private SSH or Hostinger-API path.
 
 ## Law
 
@@ -17,6 +17,16 @@ There is no Hostinger connector on Grok.
 - Failed pull, `up`, or health probe restores the previous compose file and
   recreates from that backup.
 
+## Agents
+
+| Agent | How it deploys |
+|-------|----------------|
+| Grok | GitHub `workflow_dispatch` after an in-session OK |
+| Claude Code | `gh workflow run` or GitHub MCP, same workflow |
+| Codex | same |
+
+Hostinger MCP stays available for VPS inspection. It is not the deploy door.
+
 ## One-time secrets
 
 Repo → Settings → Secrets and variables → Actions:
@@ -26,40 +36,43 @@ Repo → Settings → Secrets and variables → Actions:
 | `EDITFORGE_VPS_HOST` | VPS hostname or IP |
 | `EDITFORGE_VPS_USER` | SSH user that can run `docker compose` |
 | `EDITFORGE_VPS_SSH_KEY` | Private key only. Never commit it. |
-| `EDITFORGE_COMPOSE_DIR` | Directory on the VPS that holds the compose file |
+| `EDITFORGE_COMPOSE_DIR` | Directory on the VPS that holds `compose.yaml` |
 
 Optional:
 
 | Secret | Default |
 |--------|---------|
 | `EDITFORGE_VPS_PORT` | `22` |
-| `EDITFORGE_COMPOSE_FILE` | `compose.hostinger.yaml` |
+| `EDITFORGE_COMPOSE_FILE` | `compose.yaml` |
 | `EDITFORGE_HEALTH_URL` | `https://editforge.online/api/health` |
 | `EDITFORGE_VPS_SSH_KNOWN_HOSTS` | `ssh-keyscan` if unset |
 
 Create a GitHub Environment named `production` and add a required reviewer if
 you want a second human gate in the Actions UI.
 
-The deploy key must be able to pull GHCR on the box the same way the current
-manual deploys do. This workflow does not log the VPS into GHCR.
+The VPS user must already be able to pull GHCR. This workflow does not log the
+box into GHCR.
 
 ## Dispatch
 
-1. Publish images: workflow `Publish EditForge images` with `source_sha`.
-2. Dry run: `Deploy EditForge to Hostinger` with `image_tag` and `confirm`
-   both set to the 12-character tag, `dry_run=true`.
+```bash
+gh workflow run deploy-hostinger.yml \
+  --ref main \
+  -f image_tag=648c73d83e74 \
+  -f confirm=648c73d83e74 \
+  -f dry_run=true
+```
+
+1. Publish images: `Publish EditForge images` with `source_sha`.
+2. Dry run the command above.
 3. Live: same inputs with `dry_run=false`.
 4. Confirm `https://editforge.online/api/health` answers.
 
-Grok can trigger those workflows after you say so in-session. Grok cannot
-invent the SSH key or the compose directory.
+No agent invents the SSH key or compose directory. Those live only in Actions
+secrets.
 
 ## Local check
 
 ```bash
 bash scripts/test_hostinger_tag_swap.sh
-bash scripts/hostinger-tag-swap.sh \
-  --compose-file compose.hostinger.yaml \
-  --tag 648c73d83e74 \
-  --dry-run
 ```

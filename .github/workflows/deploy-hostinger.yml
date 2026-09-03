@@ -132,7 +132,7 @@ jobs:
           DRY: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
-          compose_file="${FILE:-compose.hostinger.yaml}"
+          compose_file="${FILE:-compose.yaml}"
           health="${HEALTH:-https://editforge.online/api/health}"
           remote_compose="${DIR%/}/${compose_file}"
           if [[ "$DRY" == "true" ]]; then

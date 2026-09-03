@@ -30,6 +30,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Dependency audit
+        run: npm audit
+
       - name: Typecheck
         run: npx tsc --noEmit
 
@@ -62,6 +65,7 @@ jobs:
       - name: Compose contract
         env:
           EDITFORGE_ACCESS_PASSWORD: ci-access-password
+          EDITFORGE_SESSION_SECRET: ci-session-secret
           EDITFORGE_MCP_TOKEN: ci-mcp-token
           EDITFORGE_WORKER_TOKEN: ci-worker-token
           EDITFORGE_PROVIDER_TOKEN: ci-provider-token
@@ -72,11 +76,12 @@ jobs:
 
       # The local DEVON stack. It is the Compose file a contributor is most
       # likely to edit and least likely to boot, so it gets the same contract
-      # check — and with only the three tokens set, which is the whole point of
+      # check, with only the four access credentials set, which is the point of
       # it: no provider token, no identity registry.
       - name: Local compose contract
         env:
           EDITFORGE_ACCESS_PASSWORD: ci-access-password
+          EDITFORGE_SESSION_SECRET: ci-session-secret
           EDITFORGE_MCP_TOKEN: ci-mcp-token
           EDITFORGE_WORKER_TOKEN: ci-worker-token
         run: docker compose -f compose.local.yaml config --quiet

@@ -8,6 +8,8 @@ import { pipeline } from "node:stream/promises";
 
 const MAX_BODY_BYTES = 1_000_000;
 const MAX_INLINE_MEDIA_BYTES = 16 * 1024 * 1024;
+const UPSTREAM_REQUEST_TIMEOUT_MS = 30_000;
+const MEDIA_TRANSFER_TIMEOUT_MS = 5 * 60 * 1000;
 const TERMINAL_RUNWAY_STATES = new Set(["SUCCEEDED", "FAILED", "CANCELLED"]);
 
 function safeEqual(left, right) {
@@ -162,6 +164,7 @@ async function runwayJson(fetchImpl, env, pathname, init = {}) {
   const response = await fetchImpl(`${base}/${pathname.replace(/^\//, "")}`, {
     ...init,
     headers: { ...upstreamHeaders(env), ...(init.headers || {}) },
+    signal: init.signal || AbortSignal.timeout(UPSTREAM_REQUEST_TIMEOUT_MS),
   });
   const value = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -230,13 +233,19 @@ async function storeResponse(response, request, extension, env) {
 }
 
 async function storeRemoteArtifact(fetchImpl, uri, request, fallbackExtension, env) {
-  const response = await fetchImpl(uri, { redirect: "follow" });
+  const response = await fetchImpl(uri, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(MEDIA_TRANSFER_TIMEOUT_MS),
+  });
   return storeResponse(response, request, fallbackExtension, env);
 }
 
 async function mediaAsDataUri(fetchImpl, uri, expectedPrefix) {
   if (asText(uri).startsWith("data:")) return uri;
-  const response = await fetchImpl(uri, { redirect: "follow" });
+  const response = await fetchImpl(uri, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(MEDIA_TRANSFER_TIMEOUT_MS),
+  });
   if (!response.ok) throw new Error(`media download failed: HTTP ${response.status}`);
   const buffer = Buffer.from(await response.arrayBuffer());
   if (buffer.length > MAX_INLINE_MEDIA_BYTES) throw new Error("media exceeds Runway's 16MB inline limit");
@@ -269,6 +278,7 @@ async function synthesizeVoice(request, identity, fetchImpl, env) {
         use_speaker_boost: settings.useSpeakerBoost !== false,
       },
     }),
+    signal: AbortSignal.timeout(MEDIA_TRANSFER_TIMEOUT_MS),
   });
   return storeResponse(response, request, ".mp3", env);
 }
@@ -368,8 +378,9 @@ export function createProviderServer(options = {}) {
       } catch {
         registryReady = false;
       }
-      return respond(res, 200, {
-        status: registryReady && token ? "ready" : "configuration_required",
+      const ready = registryReady && Boolean(token);
+      return respond(res, ready ? 200 : 503, {
+        status: ready ? "ready" : "configuration_required",
         registryReady,
         elevenLabsConfigured: Boolean(asText(env.ELEVENLABS_API_KEY)),
         runwayConfigured: Boolean(asText(env.RUNWAYML_API_SECRET)),

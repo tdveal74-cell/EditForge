@@ -56,7 +56,7 @@ session is the usual case), the same two services run as plain Node processes:
 It shares `.env` with the Compose runner on purpose, so DEVON's token is the
 same whichever one brought the studio up. State goes under `.local-run/`.
 
-What you give up: container isolation, the pinned `node:20-bookworm-slim` base,
+What you give up: container isolation, the pinned `node:22-bookworm-slim` base,
 and the named volumes. It uses whatever `ffmpeg` is on `PATH`, and without
 `ffmpeg` and `ffprobe` the worker reports degraded and `executionReady` is
 false. It exercises and verifies the lane; it is not the way to run a studio
@@ -65,15 +65,16 @@ people depend on. For that, use the Compose runner above.
 Doing it by hand instead:
 
 ```bash
-cp .env.example .env          # then set the three tokens below
+cp .env.example .env          # then set the four secrets below
 docker compose -f compose.local.yaml up -d --build
 curl -fsS http://localhost:3100/api/health
 ```
 
-The three that must be set, each a different random value:
+The four that must be set, each a different random value:
 
 ```dotenv
 EDITFORGE_ACCESS_PASSWORD=<browser password for the deployment>
+EDITFORGE_SESSION_SECRET=<browser session signing secret>
 EDITFORGE_MCP_TOKEN=<DEVON's bearer token>
 EDITFORGE_WORKER_TOKEN=<control plane -> worker, DEVON never sees it>
 ```
@@ -143,7 +144,7 @@ Unset, it goes back to `https://editforge.online/api/mcp`.
 
 | Symptom | Cause |
 |---|---|
-| `docker compose` exits complaining a variable is unset | one of the three tokens is missing from `.env` |
+| `docker compose` exits complaining a variable is unset | one of the required secrets is missing from `.env` |
 | Health answers, `executionReady` is false | the worker did not start, or `ffmpeg`/`ffprobe` are missing. `/api/health` answers **503** in this state, so a plain `curl -f` reports it as no answer at all — read the body. `docker compose -f compose.local.yaml logs worker`, or `.local-run/worker.log` |
 | DEVON says "EditForge URL and token are required" | `EDITFORGE_TOKEN` is unset on DEVON's side; the lane fails closed rather than calling unauthenticated |
 | A command fails naming an adapter env var | that operation is not in the local stack — see the table above |

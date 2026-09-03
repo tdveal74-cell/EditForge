@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 WORKDIR /app
 COPY provider ./provider
@@ -11,4 +11,3 @@ ENV PORT=9080
 USER node
 EXPOSE 9080
 CMD ["node", "provider/server.mjs"]
-

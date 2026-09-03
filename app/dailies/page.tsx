@@ -39,7 +39,16 @@ export default function DailiesPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    fetch("/api/dailies", { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          setRolls({ status: "error", message: data.error ?? `HTTP ${res.status}` });
+          return;
+        }
+        setRolls({ status: "ready", data: data.rolls ?? [] });
+      })
+      .catch((err: Error) => setRolls({ status: "error", message: err.message }));
     fetch("/api/cuts", { cache: "no-store" })
       .then(async (r) => {
         const d = await r.json();
@@ -52,7 +61,7 @@ export default function DailiesPage() {
         setCutId((prev) => prev || list[0]?.id || "");
       })
       .catch((err: Error) => setCuts({ status: "error", message: err.message }));
-  }, [load]);
+  }, []);
 
   async function act(id: string, body: Record<string, unknown>) {
     setBusy(id);

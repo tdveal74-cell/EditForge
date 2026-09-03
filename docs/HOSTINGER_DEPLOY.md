@@ -1,8 +1,9 @@
 # Hostinger production tag swap
 
 Production is `https://editforge.online` on a Hostinger VPS. Live compose on
-the box is `compose.yaml` with GHCR image pins. This repo does not auto-deploy
-that host on merge.
+the box is `/opt/editforge/app/compose.yaml` with GHCR image pins. The git
+file `compose.hostinger.yaml` must name the same pins so the repo is not a lie.
+This repo does not auto-deploy that host on merge.
 
 One door for every agent that already has GitHub: workflow
 `Deploy EditForge to Hostinger`. Grok, Claude Code, and Codex all dispatch that
@@ -24,6 +25,7 @@ job. Do not give each agent a private SSH or Hostinger-API path.
 | Grok | GitHub `workflow_dispatch` after an in-session OK |
 | Claude Code | `gh workflow run` or GitHub MCP, same workflow |
 | Codex | same |
+| Devon | Gates and records. Does not hold the SSH key. |
 
 Hostinger MCP stays available for VPS inspection. It is not the deploy door.
 
@@ -47,11 +49,26 @@ Optional:
 | `EDITFORGE_HEALTH_URL` | `https://editforge.online/api/health` |
 | `EDITFORGE_VPS_SSH_KNOWN_HOSTS` | `ssh-keyscan` if unset |
 
-Create a GitHub Environment named `production` and add a required reviewer if
-you want a second human gate in the Actions UI.
-
 The VPS user must already be able to pull GHCR. This workflow does not log the
 box into GHCR.
+
+## Firewall
+
+GitHub-hosted runners must reach TCP 22. The Hostinger firewall named
+`EditForge production temporary lockdown` defaults to drop. Port 22/Any is
+required for this door. Closing 22 to the public internet will fail the next
+deploy the same way run 1 failed. Do not close it unless you replace the door
+with a self-hosted runner on the VPS.
+
+## Snapshots
+
+Snapshots live in hPanel, not in this repo. Agents cannot read them without a
+Hostinger connector.
+
+Check: hPanel → VPS `srv1936199` → Backups / Snapshots. Confirm snapshot
+`353630` still exists or create a new one after a successful pin. Expiry was
+previously quoted as 2026-09-04 13:14:55 UTC and must be re-read in hPanel
+before that time.
 
 ## Dispatch
 

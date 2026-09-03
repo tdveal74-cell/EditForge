@@ -55,17 +55,20 @@ export function Nav() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface-elevated/85 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-border bg-surface-elevated">
       <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center justify-between gap-3">
           <Link
             href="/"
-            className="text-xs font-semibold uppercase tracking-[0.24em] text-amber-600 transition-colors duration-flagship hover:text-amber-700"
+            className="shrink-0 text-xs font-semibold uppercase tracking-[0.24em] text-amber-600 transition-colors duration-flagship hover:text-amber-700"
           >
             EditForge
           </Link>
           {/* Mobile priority strip — product actions, not full map */}
-          <nav aria-label="Priority" className="flex items-center gap-1 sm:gap-2 lg:hidden">
+          <nav
+            aria-label="Priority"
+            className="flex min-w-0 items-center gap-1 overflow-x-auto sm:gap-2 lg:hidden"
+          >
             {mobilePriority.map((l) => {
               const active = pathname === l.href || pathname.startsWith(l.href + "/");
               return (
@@ -74,10 +77,10 @@ export function Nav() {
                   href={l.href}
                   aria-current={active ? "page" : undefined}
                   className={clsx(
-                    "rounded-control px-2.5 py-1.5 text-[11px] font-medium transition-colors duration-flagship",
+                    "inline-flex min-h-11 shrink-0 items-center justify-center rounded-control px-2.5 text-[11px] font-medium transition-colors duration-flagship",
                     active
                       ? "bg-navy text-surface"
-                      : "text-navy/65 hover:bg-surface-muted hover:text-navy"
+                      : "text-navy/65 hover:bg-surface-muted hover:text-navy",
                   )}
                 >
                   {l.label}
@@ -102,7 +105,7 @@ export function Nav() {
                       "relative py-1 text-xs transition-colors duration-flagship",
                       active
                         ? "font-semibold text-navy after:absolute after:inset-x-0 after:-bottom-[13px] after:h-0.5 after:bg-amber"
-                        : "text-navy/60 hover:text-navy"
+                        : "text-navy/60 hover:text-navy",
                     )}
                   >
                     {l.label}

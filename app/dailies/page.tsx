@@ -11,33 +11,56 @@ import { REFERENCE_STILL } from "@/lib/mediaLibrary";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/field";
 
+type LoadState<T> =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "ready"; data: T };
+
 export default function DailiesPage() {
-  const [rolls, setRolls] = useState<Roll[] | null>(null);
-  const [cuts, setCuts] = useState<Cut[]>([]);
+  const [rolls, setRolls] = useState<LoadState<Roll[]>>({ status: "loading" });
+  const [cuts, setCuts] = useState<LoadState<Cut[]>>({ status: "loading" });
   const [cutId, setCutId] = useState("");
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/dailies", { cache: "no-store" });
-    const data = await res.json();
-    setRolls(data.rolls ?? []);
+    try {
+      const res = await fetch("/api/dailies", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        setRolls({ status: "error", message: data.error ?? `HTTP ${res.status}` });
+        return;
+      }
+      setRolls({ status: "ready", data: data.rolls ?? [] });
+    } catch (err) {
+      setRolls({ status: "error", message: (err as Error).message });
+    }
   }, []);
 
   useEffect(() => {
     fetch("/api/dailies", { cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => setRolls(data.rolls ?? []))
-      .catch((err: Error) => setError(err.message));
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) {
+          setRolls({ status: "error", message: data.error ?? `HTTP ${res.status}` });
+          return;
+        }
+        setRolls({ status: "ready", data: data.rolls ?? [] });
+      })
+      .catch((err: Error) => setRolls({ status: "error", message: err.message }));
     fetch("/api/cuts", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => {
+      .then(async (r) => {
+        const d = await r.json();
+        if (!r.ok) {
+          setCuts({ status: "error", message: d.error ?? `HTTP ${r.status}` });
+          return;
+        }
         const list: Cut[] = d.cuts ?? [];
-        setCuts(list);
+        setCuts({ status: "ready", data: list });
         setCutId((prev) => prev || list[0]?.id || "");
       })
-      .catch(() => setCuts([]));
+      .catch((err: Error) => setCuts({ status: "error", message: err.message }));
   }, []);
 
   async function act(id: string, body: Record<string, unknown>) {
@@ -61,6 +84,11 @@ export default function DailiesPage() {
     }
   }
 
+  const rollList = rolls.status === "ready" ? rolls.data : [];
+  const cutList = cuts.status === "ready" ? cuts.data : [];
+  const rollsEmpty = rolls.status === "ready" && rolls.data.length === 0;
+  const cutsEmpty = cuts.status === "ready" && cuts.data.length === 0;
+
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
@@ -69,10 +97,18 @@ export default function DailiesPage() {
         description="Production review queue — look, note, approve before assembly. A roll enters a cut only once an approval is recorded against it."
       />
 
-      {/* Contact sheet first — dailies are reviewed by looking */}
-      <Section title="Contact sheet" count={rolls?.length}>
+      <div className="sr-only" aria-live="polite">
+        {rolls.status === "loading" ? "Loading dailies…" : null}
+        {rolls.status === "error" ? `Dailies failed to load. ${rolls.message}` : null}
+        {rollsEmpty ? "No dailies in the store." : null}
+        {cuts.status === "loading" ? "Loading cuts…" : null}
+        {cuts.status === "error" ? `Cuts failed to load. ${cuts.message}` : null}
+        {cutsEmpty ? "No cuts in the store." : null}
+      </div>
+
+      <Section title="Contact sheet" count={rolls.status === "ready" ? rolls.data.length : undefined}>
         <ThumbnailGrid
-          shots={(rolls ?? []).map((r) => ({
+          shots={rollList.map((r) => ({
             id: r.id,
             label: `${r.camera} · ${r.scenes}`,
             status: r.status,
@@ -81,12 +117,17 @@ export default function DailiesPage() {
         />
       </Section>
 
-      {/* Cut target — always visible before the queue */}
       <div className="mt-8 max-w-xs">
         <Label text="Select into cut">
-          <Select value={cutId} onChange={(e) => setCutId(e.target.value)}>
-            {cuts.length === 0 && <option value="">No cuts in the store</option>}
-            {cuts.map((c) => (
+          <Select
+            value={cutId}
+            onChange={(e) => setCutId(e.target.value)}
+            disabled={cuts.status !== "ready" || cutList.length === 0}
+          >
+            {cuts.status === "loading" && <option value="">Loading cuts…</option>}
+            {cuts.status === "error" && <option value="">Cuts failed to load</option>}
+            {cutsEmpty && <option value="">No cuts in the store</option>}
+            {cutList.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.title}
               </option>
@@ -95,14 +136,25 @@ export default function DailiesPage() {
         </Label>
       </div>
 
+      {rolls.status === "error" && (
+        <p className="mt-4 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Dailies failed to load. {rolls.message}
+        </p>
+      )}
+      {cuts.status === "error" && (
+        <p className="mt-4 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Cuts failed to load. {cuts.message}
+        </p>
+      )}
       {error && (
         <p className="mt-4 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {error}
         </p>
       )}
 
-      {rolls === null && (
-        <div className="mt-8 space-y-2" aria-hidden>
+      {rolls.status === "loading" && (
+        <div className="mt-8 space-y-2">
+          <p className="text-sm text-navy/55">Loading dailies…</p>
           {[0, 1, 2].map((i) => (
             <div
               key={i}
@@ -112,8 +164,12 @@ export default function DailiesPage() {
         </div>
       )}
 
+      {rollsEmpty && (
+        <p className="mt-8 text-sm text-navy/55">No dailies in the store.</p>
+      )}
+
       <ul className="mt-6 space-y-3">
-        {(rolls ?? []).map((r) => {
+        {rollList.map((r) => {
           const reviewed = r.status === "approved" || r.status === "rejected";
           return (
             <li
@@ -141,7 +197,6 @@ export default function DailiesPage() {
                 </p>
               )}
 
-              {/* Mobile-first actions: stacked full-width on small screens */}
               <div className="mt-4 space-y-2 border-t border-border-faint pt-4">
                 <Input
                   className="h-11 w-full"

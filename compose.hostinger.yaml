@@ -1,11 +1,12 @@
-# Hostinger production topology for release 20e8e04697d6.
+# Hostinger production topology for release 648c73d83e74.
+# Live runtime on the VPS is /opt/editforge/app/compose.yaml with the same pins.
 # Application data volumes are external so project replacement cannot remove them.
 # The init job makes root-owned mode-0600 identity inputs readable by the non-root provider.
 name: editforge
 
 services:
   web:
-    image: ghcr.io/tdveal74-cell/editforge-web:20e8e04697d6
+    image: ghcr.io/tdveal74-cell/editforge-web:648c73d83e74
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -23,16 +24,9 @@ services:
       EDITFORGE_ARTIFACT_DIR: /artifacts
       EDITFORGE_SOURCE_MEDIA_DIR: /sources
       EDITFORGE_PUBLIC_URL: ${EDITFORGE_PUBLIC_URL:?set EDITFORGE_PUBLIC_URL}
-      # Studio-side providers. The control plane calls these directly from
-      # /gen-video, /voice and /avatar; the identity-locked DEVON path below is
-      # a separate boundary with its own credentials. Passing none of them here
-      # was why a self-host with every key set still had a studio that could
-      # only run mock.
       RUNWAY_API_KEY: ${RUNWAY_API_KEY:-${RUNWAYML_API_SECRET:-}}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
-      # Optional per-voice pins. The studio's voice ids are its own vocabulary;
-      # these map them onto real ElevenLabs voices, falling back to the default.
       ELEVENLABS_VOICE_ID_AUREN: ${ELEVENLABS_VOICE_ID_AUREN:-}
       ELEVENLABS_VOICE_ID_VESPERA: ${ELEVENLABS_VOICE_ID_VESPERA:-}
       ELEVENLABS_VOICE_ID_STOCK_NARRATOR: ${ELEVENLABS_VOICE_ID_STOCK_NARRATOR:-}
@@ -60,7 +54,7 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
   worker:
-    image: ghcr.io/tdveal74-cell/editforge-worker:20e8e04697d6
+    image: ghcr.io/tdveal74-cell/editforge-worker:648c73d83e74
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -125,7 +119,7 @@ services:
       options: { max-size: "1m", max-file: "1" }
 
   provider:
-    image: ghcr.io/tdveal74-cell/editforge-provider:20e8e04697d6
+    image: ghcr.io/tdveal74-cell/editforge-provider:648c73d83e74
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -184,7 +178,6 @@ services:
       options: { max-size: "10m", max-file: "3" }
 
 volumes:
-  # These four names already contain persisted production data.
   editforge_web_data:
     external: true
     name: editforge_editforge_web_data
@@ -207,4 +200,3 @@ volumes:
 networks:
   control:
   render:
-

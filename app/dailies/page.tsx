@@ -26,7 +26,10 @@ export default function DailiesPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    fetch("/api/dailies", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setRolls(data.rolls ?? []))
+      .catch((err: Error) => setError(err.message));
     fetch("/api/cuts", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
@@ -35,7 +38,7 @@ export default function DailiesPage() {
         setCutId((prev) => prev || list[0]?.id || "");
       })
       .catch(() => setCuts([]));
-  }, [load]);
+  }, []);
 
   async function act(id: string, body: Record<string, unknown>) {
     setBusy(id);

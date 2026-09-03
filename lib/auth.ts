@@ -3,8 +3,9 @@
  *
  * Two principles, both fail-closed:
  *
- *  1. When `EDITFORGE_ACCESS_PASSWORD` is set, the whole app is private —
- *     pages redirect to a login, APIs answer 401.
+ *  1. Production never silently becomes public. A browser password or MCP
+ *     token turns the gate on in every environment, and production refuses
+ *     protected requests when neither credential is configured.
  *  2. Spending money always requires authentication, whether or not a password
  *     is configured. With no password and no MCP token, nothing can
  *     authenticate, so no billable provider can be reached at all. Live keys
@@ -28,8 +29,16 @@ export function secretsMatch(provided: string, expected: string): boolean {
  * itself, so a leaked cookie does not hand over the password used elsewhere.
  */
 export async function sessionToken(password: string): Promise<string> {
-  const data = new TextEncoder().encode(`editforge-session-v1:${password}`);
-  const digest = await crypto.subtle.digest("SHA-256", data);
+  const encoder = new TextEncoder();
+  const secret = process.env.EDITFORGE_SESSION_SECRET?.trim() || password;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`editforge-session-v2:${password}`));
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -81,4 +90,14 @@ export async function isAuthenticated(opts: {
 /** True when the app is configured to be private. */
 export function accessGateEnabled(): boolean {
   return Boolean(process.env.EDITFORGE_ACCESS_PASSWORD);
+}
+
+/** True when either supported credential can protect a request. */
+export function authenticationConfigured(): boolean {
+  return Boolean(process.env.EDITFORGE_ACCESS_PASSWORD || process.env.EDITFORGE_MCP_TOKEN);
+}
+
+/** A separate signing key prevents an exposed cookie from becoming a password oracle. */
+export function sessionSecretConfigured(): boolean {
+  return Boolean(process.env.EDITFORGE_SESSION_SECRET?.trim());
 }

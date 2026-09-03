@@ -23,10 +23,14 @@ services:
       context: .
       dockerfile: infrastructure/web/Dockerfile
     restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     environment:
       NODE_ENV: production
       EDITFORGE_DATA_DIR: /data
       EDITFORGE_ACCESS_PASSWORD: ${EDITFORGE_ACCESS_PASSWORD:?set EDITFORGE_ACCESS_PASSWORD}
+      EDITFORGE_SESSION_SECRET: ${EDITFORGE_SESSION_SECRET:?set EDITFORGE_SESSION_SECRET}
       EDITFORGE_MCP_TOKEN: ${EDITFORGE_MCP_TOKEN:?set EDITFORGE_MCP_TOKEN}
       EDITFORGE_WORKER_URL: http://worker:8787
       EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
@@ -47,7 +51,7 @@ services:
       HEYGEN_AVATAR_ID: ${HEYGEN_AVATAR_ID:-}
       HEYGEN_VOICE_ID: ${HEYGEN_VOICE_ID:-}
     ports:
-      - "${EDITFORGE_PORT:-3100}:3000"
+      - "127.0.0.1:${EDITFORGE_PORT:-3100}:3000"
     volumes:
       - editforge_local_web_data:/data
       - editforge_local_artifacts:/artifacts
@@ -62,12 +66,18 @@ services:
       retries: 8
       start_period: 30s
     networks: [control, render]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   worker:
     build:
       context: .
       dockerfile: infrastructure/worker/Dockerfile
     restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     environment:
       NODE_ENV: production
       EDITFORGE_WORK_DIR: /data
@@ -91,6 +101,9 @@ services:
       retries: 8
       start_period: 20s
     networks: [render]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
 volumes:
   editforge_local_web_data:

@@ -2,30 +2,37 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   SESSION_COOKIE,
   URL_TOKEN_PARAM,
-  accessGateEnabled,
+  authenticationConfigured,
   bearerFrom,
   isAuthenticated,
   secretsMatch,
 } from "@/lib/auth";
 
 /**
- * Makes the whole studio private when `EDITFORGE_ACCESS_PASSWORD` is set.
+ * Makes the whole studio private when any application credential is set.
  *
  * Vercel's own deployment protection covers production only on paid plans, so
- * privacy lives in the app instead. With no password configured the app is open
- * — which is right for local development, and safe because spending money is
- * gated separately at the point of spend rather than only here.
+ * privacy lives in the app instead. Credential-free local development remains
+ * convenient, while production fails closed instead of exposing an accidental
+ * public data plane.
  */
 
 // Health stays reachable so uptime checks work against a private deployment,
 // and the login route obviously cannot require a login.
 const OPEN_PATHS = ["/login", "/api/login", "/api/health"];
 
-export async function middleware(req: NextRequest) {
-  if (!accessGateEnabled()) return NextResponse.next();
-
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (OPEN_PATHS.some((p) => pathname === p)) return NextResponse.next();
+
+  const authenticationRequired = process.env.NODE_ENV === "production" || authenticationConfigured();
+  if (!authenticationRequired) return NextResponse.next();
+  if (!authenticationConfigured()) {
+    const message = "Production authentication is not configured";
+    return pathname.startsWith("/api/")
+      ? NextResponse.json({ error: message }, { status: 503 })
+      : new NextResponse(message, { status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
 
   // Worker receipts use a separate token and are verified again by the route.
   // Let only the exact callback shape reach that verification layer.

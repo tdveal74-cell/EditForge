@@ -1,10 +1,6 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
-
-const compat = new FlatCompat({
-  baseDirectory: dirname(fileURLToPath(import.meta.url)),
-});
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTypeScript from "eslint-config-next/typescript";
 
 /**
  * ESLint was never actually installed here.
@@ -19,17 +15,16 @@ const compat = new FlatCompat({
  * This is the real thing: flat config, the Next rules, run by `eslint .`, and
  * blocking in CI.
  */
-const config = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
-  {
-    ignores: [
-      ".next/**",
-      "node_modules/**",
-      "next-env.d.ts",
-      "public/**",
-      "coverage/**",
-    ],
-  },
+const config = defineConfig([
+  ...nextVitals,
+  ...nextTypeScript,
+  globalIgnores([
+    ".next/**",
+    "node_modules/**",
+    "next-env.d.ts",
+    "public/**",
+    "coverage/**",
+  ]),
   {
     rules: {
       // An unused variable is usually a half-finished edit — a value read from
@@ -47,6 +42,6 @@ const config = [
       ],
     },
   },
-];
+]);
 
 export default config;

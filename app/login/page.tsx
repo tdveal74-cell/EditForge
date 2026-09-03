@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label, Input } from "@/components/ui/field";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -23,8 +25,8 @@ export default function LoginPage() {
         setError((await res.json()).error ?? "Sign in failed");
         return;
       }
-      // Full reload so middleware re-evaluates with the new cookie.
-      window.location.href = "/";
+      router.replace("/");
+      router.refresh();
     } catch {
       setError("Could not reach the studio.");
     } finally {

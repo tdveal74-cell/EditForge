@@ -16,6 +16,9 @@ import {
 
 export * from "./provider-registry";
 
+const PROVIDER_SUBMIT_TIMEOUT_MS = 120_000;
+const PROVIDER_POLL_TIMEOUT_MS = 30_000;
+
 /**
  * The one execution boundary for AI media work.
  *
@@ -166,6 +169,7 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
       },
       body: JSON.stringify(wire.buildBody(req, settings)),
       cache: "no-store",
+      signal: AbortSignal.timeout(PROVIDER_SUBMIT_TIMEOUT_MS),
     });
     if (!res.ok) {
       return {
@@ -279,6 +283,7 @@ export async function pollProvider(provider: string, externalId: string): Promis
         ...(spec.wire.headers ?? {}),
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(PROVIDER_POLL_TIMEOUT_MS),
     });
     if (!res.ok) {
       return {

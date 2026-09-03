@@ -61,6 +61,7 @@ Create `.env` from `.env.example` and set at least:
 
 ```dotenv
 EDITFORGE_ACCESS_PASSWORD=<random browser password>
+EDITFORGE_SESSION_SECRET=<different random session signing secret>
 EDITFORGE_MCP_TOKEN=<random DEVON bearer token>
 EDITFORGE_WORKER_TOKEN=<different random worker token>
 EDITFORGE_PUBLIC_URL=http://localhost:3100

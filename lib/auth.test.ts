@@ -1,9 +1,19 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { SESSION_COOKIE, accessGateEnabled, bearerFrom, isAuthenticated, secretsMatch, sessionToken } from "./auth";
+import {
+  SESSION_COOKIE,
+  accessGateEnabled,
+  authenticationConfigured,
+  bearerFrom,
+  isAuthenticated,
+  secretsMatch,
+  sessionSecretConfigured,
+  sessionToken,
+} from "./auth";
 
 afterEach(() => {
   delete process.env.EDITFORGE_ACCESS_PASSWORD;
   delete process.env.EDITFORGE_MCP_TOKEN;
+  delete process.env.EDITFORGE_SESSION_SECRET;
 });
 
 describe("secret comparison", () => {
@@ -24,6 +34,13 @@ describe("session token", () => {
 
   it("does not contain the password it was derived from", async () => {
     expect(await sessionToken("hunter2")).not.toContain("hunter2");
+  });
+
+  it("invalidates sessions when the signing secret rotates", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "first-secret";
+    const first = await sessionToken("hunter2");
+    process.env.EDITFORGE_SESSION_SECRET = "second-secret";
+    expect(await sessionToken("hunter2")).not.toBe(first);
   });
 });
 
@@ -81,6 +98,15 @@ describe("authentication", () => {
     expect(accessGateEnabled()).toBe(false);
     process.env.EDITFORGE_ACCESS_PASSWORD = "x";
     expect(accessGateEnabled()).toBe(true);
+  });
+
+  it("reports configured API auth and session signing independently", () => {
+    expect(authenticationConfigured()).toBe(false);
+    expect(sessionSecretConfigured()).toBe(false);
+    process.env.EDITFORGE_MCP_TOKEN = "token";
+    process.env.EDITFORGE_SESSION_SECRET = "secret";
+    expect(authenticationConfigured()).toBe(true);
+    expect(sessionSecretConfigured()).toBe(true);
   });
 
   it("names the cookie once, so middleware and the login route cannot disagree", () => {

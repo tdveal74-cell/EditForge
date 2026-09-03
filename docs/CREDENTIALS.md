@@ -93,12 +93,13 @@ link that 404s a minute later.
 | Variable | What it does |
 |---|---|
 | `EDITFORGE_ACCESS_PASSWORD` | Makes the whole deployment private: pages redirect to `/login`, APIs answer 401. |
+| `EDITFORGE_SESSION_SECRET` | Signs browser sessions. Use a long random value different from the access password. |
 | `EDITFORGE_MCP_TOKEN` | Lets an MCP client run the state-changing tools. |
 
 Spending money always requires authentication, whether or not a password is set.
-With **neither** configured nothing can authenticate, so no billable provider is
-reachable at all — live keys on an open deployment then cost nothing rather than
-everything. Set at least one before setting any provider key.
+With neither request credential configured, production fails closed and local
+development cannot reach billable providers. Set all three values for a browser
+deployment, with a different random value for each.
 
 ## Durable store
 

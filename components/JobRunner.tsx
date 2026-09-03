@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JobKind, JobStatus, StudioJob } from "@/lib/jobs";
 import { idempotencyKeyFor } from "@/lib/idempotency";
+import { decideSpendClick } from "@/lib/billable-confirmation";
 import { isPlayableAudio, isPlayableVideo } from "@/lib/media";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,6 +56,8 @@ export function JobRunner({
   const [readiness, setReadiness] = useState<Record<string, ProviderReadiness>>({});
   const [artifactStore, setArtifactStore] = useState(true);
   const [polls, setPolls] = useState(0);
+  const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
+  const [providersLoaded, setProvidersLoaded] = useState(false);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -74,6 +77,8 @@ export function JobRunner({
         setReadiness(Object.fromEntries(data.providers.map((p) => [p.id, p])));
       } catch {
         // degraded picker is fine
+      } finally {
+        if (alive.current) setProvidersLoaded(true);
       }
     })();
   }, []);
@@ -81,6 +86,15 @@ export function JobRunner({
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
   const missingSettings = chosen?.settingsMissing ?? [];
+  const liveReady =
+    Boolean(chosen?.billable) && missingSettings.length === 0 && providersLoaded;
+  const spend = decideSpendClick({
+    billable: liveReady,
+    readinessKnown: providersLoaded && Boolean(chosen),
+    currentKey: key,
+    confirmedKey,
+  });
+  const waitingOnReadiness = provider !== "mock" && !providersLoaded;
 
   async function run() {
     setBusy(true);
@@ -106,11 +120,21 @@ export function JobRunner({
         return;
       }
       setJob(data.job);
+      setConfirmedKey(null);
     } catch (err) {
       setError(`Could not reach the studio API: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
+  }
+
+  function onPrimaryClick() {
+    if (spend === "confirm") {
+      setConfirmedKey(key);
+      return;
+    }
+    if (spend === "wait") return;
+    void run();
   }
 
   const act = useCallback(async (id: string, action: "poll" | "complete" | "retry" | "cancel") => {
@@ -149,6 +173,13 @@ export function JobRunner({
 
   const tracking = job !== null && !SETTLED.includes(job.status);
   const stalled = tracking && polls >= MAX_POLLS;
+  const primaryDisabled =
+    busy ||
+    tracking ||
+    Boolean(blockedReason) ||
+    !prompt.trim() ||
+    waitingOnReadiness ||
+    spend === "wait";
 
   return (
     <section className="mt-6 rounded-card border border-border bg-surface-elevated p-5">
@@ -175,10 +206,14 @@ export function JobRunner({
           type="button"
           variant="accent"
           className="min-h-11 w-full sm:w-auto"
-          onClick={run}
-          disabled={busy || tracking || Boolean(blockedReason) || !prompt.trim()}
+          onClick={onPrimaryClick}
+          disabled={primaryDisabled}
         >
-          {busy && !job ? "Submitting…" : "Run job"}
+          {busy && !job
+            ? "Submitting…"
+            : spend === "confirm"
+              ? "Confirm paid run"
+              : "Run job"}
         </Button>
       </div>
 
@@ -187,6 +222,7 @@ export function JobRunner({
           {chosen.billable && missingSettings.length === 0 ? (
             <span className="text-amber-700">
               Live provider — running this bills real work against {chosen.envKey}.
+              {spend === "confirm" ? " Confirm the exact brief before it is submitted." : ""}
             </span>
           ) : chosen.id === "mock" ? (
             <span className="text-navy/50">Offline path — no spend, and no media produced.</span>
@@ -205,8 +241,6 @@ export function JobRunner({
               is nowhere to keep it. It will refuse rather than spend.
             </span>
           ) : missingSettings.length > 0 ? (
-            // Without this, a HeyGen render refused for a missing look id reads
-            // as a bad API key — the one thing that is not wrong.
             <span className="text-navy/50">
               The key is set, but {missingSettings.join(" and ")}{" "}
               {missingSettings.length > 1 ? "are" : "is"} not — this will refuse until{" "}
@@ -238,7 +272,6 @@ export function JobRunner({
 
       {job && (
         <div className="mt-4 space-y-3">
-          {/* Result stage */}
           {(job.status === "completed" || job.status === "validating") && (
             <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
               <div className="flex min-h-[8rem] flex-col items-center justify-center bg-navy/[0.03] px-4 py-8">
@@ -247,9 +280,6 @@ export function JobRunner({
                     <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">
                       Result ready
                     </p>
-                    {/* Play it here. A finished VO that can only be opened in
-                        another tab is a link, not a result — and judging a take
-                        is the whole reason to come back to this page. */}
                     {isPlayableAudio(job.result) ? (
                       <audio className="mt-3 w-full max-w-md" controls preload="metadata" src={job.result} />
                     ) : isPlayableVideo(job.result) ? (

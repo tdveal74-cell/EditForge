@@ -6,7 +6,7 @@ on:
       source_sha:
         description: Commit or ref to publish
         required: true
-        default: 83f9254f71f3e10cdfa8a930638c81080489b494
+        default: 5c265e0568d23e23dac6952e45e63e22b80844ed
   push:
     branches: [main]
     paths:
@@ -43,7 +43,7 @@ jobs:
       - name: Check out pinned source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || '83f9254f71f3e10cdfa8a930638c81080489b494' }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || '5c265e0568d23e23dac6952e45e63e22b80844ed' }}
 
       - name: Resolve immutable tag
         id: source

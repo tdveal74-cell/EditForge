@@ -60,7 +60,9 @@ volumes, and artifact volumes. Only the web service publishes a host port.
 Create `.env` from `.env.example` and set at least:
 
 ```dotenv
-EDITFORGE_ACCESS_PASSWORD=<random browser password>
+GOOGLE_CLIENT_ID=<Google Web OAuth client id>
+GOOGLE_CLIENT_SECRET=<Google Web OAuth client secret>
+EDITFORGE_GOOGLE_ALLOWED_EMAIL=<owner Google account>
 EDITFORGE_SESSION_SECRET=<different random session signing secret>
 EDITFORGE_MCP_TOKEN=<random DEVON bearer token>
 EDITFORGE_WORKER_TOKEN=<different random worker token>

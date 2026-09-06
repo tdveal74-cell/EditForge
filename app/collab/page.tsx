@@ -26,7 +26,7 @@ const roles = [
 const ENFORCED = [
   {
     what: "Access to the app",
-    how: "A verified passkey or recovery password creates the same hardened studio session. Protected pages and APIs refuse anonymous access.",
+    how: "The allowlisted Google identity or a verified passkey creates the same hardened studio session. Protected pages and APIs refuse anonymous access.",
     real: true,
   },
   {
@@ -72,9 +72,7 @@ export default function CollabPage() {
       <Section title="What is enforced">
         {gate === false && (
           <p className="mb-3 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            No access password is set on this deployment, so the app is open. Set{" "}
-            <code className="rounded bg-amber-100 px-1">EDITFORGE_ACCESS_PASSWORD</code> and redeploy to close
-            it.
+            Owner authentication is incomplete. Configure the Google OAuth identity and session secret before production use.
           </p>
         )}
         {gate === true && (

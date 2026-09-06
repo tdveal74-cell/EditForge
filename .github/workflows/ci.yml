@@ -64,8 +64,10 @@ jobs:
 
       - name: Compose contract
         env:
-          EDITFORGE_ACCESS_PASSWORD: ci-access-password
           EDITFORGE_SESSION_SECRET: ci-session-secret
+          GOOGLE_CLIENT_ID: ci-google-client
+          GOOGLE_CLIENT_SECRET: ci-google-secret
+          EDITFORGE_GOOGLE_ALLOWED_EMAIL: owner@example.com
           EDITFORGE_MCP_TOKEN: ci-mcp-token
           EDITFORGE_WORKER_TOKEN: ci-worker-token
           EDITFORGE_PROVIDER_TOKEN: ci-provider-token
@@ -76,8 +78,10 @@ jobs:
 
       - name: Hostinger compose contract
         env:
-          EDITFORGE_ACCESS_PASSWORD: ci-access-password
           EDITFORGE_SESSION_SECRET: ci-session-secret
+          GOOGLE_CLIENT_ID: ci-google-client
+          GOOGLE_CLIENT_SECRET: ci-google-secret
+          EDITFORGE_GOOGLE_ALLOWED_EMAIL: owner@example.com
           EDITFORGE_MCP_TOKEN: ci-mcp-token
           EDITFORGE_WORKER_TOKEN: ci-worker-token
           EDITFORGE_PROVIDER_TOKEN: ci-provider-token
@@ -89,12 +93,14 @@ jobs:
 
       # The local DEVON stack. It is the Compose file a contributor is most
       # likely to edit and least likely to boot, so it gets the same contract
-      # check, with only the four access credentials set, which is the point of
+      # check, with only the owner and worker credentials set, which is the point of
       # it: no provider token, no identity registry.
       - name: Local compose contract
         env:
-          EDITFORGE_ACCESS_PASSWORD: ci-access-password
           EDITFORGE_SESSION_SECRET: ci-session-secret
+          GOOGLE_CLIENT_ID: ci-google-client
+          GOOGLE_CLIENT_SECRET: ci-google-secret
+          EDITFORGE_GOOGLE_ALLOWED_EMAIL: owner@example.com
           EDITFORGE_MCP_TOKEN: ci-mcp-token
           EDITFORGE_WORKER_TOKEN: ci-worker-token
         run: docker compose -f compose.local.yaml config --quiet

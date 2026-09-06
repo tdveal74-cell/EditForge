@@ -2,17 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Label, Input } from "@/components/ui/field";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [passkeyAvailable, setPasskeyAvailable] = useState<boolean | null>(null);
-  const [googleAvailable, setGoogleAvailable] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
 
   useEffect(() => {
     fetch("/api/passkeys/status", { cache: "no-store" })
@@ -61,35 +57,14 @@ export default function LoginPage() {
     }
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) {
-        setError((await res.json()).error ?? "Sign in failed");
-        return;
-      }
-      router.replace("/");
-      router.refresh();
-    } catch {
-      setError("Could not reach the studio.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const loading = passkeyAvailable === null || googleAvailable === null;
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6 py-12">
       <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">EditForge</p>
       <h1 className="mt-2 text-2xl font-semibold tracking-tight text-navy">Private studio</h1>
       <p className="mt-2 text-sm text-navy/60">
-        This deployment holds live provider credentials. Use your verified device to continue.
+        Google verifies the studio owner. After enrollment, your device passkey becomes the fastest way back in.
       </p>
 
       {passkeyAvailable && (
@@ -109,7 +84,7 @@ export default function LoginPage() {
           href="/api/auth/google/start"
           className={`${passkeyAvailable ? "mt-3" : "mt-8"} flex min-h-12 w-full items-center justify-between rounded-control border border-border-strong bg-white px-4 text-sm font-semibold text-navy shadow-card transition-transform duration-flagship hover:-translate-y-0.5`}
         >
-          <span>Continue with Google</span>
+          <span>{passkeyAvailable ? "Use Google recovery" : "Start with Google"}</span>
           <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5">
             <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.4Z" />
             <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z" />
@@ -119,49 +94,23 @@ export default function LoginPage() {
         </a>
       )}
 
-      <form onSubmit={submit} className={`${passkeyAvailable || googleAvailable ? "mt-5 border-t border-border pt-5" : "mt-8"} space-y-4`}>
-        <p className="text-xs leading-relaxed text-navy/50">
-          {passkeyAvailable
-            ? "Recovery password"
-            : "Sign in with the recovery password once, then create your first passkey in Security."}
+      {loading && <p className="mt-8 text-sm text-navy/50">Checking secure sign-in…</p>}
+
+      {!loading && !googleAvailable && !passkeyAvailable && (
+        <p role="alert" className="mt-8 rounded-control border border-amber-300 bg-amber-50 px-3 py-3 text-sm leading-relaxed text-amber-950">
+          Owner sign-in is awaiting Google configuration. No password fallback is enabled.
         </p>
-        <Label text="Access password">
-          <span className="relative block">
-            <Input
-              type={showPassword ? "text" : "password"}
-              autoFocus
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="pr-16"
-            />
-            <button
-              type="button"
-              aria-label={showPassword ? "Hide access password" : "Show access password"}
-              aria-pressed={showPassword}
-              onClick={() => setShowPassword((visible) => !visible)}
-              className="absolute inset-y-0 right-0 flex min-w-14 items-center justify-center rounded-r-control px-3 text-xs font-semibold text-navy/55 transition-colors duration-flagship hover:bg-navy/5 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber focus-visible:ring-offset-1"
-            >
-              {showPassword ? "Hide" : "Show"}
-            </button>
-          </span>
-        </Label>
+      )}
 
-        {error && (
-          <p className="rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {error}
-          </p>
-        )}
+      {error && (
+        <p role="alert" className="mt-4 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {error}
+        </p>
+      )}
 
-        <Button type="submit" disabled={busy || !password} className="w-full">
-          {busy ? "Signing in…" : passkeyAvailable ? "Use recovery password" : "Sign in to enroll passkey"}
-        </Button>
-        {(passkeyAvailable || googleAvailable) && (
-          <p className="text-center text-[11px] leading-relaxed text-navy/45">
-            Forgot the recovery password? Sign in with {passkeyAvailable && googleAvailable ? "your passkey or Google" : passkeyAvailable ? "your passkey" : "Google"}, then rotate it in Security.
-          </p>
-        )}
-      </form>
+      <p className="mt-6 text-center text-[11px] leading-relaxed text-navy/45">
+        First visit: Google. Returning visits: passkey, with Google kept as recovery.
+      </p>
     </main>
   );
 }

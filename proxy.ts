@@ -21,7 +21,6 @@ import {
 // and the login route obviously cannot require a login.
 const OPEN_PATHS = [
   "/login",
-  "/api/login",
   "/api/health",
   "/manifest.webmanifest",
   "/sw.js",

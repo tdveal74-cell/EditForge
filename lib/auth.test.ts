@@ -11,7 +11,6 @@ import {
 } from "./auth";
 
 afterEach(() => {
-  delete process.env.EDITFORGE_ACCESS_PASSWORD;
   delete process.env.EDITFORGE_MCP_TOKEN;
   delete process.env.EDITFORGE_SESSION_SECRET;
   delete process.env.GOOGLE_CLIENT_ID;
@@ -70,25 +69,10 @@ describe("authentication", () => {
     expect(await isAuthenticated({ sessionCookie: "not-the-token" })).toBe(false);
   });
 
-  it("keeps a session valid when only the recovery password rotates", async () => {
-    process.env.EDITFORGE_SESSION_SECRET = "studio-signing-secret";
-    process.env.EDITFORGE_ACCESS_PASSWORD = "old-password";
-    const session = await sessionToken();
-    process.env.EDITFORGE_ACCESS_PASSWORD = "new-password";
-    expect(await isAuthenticated({ sessionCookie: session })).toBe(true);
-  });
-
   it("accepts the MCP token from the URL when one is offered", async () => {
     process.env.EDITFORGE_MCP_TOKEN = "tok-123";
     expect(await isAuthenticated({ urlToken: "tok-123" })).toBe(true);
     expect(await isAuthenticated({ urlToken: "tok-999" })).toBe(false);
-  });
-
-  it("does not accept the access password as a URL token", async () => {
-    // The URL token is the MCP credential only; the password is for browsers
-    // and must not become a shareable link.
-    process.env.EDITFORGE_ACCESS_PASSWORD = "studio-pass";
-    expect(await isAuthenticated({ urlToken: "studio-pass" })).toBe(false);
   });
 
   it("authenticates nobody when nothing is configured", async () => {
@@ -101,7 +85,10 @@ describe("authentication", () => {
 
   it("reports whether the access gate is on", () => {
     expect(accessGateEnabled()).toBe(false);
-    process.env.EDITFORGE_ACCESS_PASSWORD = "x";
+    process.env.EDITFORGE_SESSION_SECRET = "session-secret";
+    process.env.GOOGLE_CLIENT_ID = "client";
+    process.env.GOOGLE_CLIENT_SECRET = "secret";
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
     expect(accessGateEnabled()).toBe(true);
   });
 
@@ -123,7 +110,7 @@ describe("authentication", () => {
     expect(authenticationConfigured()).toBe(true);
   });
 
-  it("names the cookie once, so middleware and the login route cannot disagree", () => {
+  it("names the cookie once, so middleware and identity routes cannot disagree", () => {
     expect(SESSION_COOKIE).toBe("editforge_session");
   });
 });

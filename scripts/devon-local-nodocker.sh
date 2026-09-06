@@ -89,7 +89,9 @@ if [ ! -f .env ]; then
 # EditForge local settings. Private: git ignores this file.
 EDITFORGE_PORT=3100
 EDITFORGE_PUBLIC_URL=http://localhost:3100
-EDITFORGE_ACCESS_PASSWORD=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+EDITFORGE_GOOGLE_ALLOWED_EMAIL=
 EDITFORGE_SESSION_SECRET=
 EDITFORGE_MCP_TOKEN=
 EDITFORGE_WORKER_TOKEN=
@@ -97,7 +99,7 @@ EDITFORGE_SOURCE_MEDIA_HOST_DIR=./media
 ENVEOF
   ok "Wrote .env"
 fi
-for key in EDITFORGE_ACCESS_PASSWORD EDITFORGE_SESSION_SECRET EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
+for key in EDITFORGE_SESSION_SECRET EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
   if grep -q "^${key}=$" .env 2>/dev/null; then
     python3 - "$key" "$(secret)" <<'PYEOF'
 import pathlib, sys
@@ -112,6 +114,11 @@ p.write_text("\n".join(lines) + "\n")
 PYEOF
     ok "Generated $key"
   fi
+done
+for key in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET EDITFORGE_GOOGLE_ALLOWED_EMAIL; do
+  [ -n "$(env_value "$key")" ] || die \
+"$key is missing from .env. Google must be configured before the passwordless
+studio can start."
 done
 
 PORT="$(env_value EDITFORGE_PORT)"; PORT="${PORT:-3100}"

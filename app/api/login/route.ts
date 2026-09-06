@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, secretsMatch, sessionToken } from "@/lib/auth";
+import { SESSION_COOKIE, sessionToken } from "@/lib/auth";
+import { verifyRecoveryPassword } from "@/lib/access-password";
 import {
   clearLoginFailures,
   loginRateLimitStatus,
@@ -29,17 +30,9 @@ export async function POST(req: Request) {
   const currentLimit = loginRateLimitStatus(key);
   if (!currentLimit.allowed) return rateLimited(currentLimit.retryAfterSeconds);
 
-  const password = process.env.EDITFORGE_ACCESS_PASSWORD;
-  if (!password) {
-    return NextResponse.json(
-      { error: "No access password is configured, so there is nothing to sign in to." },
-      { status: 400 }
-    );
-  }
-
   const body = await req.json().catch(() => ({}));
   const provided = String(body.password ?? "");
-  if (!provided || !secretsMatch(provided, password)) {
+  if (!provided || !(await verifyRecoveryPassword(provided))) {
     // One message for both wrong and empty: nothing here should help someone
     // work out how close they got.
     const limit = recordLoginFailure(key);
@@ -50,7 +43,7 @@ export async function POST(req: Request) {
 
   clearLoginFailures(key);
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(SESSION_COOKIE, await sessionToken(password), {
+  res.cookies.set(SESSION_COOKIE, await sessionToken(), {
     httpOnly: true,
     sameSite: "strict",
     secure: process.env.NODE_ENV === "production",

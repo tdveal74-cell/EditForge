@@ -3,9 +3,9 @@
  *
  * Two principles, both fail-closed:
  *
- *  1. Production never silently becomes public. A browser password or MCP
- *     token turns the gate on in every environment, and production refuses
- *     protected requests when neither credential is configured.
+ *  1. Production never silently becomes public. Browser identity and MCP
+ *     credentials turn the gate on, and production refuses protected requests
+ *     when authentication is not configured.
  *  2. Spending money always requires authentication, whether or not a password
  *     is configured. With no password and no MCP token, nothing can
  *     authenticate, so no billable provider can be reached at all. Live keys
@@ -25,12 +25,17 @@ export function secretsMatch(provided: string, expected: string): boolean {
 }
 
 /**
- * The cookie value for a given password. Derived rather than the password
- * itself, so a leaked cookie does not hand over the password used elsewhere.
+ * The shared studio-session proof minted after any approved sign-in method.
+ * It is independent of the recovery password so a passkey or Google identity
+ * can recover access and rotate that password without invalidating its own
+ * newly authenticated session.
  */
-export async function sessionToken(password: string): Promise<string> {
+export async function sessionToken(): Promise<string> {
   const encoder = new TextEncoder();
-  const secret = process.env.EDITFORGE_SESSION_SECRET?.trim() || password;
+  const secret =
+    process.env.EDITFORGE_SESSION_SECRET?.trim() ||
+    process.env.EDITFORGE_ACCESS_PASSWORD?.trim();
+  if (!secret) throw new Error("EditForge session signing is not configured");
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
@@ -38,7 +43,7 @@ export async function sessionToken(password: string): Promise<string> {
     false,
     ["sign"]
   );
-  const digest = await crypto.subtle.sign("HMAC", key, encoder.encode(`editforge-session-v2:${password}`));
+  const digest = await crypto.subtle.sign("HMAC", key, encoder.encode("editforge-session-v3:studio"));
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
@@ -80,11 +85,12 @@ export async function isAuthenticated(opts: {
     if (fromUrl && secretsMatch(fromUrl, mcpToken)) return true;
   }
 
-  const password = process.env.EDITFORGE_ACCESS_PASSWORD;
-  if (!password) return false;
   const cookie = opts.sessionCookie ?? "";
   if (!cookie) return false;
-  return secretsMatch(cookie, await sessionToken(password));
+  if (!process.env.EDITFORGE_SESSION_SECRET?.trim() && !process.env.EDITFORGE_ACCESS_PASSWORD?.trim()) {
+    return false;
+  }
+  return secretsMatch(cookie, await sessionToken());
 }
 
 /** True when the app is configured to be private. */
@@ -92,9 +98,18 @@ export function accessGateEnabled(): boolean {
   return Boolean(process.env.EDITFORGE_ACCESS_PASSWORD);
 }
 
-/** True when either supported credential can protect a request. */
+/** True when a configured identity or MCP credential can protect a request. */
 export function authenticationConfigured(): boolean {
-  return Boolean(process.env.EDITFORGE_ACCESS_PASSWORD || process.env.EDITFORGE_MCP_TOKEN);
+  const google = Boolean(
+    process.env.GOOGLE_CLIENT_ID &&
+    process.env.GOOGLE_CLIENT_SECRET &&
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL
+  );
+  return Boolean(
+    process.env.EDITFORGE_ACCESS_PASSWORD ||
+    process.env.EDITFORGE_MCP_TOKEN ||
+    (google && process.env.EDITFORGE_SESSION_SECRET?.trim())
+  );
 }
 
 /** A separate signing key prevents an exposed cookie from becoming a password oracle. */

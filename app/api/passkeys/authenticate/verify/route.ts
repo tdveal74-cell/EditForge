@@ -42,12 +42,8 @@ export async function POST(req: Request) {
     if (!verification.verified) throw new Error("Passkey verification failed");
     await updatePasskeyCounter(stored.id, verification.authenticationInfo.newCounter);
 
-    const password = process.env.EDITFORGE_ACCESS_PASSWORD;
-    if (!password) {
-      return NextResponse.json({ error: "The recovery credential is not configured." }, { status: 503 });
-    }
     const res = NextResponse.json({ ok: true });
-    res.cookies.set(SESSION_COOKIE, await sessionToken(password), {
+    res.cookies.set(SESSION_COOKIE, await sessionToken(), {
       httpOnly: true,
       sameSite: "strict",
       secure: process.env.NODE_ENV === "production",
@@ -59,4 +55,3 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Passkey verification failed." }, { status: 401 });
   }
 }
-

@@ -27,6 +27,71 @@ body {
     "ss01" on,
     "cv05" on;
   text-rendering: optimizeLegibility;
+  position: relative;
+  isolation: isolate;
+}
+
+#main {
+  position: relative;
+  z-index: 1;
+}
+
+.studio-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(217, 233, 154, 0.13), transparent 24rem),
+    linear-gradient(135deg, rgba(20, 32, 31, 0.025), transparent 45%);
+}
+.atmosphere-frame {
+  position: absolute;
+  display: block;
+  background-size: cover;
+  background-position: center;
+  filter: saturate(0.68) contrast(1.08);
+  opacity: 0.075;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 74%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 24%, #000 74%, transparent);
+}
+.atmosphere-frame-a {
+  width: min(42vw, 680px);
+  height: 58vh;
+  right: -8vw;
+  top: 9vh;
+  background-image: url("/canvas/stills/cinematic.webp");
+  transform: rotate(4deg);
+}
+.atmosphere-frame-b {
+  width: min(34vw, 500px);
+  height: 46vh;
+  left: -10vw;
+  bottom: 4vh;
+  background-image: url("/canvas/stills/film.webp");
+  transform: rotate(-5deg);
+}
+.atmosphere-glow {
+  position: absolute;
+  width: 38rem;
+  height: 38rem;
+  right: -15rem;
+  bottom: -17rem;
+  border: 1px solid rgba(212, 160, 23, 0.16);
+  border-radius: 50%;
+  box-shadow: 0 0 0 7rem rgba(212, 160, 23, 0.018), 0 0 0 14rem rgba(20, 32, 31, 0.018);
+}
+.atmosphere-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.16;
+  background-image:
+    linear-gradient(rgba(10, 22, 40, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(10, 22, 40, 0.045) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: radial-gradient(circle at center, #000, transparent 78%);
+  mask-image: radial-gradient(circle at center, #000, transparent 78%);
 }
 
 ::selection {
@@ -205,6 +270,64 @@ body {
 .forge-footer > div {
   display: flex;
   gap: 26px;
+  align-items: center;
+}
+.pwa-install {
+  min-height: 44px;
+  color: #d9e99a;
+  font-size: 10px;
+  border-bottom: 1px solid #687c59;
+}
+.mobile-dock {
+  display: none;
+}
+.page-header-premium {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: clamp(24px, 6vw, 88px);
+  align-items: end;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.page-header-copy {
+  min-width: 0;
+}
+.page-header-visual {
+  display: flex;
+  align-items: flex-end;
+  gap: 15px;
+}
+.page-header-visual figure {
+  position: relative;
+  width: clamp(150px, 17vw, 220px);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgba(20, 32, 31, 0.25);
+  background: #14201f;
+  box-shadow: 9px 13px 25px rgba(10, 22, 40, 0.12);
+}
+.page-header-visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.74) contrast(1.06);
+  opacity: 0.9;
+}
+.page-header-visual figure::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(8, 17, 13, 0.7), transparent 58%);
+}
+.page-header-visual figure > span {
+  position: absolute;
+  z-index: 1;
+  left: 10px;
+  bottom: 8px;
+  color: #d9e99a;
+  font: 7px ui-monospace, monospace;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
 }
 .forge-footer > span {
   font-size: 11px;
@@ -229,6 +352,9 @@ body {
   }
 }
 @media (max-width: 700px) {
+  body {
+    padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  }
   .forge-nav {
     min-height: 73px;
     padding: 12px 19px;
@@ -286,5 +412,81 @@ body {
   }
   .forge-footer > p {
     font-size: 9px;
+  }
+  .mobile-dock {
+    position: fixed;
+    z-index: 80;
+    left: 10px;
+    right: 10px;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    min-height: 62px;
+    padding: 6px 5px;
+    border: 1px solid #60705a;
+    border-radius: 18px;
+    background: rgba(20, 32, 31, 0.96);
+    box-shadow: 0 18px 44px rgba(4, 12, 9, 0.38);
+  }
+  .mobile-dock a {
+    display: flex;
+    min-width: 0;
+    min-height: 50px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    border-radius: 12px;
+    color: #aebda7;
+    font-size: 8px;
+    letter-spacing: 0.02em;
+  }
+  .mobile-dock a > span {
+    color: #d9e99a;
+    font-size: 16px;
+    line-height: 1;
+  }
+  .mobile-dock a[aria-current="page"] {
+    background: #2a3c32;
+    color: #f0f2e6;
+  }
+  .studio-atmosphere .atmosphere-frame-a {
+    width: 78vw;
+    right: -35vw;
+    opacity: 0.055;
+  }
+  .studio-atmosphere .atmosphere-frame-b {
+    width: 70vw;
+    left: -42vw;
+    opacity: 0.045;
+  }
+  .forge-footer {
+    padding-bottom: 35px;
+  }
+  .page-header-premium {
+    grid-template-columns: minmax(0, 1fr) 38vw;
+    gap: 15px;
+    align-items: start;
+  }
+  .page-header-copy h1 {
+    font-size: 1.75rem;
+  }
+  .page-header-visual {
+    display: block;
+  }
+  .page-header-visual figure {
+    width: 100%;
+    margin-top: 2px;
+  }
+  .page-header-visual > div {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+}
+
+@media (display-mode: standalone) {
+  .forge-nav {
+    padding-top: max(15px, env(safe-area-inset-top));
   }
 }

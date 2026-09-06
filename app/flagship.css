@@ -308,6 +308,96 @@
   line-height: 1.6;
   margin-top: 10px;
 }
+.production-reel {
+  background: #101916;
+  color: #edf0e4;
+  padding: 85px 0 92px;
+  border-top: 1px solid #3d4d41;
+  border-bottom: 1px solid #3d4d41;
+}
+.reel-heading {
+  display: grid;
+  grid-template-columns: 0.7fr 1.2fr 0.8fr;
+  gap: clamp(25px, 5vw, 85px);
+  align-items: end;
+  padding: 0 clamp(24px, 5vw, 80px) 36px;
+}
+.reel-heading > .forge-eyebrow {
+  color: #9caf98;
+}
+.reel-heading h2 {
+  max-width: 650px;
+  font-size: clamp(32px, 4.3vw, 66px);
+  font-weight: 400;
+  line-height: 1.02;
+  letter-spacing: -0.055em;
+}
+.reel-heading > p:last-child {
+  max-width: 310px;
+  color: #aab8a7;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.reel-track {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: clamp(8px, 1.2vw, 18px);
+  padding: 0 clamp(24px, 3vw, 46px);
+}
+.reel-track figure {
+  min-width: 0;
+}
+.reel-image {
+  position: relative;
+  aspect-ratio: 0.78;
+  overflow: hidden;
+  background: #26362e;
+}
+.reel-image::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(219, 232, 207, 0.18);
+  background: linear-gradient(to top, rgba(5, 13, 9, 0.56), transparent 42%);
+  pointer-events: none;
+}
+.reel-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.82) contrast(1.04);
+  transition: transform 0.8s cubic-bezier(0.2, 0.75, 0.2, 1), filter 0.5s ease;
+}
+.reel-track figure:hover img {
+  transform: scale(1.035);
+  filter: saturate(1) contrast(1.04);
+}
+.reel-image > span {
+  position: absolute;
+  z-index: 2;
+  left: 14px;
+  bottom: 12px;
+  font: 9px ui-monospace, monospace;
+  letter-spacing: 0.14em;
+  color: #d9e99a;
+}
+.reel-track figcaption {
+  padding: 16px 3px 0;
+}
+.reel-track figcaption strong,
+.reel-track figcaption span {
+  display: block;
+}
+.reel-track figcaption strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.reel-track figcaption span {
+  margin-top: 5px;
+  color: #90a08e;
+  font-size: 10px;
+  line-height: 1.45;
+}
 .conform-act {
   background: #aabd87;
   color: #223023;
@@ -737,6 +827,30 @@
   }
 }
 @media (max-width: 700px) {
+  .production-reel {
+    padding: 62px 0 68px;
+  }
+  .reel-heading {
+    grid-template-columns: 1fr;
+    gap: 17px;
+  }
+  .reel-heading h2 {
+    font-size: 38px;
+  }
+  .reel-track {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    padding: 0 24px 18px;
+    scrollbar-width: none;
+  }
+  .reel-track::-webkit-scrollbar {
+    display: none;
+  }
+  .reel-track figure {
+    flex: 0 0 72vw;
+    scroll-snap-align: start;
+  }
   .forge-hero {
     display: flex;
     flex-direction: column;

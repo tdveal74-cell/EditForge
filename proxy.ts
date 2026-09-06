@@ -19,11 +19,20 @@ import {
 
 // Health stays reachable so uptime checks work against a private deployment,
 // and the login route obviously cannot require a login.
-const OPEN_PATHS = ["/login", "/api/login", "/api/health"];
+const OPEN_PATHS = [
+  "/login",
+  "/api/login",
+  "/api/health",
+  "/manifest.webmanifest",
+  "/sw.js",
+  "/api/passkeys/status",
+  "/api/passkeys/authenticate/options",
+  "/api/passkeys/authenticate/verify",
+];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (OPEN_PATHS.some((p) => pathname === p)) return NextResponse.next();
+  if (OPEN_PATHS.some((p) => pathname === p) || pathname.startsWith("/icons/")) return NextResponse.next();
 
   const authenticationRequired = process.env.NODE_ENV === "production" || authenticationConfigured();
   if (!authenticationRequired) return NextResponse.next();

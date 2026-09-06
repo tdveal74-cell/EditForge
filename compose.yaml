@@ -26,6 +26,8 @@ services:
       # a separate boundary with its own credentials. Passing none of them here
       # was why a self-host with every key set still had a studio that could
       # only run mock.
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      XAI_AGENT_MODEL: ${XAI_AGENT_MODEL:-grok-4.6}
       RUNWAY_API_KEY: ${RUNWAY_API_KEY:-${RUNWAYML_API_SECRET:-}}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}

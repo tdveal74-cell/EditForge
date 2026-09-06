@@ -23,6 +23,7 @@ const config = defineConfig([
     "node_modules/**",
     "next-env.d.ts",
     "public/**",
+    "scrollcraft/builds/**/scrollcraft.js", // Unmodified vendor runtime, retained for provenance.
     "coverage/**",
   ]),
   {

@@ -20,11 +20,6 @@ export default function SecurityPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showRecoveryPassword, setShowRecoveryPassword] = useState(false);
-  const [recoveryMessage, setRecoveryMessage] = useState("");
-  const [recoveryError, setRecoveryError] = useState("");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/passkeys", { cache: "no-store" });
@@ -76,7 +71,7 @@ export default function SecurityPage() {
   }
 
   async function remove(passkey: PasskeySummary) {
-    if (!window.confirm(`Remove ${passkey.label}? The recovery password will still work.`)) return;
+    if (!window.confirm(`Remove ${passkey.label}? Google recovery will still work.`)) return;
     setBusy(true);
     setError("");
     try {
@@ -87,33 +82,6 @@ export default function SecurityPage() {
       await load();
     } catch (err) {
       setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function rotateRecoveryPassword(event: React.FormEvent) {
-    event.preventDefault();
-    setRecoveryError("");
-    setRecoveryMessage("");
-    if (newPassword !== confirmPassword) {
-      setRecoveryError("The recovery passwords do not match.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch("/api/access-password", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not rotate the recovery password.");
-      setNewPassword("");
-      setConfirmPassword("");
-      setRecoveryMessage("Recovery password rotated. Existing passkeys and this session remain valid.");
-    } catch (err) {
-      setRecoveryError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -132,7 +100,7 @@ export default function SecurityPage() {
             <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">New passkey</p>
             <h2 className="mt-2 text-xl font-semibold text-navy">Use your fingerprint, face, PIN, or nearby device</h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-navy/60">
-              Enrollment requires this authenticated session. The recovery password remains available if your device is lost.
+              Enrollment requires the Google-authenticated owner session. Google remains available if your device is lost.
             </p>
             <label className="mt-5 block text-xs font-medium uppercase tracking-wide text-navy/45">
               Passkey name
@@ -181,50 +149,10 @@ export default function SecurityPage() {
 
       <section className="mt-8 rounded-card border border-border bg-surface-elevated p-6 shadow-card">
         <p className="text-xs font-semibold uppercase tracking-wide text-navy/45">Recovery</p>
-        <h2 className="mt-2 text-xl font-semibold text-navy">Rotate recovery password</h2>
+        <h2 className="mt-2 text-xl font-semibold text-navy">Google stays your recovery identity</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-navy/60">
-          Use this after signing in with Google or a passkey when the previous password is lost. EditForge stores a salted password verifier, not the replacement password.
+          If a device is lost, use the allowlisted Google account on the sign-in screen, then enroll a replacement passkey here.
         </p>
-        <form className="mt-5 grid gap-4 sm:grid-cols-2" onSubmit={rotateRecoveryPassword}>
-          <label className="text-xs font-medium uppercase tracking-wide text-navy/45">
-            New password
-            <Input
-              className="mt-1 normal-case tracking-normal"
-              type={showRecoveryPassword ? "text" : "password"}
-              autoComplete="new-password"
-              minLength={16}
-              maxLength={128}
-              required
-              value={newPassword}
-              onChange={(event) => setNewPassword(event.target.value)}
-            />
-          </label>
-          <label className="text-xs font-medium uppercase tracking-wide text-navy/45">
-            Confirm password
-            <Input
-              className="mt-1 normal-case tracking-normal"
-              type={showRecoveryPassword ? "text" : "password"}
-              autoComplete="new-password"
-              minLength={16}
-              maxLength={128}
-              required
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-            />
-          </label>
-          <label className="flex min-h-11 items-center gap-2 text-xs text-navy/60">
-            <input type="checkbox" checked={showRecoveryPassword} onChange={(event) => setShowRecoveryPassword(event.target.checked)} />
-            Show recovery password
-          </label>
-          <Button type="submit" disabled={busy || newPassword.length < 16 || confirmPassword.length < 16}>
-            {busy ? "Saving…" : "Rotate password"}
-          </Button>
-        </form>
-        {(recoveryMessage || recoveryError) && (
-          <p role={recoveryError ? "alert" : "status"} className={`mt-4 rounded-control border px-3 py-2 text-sm ${recoveryError ? "border-red-200 bg-red-50 text-red-800" : "border-border bg-surface-muted text-navy/70"}`}>
-            {recoveryError || recoveryMessage}
-          </p>
-        )}
       </section>
     </main>
   );

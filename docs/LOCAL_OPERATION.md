@@ -73,7 +73,9 @@ curl -fsS http://localhost:3100/api/health
 The four that must be set, each a different random value:
 
 ```dotenv
-EDITFORGE_ACCESS_PASSWORD=<browser password for the deployment>
+GOOGLE_CLIENT_ID=<Google Web OAuth client id>
+GOOGLE_CLIENT_SECRET=<Google Web OAuth client secret>
+EDITFORGE_GOOGLE_ALLOWED_EMAIL=<owner Google account>
 EDITFORGE_SESSION_SECRET=<browser session signing secret>
 EDITFORGE_MCP_TOKEN=<DEVON's bearer token>
 EDITFORGE_WORKER_TOKEN=<control plane -> worker, DEVON never sees it>

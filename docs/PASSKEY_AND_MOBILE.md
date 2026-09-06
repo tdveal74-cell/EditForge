@@ -4,8 +4,8 @@
 
 EditForge uses WebAuthn for passkey registration and authentication.
 
-- The recovery password is required for initial enrollment unless Google sign-in is configured.
-- A verified allowlisted Google account can recover the studio and rotate a lost recovery password.
+- The verified allowlisted Google account is the only initial enrollment path.
+- After enrollment, a passkey is the primary sign-in method and Google remains the recovery identity.
 - Registration is available only inside an authenticated studio session at `/security`.
 - Authentication requires user verification through the device, such as a fingerprint, face, PIN, or nearby-device approval.
 - The private key never reaches EditForge. The durable store contains the credential ID, public key, signature counter, transport hints, and non-secret device metadata.
@@ -25,7 +25,7 @@ Change the RP ID or origin only when the public hostname changes. Existing passk
 
 ## First enrollment
 
-1. Sign in once with the recovery password or the allowlisted Google account.
+1. Sign in with the allowlisted Google account.
 2. Open `/security` from Departments, Systems, Security.
 3. Name the passkey and select **Create passkey**.
 4. Complete the browser or device verification prompt.
@@ -49,9 +49,8 @@ EDITFORGE_GOOGLE_ALLOWED_EMAIL=<owner Google account>
 EDITFORGE_GOOGLE_REDIRECT_ORIGIN=https://editforge.online
 ```
 
-After Google or passkey authentication, open `/security` to set a new recovery
-password. Recovery passwords must be 16 to 128 characters. EditForge writes only
-a salted scrypt verifier to its persistent data store.
+After Google authentication, open `/security` to enroll the first passkey. No
+access-password endpoint, password form, or password verifier is present.
 
 ## Mobile app
 

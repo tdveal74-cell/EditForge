@@ -94,6 +94,9 @@ link that 404s a minute later.
 |---|---|
 | `EDITFORGE_ACCESS_PASSWORD` | Makes the whole deployment private: pages redirect to `/login`, APIs answer 401. |
 | `EDITFORGE_SESSION_SECRET` | Signs browser sessions. Use a long random value different from the access password. |
+| `EDITFORGE_PASSKEY_RP_ID` | WebAuthn relying-party hostname. Production defaults to `editforge.online`. |
+| `EDITFORGE_PASSKEY_ORIGIN` | Exact HTTPS origin accepted for passkey ceremonies. |
+| `EDITFORGE_PASSKEY_NAME` | Human-readable service name shown by the device during enrollment. |
 | `EDITFORGE_MCP_TOKEN` | Lets an MCP client run the state-changing tools. |
 
 Spending money always requires authentication, whether or not a password is set.

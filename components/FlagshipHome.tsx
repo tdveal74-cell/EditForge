@@ -290,6 +290,62 @@ function ConformDesk() {
     </section>
   );
 }
+
+const reelFrames = [
+  {
+    src: "/canvas/stills/film.webp",
+    label: "Narrative",
+    caption: "Hold the frame until it says something.",
+  },
+  {
+    src: "/canvas/stills/talent.webp",
+    label: "Performance",
+    caption: "Presence before polish.",
+  },
+  {
+    src: "/canvas/stills/product.webp",
+    label: "Campaign",
+    caption: "Make the object feel inevitable.",
+  },
+  {
+    src: "/canvas/stills/social.webp",
+    label: "Vertical",
+    caption: "Designed for the first thumb-stop.",
+  },
+];
+
+function ProductionReel() {
+  return (
+    <section className="production-reel" aria-labelledby="production-reel-title" data-sc-act="flow">
+      <div className="reel-heading">
+        <p className="forge-eyebrow">STILLS / MOTION / PERFORMANCE / FINISH</p>
+        <h2 id="production-reel-title">A visual language for every kind of work.</h2>
+        <p>One premium production system, from cinematic drama to vertical campaigns.</p>
+      </div>
+      <div className="reel-track" data-sc-stagger="70">
+        {reelFrames.map((frame, index) => (
+          <figure key={frame.src} data-sc-in>
+            <div className="reel-image">
+              <Image
+                src={frame.src}
+                alt={`${frame.label} production reference`}
+                width={720}
+                height={900}
+                sizes="(max-width: 700px) 72vw, 25vw"
+                unoptimized
+              />
+              <span>{String(index + 1).padStart(2, "0")}</span>
+            </div>
+            <figcaption>
+              <strong>{frame.label}</strong>
+              <span>{frame.caption}</span>
+            </figcaption>
+          </figure>
+        ))}
+      </div>
+    </section>
+  );
+}
 export function FlagshipHome() {
   const root = useRef<HTMLElement>(null);
   const mounted = useRef(false);
@@ -444,6 +500,7 @@ export function FlagshipHome() {
           </li>
         </ol>
       </section>
+      <ProductionReel />
       <ConformDesk />
       <section className="department-section" data-sc-act="flow">
         <div className="department-heading">

@@ -40,12 +40,14 @@ const departments = [
       ["Render", "/render"],
       ["Hardware", "/hardware"],
       ["Jobs", "/jobs"],
+      ["Security", "/security"],
     ],
   },
 ];
 export function Nav() {
   const pathname = usePathname();
   return (
+    <>
     <header className="forge-nav">
       <a className="forge-brand" href="/" aria-label="EditForge home">
         <span className="brand-mark" aria-hidden="true">
@@ -95,5 +97,24 @@ export function Nav() {
         Enter the studio <span aria-hidden="true">↗</span>
       </a>
     </header>
+    <nav className="mobile-dock" aria-label="Mobile app navigation">
+      {[
+        ["Home", "/", "EF"],
+        ["Canvas", "/canvas", "◇"],
+        ["Agent", "/canvas?panel=agent", "✦"],
+        ["Projects", "/projects", "▣"],
+        ["Jobs", "/jobs", "↗"],
+      ].map(([label, href, glyph]) => (
+        <a
+          key={label}
+          href={href}
+          aria-current={pathname === href.split("?")[0] ? "page" : undefined}
+        >
+          <span aria-hidden="true">{glyph}</span>
+          {label}
+        </a>
+      ))}
+    </nav>
+    </>
   );
 }

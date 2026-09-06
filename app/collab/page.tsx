@@ -26,7 +26,7 @@ const roles = [
 const ENFORCED = [
   {
     what: "Access to the app",
-    how: "One shared password. Everything except /login, /api/login, and /api/health is refused without a session.",
+    how: "A verified passkey or recovery password creates the same hardened studio session. Protected pages and APIs refuse anonymous access.",
     real: true,
   },
   {

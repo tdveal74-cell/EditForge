@@ -12,12 +12,27 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [passkeyAvailable, setPasskeyAvailable] = useState<boolean | null>(null);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
 
   useEffect(() => {
     fetch("/api/passkeys/status", { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => setPasskeyAvailable(Boolean(data.available)))
       .catch(() => setPasskeyAvailable(false));
+    fetch("/api/auth/google/status", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setGoogleAvailable(Boolean(data.available)))
+      .catch(() => setGoogleAvailable(false));
+    const authError = new URLSearchParams(window.location.search).get("auth");
+    if (authError) {
+      queueMicrotask(() =>
+        setError(
+          authError === "google-unavailable"
+            ? "Google sign-in is not configured for this studio."
+            : "Google sign-in could not be verified for this studio."
+        )
+      );
+    }
   }, []);
 
   async function passkeySignIn() {
@@ -89,10 +104,25 @@ export default function LoginPage() {
         </button>
       )}
 
-      <form onSubmit={submit} className={`${passkeyAvailable ? "mt-5 border-t border-border pt-5" : "mt-8"} space-y-4`}>
+      {googleAvailable && (
+        <a
+          href="/api/auth/google/start"
+          className={`${passkeyAvailable ? "mt-3" : "mt-8"} flex min-h-12 w-full items-center justify-between rounded-control border border-border-strong bg-white px-4 text-sm font-semibold text-navy shadow-card transition-transform duration-flagship hover:-translate-y-0.5`}
+        >
+          <span>Continue with Google</span>
+          <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5">
+            <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.8 3-4.3 3-7.4Z" />
+            <path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1a5.8 5.8 0 0 1-5.5-4H3.2v2.6A10 10 0 0 0 12 22Z" />
+            <path fill="#FBBC05" d="M6.5 14.1A6 6 0 0 1 6.2 12c0-.7.1-1.4.3-2.1V7.3H3.2A10 10 0 0 0 2 12c0 1.7.4 3.3 1.2 4.7l3.3-2.6Z" />
+            <path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.8A9.7 9.7 0 0 0 12 2a10 10 0 0 0-8.8 5.3l3.3 2.6A5.8 5.8 0 0 1 12 5.9Z" />
+          </svg>
+        </a>
+      )}
+
+      <form onSubmit={submit} className={`${passkeyAvailable || googleAvailable ? "mt-5 border-t border-border pt-5" : "mt-8"} space-y-4`}>
         <p className="text-xs leading-relaxed text-navy/50">
           {passkeyAvailable
-            ? "Recovery access"
+            ? "Recovery password"
             : "Sign in with the recovery password once, then create your first passkey in Security."}
         </p>
         <Label text="Access password">
@@ -126,6 +156,11 @@ export default function LoginPage() {
         <Button type="submit" disabled={busy || !password} className="w-full">
           {busy ? "Signing in…" : passkeyAvailable ? "Use recovery password" : "Sign in to enroll passkey"}
         </Button>
+        {(passkeyAvailable || googleAvailable) && (
+          <p className="text-center text-[11px] leading-relaxed text-navy/45">
+            Forgot the recovery password? Sign in with {passkeyAvailable && googleAvailable ? "your passkey or Google" : passkeyAvailable ? "your passkey" : "Google"}, then rotate it in Security.
+          </p>
+        )}
       </form>
     </main>
   );

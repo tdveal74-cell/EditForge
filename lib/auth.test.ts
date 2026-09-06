@@ -14,6 +14,9 @@ afterEach(() => {
   delete process.env.EDITFORGE_ACCESS_PASSWORD;
   delete process.env.EDITFORGE_MCP_TOKEN;
   delete process.env.EDITFORGE_SESSION_SECRET;
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
+  delete process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL;
 });
 
 describe("secret comparison", () => {
@@ -26,21 +29,22 @@ describe("secret comparison", () => {
 });
 
 describe("session token", () => {
-  it("is stable for a password and different for another", async () => {
-    const a = await sessionToken("hunter2");
-    expect(await sessionToken("hunter2")).toBe(a);
-    expect(await sessionToken("hunter3")).not.toBe(a);
+  it("is stable for a configured signing secret", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "signing-secret";
+    const a = await sessionToken();
+    expect(await sessionToken()).toBe(a);
   });
 
-  it("does not contain the password it was derived from", async () => {
-    expect(await sessionToken("hunter2")).not.toContain("hunter2");
+  it("does not contain the secret it was derived from", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "signing-secret";
+    expect(await sessionToken()).not.toContain("signing-secret");
   });
 
   it("invalidates sessions when the signing secret rotates", async () => {
     process.env.EDITFORGE_SESSION_SECRET = "first-secret";
-    const first = await sessionToken("hunter2");
+    const first = await sessionToken();
     process.env.EDITFORGE_SESSION_SECRET = "second-secret";
-    expect(await sessionToken("hunter2")).not.toBe(first);
+    expect(await sessionToken()).not.toBe(first);
   });
 });
 
@@ -59,18 +63,19 @@ describe("authentication", () => {
     expect(await isAuthenticated({ authorization: "Bearer wrong-01" })).toBe(false);
   });
 
-  it("accepts a session cookie derived from the access password", async () => {
-    process.env.EDITFORGE_ACCESS_PASSWORD = "studio-pass";
-    const cookie = await sessionToken("studio-pass");
+  it("accepts a session cookie derived from the signing secret", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "studio-signing-secret";
+    const cookie = await sessionToken();
     expect(await isAuthenticated({ sessionCookie: cookie })).toBe(true);
     expect(await isAuthenticated({ sessionCookie: "not-the-token" })).toBe(false);
   });
 
-  it("rejects a cookie minted from a different password", async () => {
-    const stale = await sessionToken("old-password");
+  it("keeps a session valid when only the recovery password rotates", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "studio-signing-secret";
+    process.env.EDITFORGE_ACCESS_PASSWORD = "old-password";
+    const session = await sessionToken();
     process.env.EDITFORGE_ACCESS_PASSWORD = "new-password";
-    // Rotating the password must invalidate sessions issued under the old one.
-    expect(await isAuthenticated({ sessionCookie: stale })).toBe(false);
+    expect(await isAuthenticated({ sessionCookie: session })).toBe(true);
   });
 
   it("accepts the MCP token from the URL when one is offered", async () => {
@@ -107,6 +112,15 @@ describe("authentication", () => {
     process.env.EDITFORGE_SESSION_SECRET = "secret";
     expect(authenticationConfigured()).toBe(true);
     expect(sessionSecretConfigured()).toBe(true);
+  });
+
+  it("requires a session signing secret for Google browser authentication", () => {
+    process.env.GOOGLE_CLIENT_ID = "client";
+    process.env.GOOGLE_CLIENT_SECRET = "secret";
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
+    expect(authenticationConfigured()).toBe(false);
+    process.env.EDITFORGE_SESSION_SECRET = "session-secret";
+    expect(authenticationConfigured()).toBe(true);
   });
 
   it("names the cookie once, so middleware and the login route cannot disagree", () => {

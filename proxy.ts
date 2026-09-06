@@ -28,6 +28,9 @@ const OPEN_PATHS = [
   "/api/passkeys/status",
   "/api/passkeys/authenticate/options",
   "/api/passkeys/authenticate/verify",
+  "/api/auth/google/status",
+  "/api/auth/google/start",
+  "/api/auth/google/callback",
 ];
 
 export async function proxy(req: NextRequest) {

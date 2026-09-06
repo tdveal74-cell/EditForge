@@ -30,9 +30,14 @@ export type EnvLike = Record<string, string | undefined>;
 /** Resolved per-request configuration a wire needs beyond the API key. */
 export type WireSettings = Record<string, string>;
 
-export type SettingsResult = { ok: true; value: WireSettings } | { ok: false; error: string };
+export type SettingsResult =
+  { ok: true; value: WireSettings } | { ok: false; error: string };
 
-export type PollReading = { state: ProviderState; result?: string; note?: string };
+export type PollReading = {
+  state: ProviderState;
+  result?: string;
+  note?: string;
+};
 
 /**
  * Where a provider expects its credential.
@@ -45,7 +50,10 @@ export type PollReading = { state: ProviderState; result?: string; note?: string
 export type ProviderAuth = { header: string; scheme?: string };
 
 /** What a wire gets when it does not name its own. */
-export const DEFAULT_AUTH: ProviderAuth = { header: "Authorization", scheme: "Bearer" };
+export const DEFAULT_AUTH: ProviderAuth = {
+  header: "Authorization",
+  scheme: "Bearer",
+};
 
 /**
  * How one provider's HTTP surface actually looks.
@@ -67,7 +75,10 @@ export type ProviderWire = {
    */
   settings?: (env: EnvLike, req: SubmitRequest) => SettingsResult;
   submitPath: (req: SubmitRequest, settings: WireSettings) => string;
-  buildBody: (req: SubmitRequest, settings: WireSettings) => Record<string, unknown>;
+  buildBody: (
+    req: SubmitRequest,
+    settings: WireSettings,
+  ) => Record<string, unknown>;
   /** Pull the provider's own task id out of its submit envelope. */
   readSubmitId?: (data: unknown) => string | undefined;
   /** Absent only for `binary` providers, which have nothing to poll. */
@@ -80,6 +91,10 @@ export type ProviderWire = {
    * already finished. `extension` is what the stored file is named.
    */
   binary?: { extension: string };
+  jsonMedia?: {
+    extension: string;
+    readBase64: (data: unknown) => string | undefined;
+  };
 };
 
 export type ProviderSpec = {
@@ -122,14 +137,19 @@ const RUNWAY_API_VERSION = "2024-11-06";
  * `text_to_video` offers landscape and portrait only — there is no square.
  */
 const RUNWAY_RATIOS = ["1280:720", "720:1280"];
-const RUNWAY_ASPECT_RATIOS: Record<string, string> = { "16:9": "1280:720", "9:16": "720:1280" };
+const RUNWAY_ASPECT_RATIOS: Record<string, string> = {
+  "16:9": "1280:720",
+  "9:16": "720:1280",
+};
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 /**
@@ -143,11 +163,109 @@ function record(value: unknown): Record<string, unknown> {
 export function elevenLabsVoiceId(env: EnvLike, studioVoiceId: string): string {
   const asked = text(studioVoiceId);
   if (asked && !asked.startsWith("vo-")) return asked;
-  const slug = asked.replace(/^vo-/, "").replace(/[^A-Za-z0-9]+/g, "_").toUpperCase();
-  return text(slug ? env[`ELEVENLABS_VOICE_ID_${slug}`] : "") || text(env.ELEVENLABS_VOICE_ID);
+  const slug = asked
+    .replace(/^vo-/, "")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .toUpperCase();
+  return (
+    text(slug ? env[`ELEVENLABS_VOICE_ID_${slug}`] : "") ||
+    text(env.ELEVENLABS_VOICE_ID)
+  );
 }
 
 export const PROVIDERS: ProviderSpec[] = [
+  {
+    id: "xai-image",
+    kind: "gen-image",
+    label: "Grok Imagine still",
+    envKey: "XAI_API_KEY",
+    endpoint: "https://api.x.ai/v1",
+    wire: {
+      jsonMedia: {
+        extension: ".jpg",
+        readBase64: (data) => {
+          const rows = record(data).data;
+          return Array.isArray(rows)
+            ? text(record(rows[0]).b64_json) || undefined
+            : undefined;
+        },
+      },
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!["16:9", "9:16", "1:1", "4:3", "3:2"].includes(aspect))
+          return { ok: false, error: "Unsupported image aspect ratio" };
+        return { ok: true, value: { aspect } };
+      },
+      submitPath: () => "/images/generations",
+      buildBody: (req, s) => ({
+        model: "grok-imagine-image-2.0",
+        prompt: req.prompt,
+        n: 1,
+        aspect_ratio: s.aspect,
+        response_format: "b64_json",
+      }),
+    },
+  },
+  {
+    id: "xai-video",
+    kind: "gen-video",
+    label: "Grok Imagine motion",
+    envKey: "XAI_API_KEY",
+    endpoint: "https://api.x.ai/v1",
+    wire: {
+      settings: (_env, req) => {
+        const duration = Number(req.options?.duration ?? 6);
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!Number.isInteger(duration) || duration < 1 || duration > 15)
+          return {
+            ok: false,
+            error: "Motion duration must be 1 to 15 whole seconds",
+          };
+        if (!["16:9", "9:16", "1:1", "4:3", "3:2"].includes(aspect))
+          return { ok: false, error: "Unsupported video aspect ratio" };
+        const image = text(req.options?.imageUrl);
+        if (
+          image &&
+          !/^https:\/\//.test(image) &&
+          !/^data:image\/(jpeg|png|webp);base64,/.test(image)
+        )
+          return {
+            ok: false,
+            error: "Motion reference must be an HTTPS image or embedded image",
+          };
+        return {
+          ok: true,
+          value: { duration: String(duration), aspect, image },
+        };
+      },
+      submitPath: () => "/videos/generations",
+      buildBody: (req, s) => ({
+        model: "grok-imagine-video-1.5",
+        prompt: req.prompt,
+        duration: Number(s.duration),
+        aspect_ratio: s.aspect,
+        resolution: "720p",
+        generate_audio: false,
+        ...(s.image ? { image: { url: s.image } } : {}),
+      }),
+      readSubmitId: (data) => text(record(data).request_id) || undefined,
+      pollPath: (id) => `/videos/${encodeURIComponent(id)}`,
+      readPoll: (data) => {
+        const r = record(data);
+        const v = record(r.video);
+        const state =
+          r.status === "expired" ? "failed" : normalizeState(text(r.status));
+        return {
+          state,
+          result: state === "succeeded" ? text(v.url) || undefined : undefined,
+          note:
+            state === "failed"
+              ? "Video generation failed or expired."
+              : undefined,
+        };
+      },
+    },
+  },
   // Gen video
   {
     id: "runway",
@@ -168,7 +286,10 @@ export const PROVIDERS: ProviderSpec[] = [
         const asked = text(req.options?.ratio);
         const aspect = text(req.options?.aspect);
         if (asked && !RUNWAY_RATIOS.includes(asked)) {
-          return { ok: false, error: `Runway ratio must be one of ${RUNWAY_RATIOS.join(", ")}` };
+          return {
+            ok: false,
+            error: `Runway ratio must be one of ${RUNWAY_RATIOS.join(", ")}`,
+          };
         }
         if (!asked && aspect && !RUNWAY_ASPECT_RATIOS[aspect]) {
           return {
@@ -176,9 +297,15 @@ export const PROVIDERS: ProviderSpec[] = [
             error: `Runway text-to-video renders ${Object.keys(RUNWAY_ASPECT_RATIOS).join(" or ")}, not ${aspect}`,
           };
         }
-        const duration = Number(req.options?.duration ?? req.options?.durationSec ?? 5);
+        const duration = Number(
+          req.options?.duration ?? req.options?.durationSec ?? 5,
+        );
         if (!Number.isInteger(duration) || duration < 2 || duration > 10) {
-          return { ok: false, error: "Runway duration must be a whole number of seconds from 2 to 10" };
+          return {
+            ok: false,
+            error:
+              "Runway duration must be a whole number of seconds from 2 to 10",
+          };
         }
         return {
           ok: true,
@@ -201,7 +328,12 @@ export const PROVIDERS: ProviderSpec[] = [
   },
   { id: "kling", kind: "gen-video", label: "Kling", envKey: "KLING_API_KEY" },
   { id: "veo", kind: "gen-video", label: "Veo", envKey: "VEO_API_KEY" },
-  { id: "seedream", kind: "gen-video", label: "Seedream", envKey: "SEEDREAM_API_KEY" },
+  {
+    id: "seedream",
+    kind: "gen-video",
+    label: "Seedream",
+    envKey: "SEEDREAM_API_KEY",
+  },
 
   // Voice. Text-to-speech answers with the audio bytes themselves, so there is
   // no task id and nothing to poll — `binary` says so, and the boundary stores
@@ -212,7 +344,12 @@ export const PROVIDERS: ProviderSpec[] = [
     label: "ElevenLabs",
     envKey: "ELEVENLABS_API_KEY",
     endpoint: "https://api.elevenlabs.io/v1",
-    settingKeys: [{ label: "ELEVENLABS_VOICE_ID", anyOf: ["ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_ID_*"] }],
+    settingKeys: [
+      {
+        label: "ELEVENLABS_VOICE_ID",
+        anyOf: ["ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_ID_*"],
+      },
+    ],
     wire: {
       auth: { header: "xi-api-key" },
       binary: { extension: ".mp3" },
@@ -225,7 +362,8 @@ export const PROVIDERS: ProviderSpec[] = [
               "No ElevenLabs voice id for this voice — set ELEVENLABS_VOICE_ID, or ELEVENLABS_VOICE_ID_<VOICE> to pin one studio voice",
           };
         }
-        if (!req.prompt.trim()) return { ok: false, error: "ElevenLabs needs a script to speak" };
+        if (!req.prompt.trim())
+          return { ok: false, error: "ElevenLabs needs a script to speak" };
         return {
           ok: true,
           value: {
@@ -262,11 +400,25 @@ export const PROVIDERS: ProviderSpec[] = [
     wire: {
       auth: { header: "X-Api-Key" },
       settings: (env, req) => {
-        const avatarId = text(req.options?.avatarId) || text(env.HEYGEN_AVATAR_ID);
+        const avatarId =
+          text(req.options?.avatarId) || text(env.HEYGEN_AVATAR_ID);
         const voiceId = text(req.options?.voiceId) || text(env.HEYGEN_VOICE_ID);
-        if (!avatarId) return { ok: false, error: "HEYGEN_AVATAR_ID is not set — HeyGen needs the avatar look to render" };
-        if (!voiceId) return { ok: false, error: "HEYGEN_VOICE_ID is not set — HeyGen needs a voice for the script" };
-        return { ok: true, value: { avatarId, voiceId, title: text(req.options?.title) } };
+        if (!avatarId)
+          return {
+            ok: false,
+            error:
+              "HEYGEN_AVATAR_ID is not set — HeyGen needs the avatar look to render",
+          };
+        if (!voiceId)
+          return {
+            ok: false,
+            error:
+              "HEYGEN_VOICE_ID is not set — HeyGen needs a voice for the script",
+          };
+        return {
+          ok: true,
+          value: { avatarId, voiceId, title: text(req.options?.title) },
+        };
       },
       submitPath: () => "/v3/videos",
       buildBody: (req, settings) => ({
@@ -281,7 +433,12 @@ export const PROVIDERS: ProviderSpec[] = [
       // answered without a task id.
       readSubmitId: (data) => {
         const envelope = record(record(data).data);
-        return text(envelope.id) || text(envelope.video_id) || text(record(data).video_id) || undefined;
+        return (
+          text(envelope.id) ||
+          text(envelope.video_id) ||
+          text(record(data).video_id) ||
+          undefined
+        );
       },
       pollPath: (id) => `/v3/videos/${encodeURIComponent(id)}`,
       readPoll: (data) => {
@@ -289,10 +446,16 @@ export const PROVIDERS: ProviderSpec[] = [
         const state = normalizeState(text(envelope.status));
         return {
           state,
-          result: state === "succeeded" ? text(envelope.video_url) || undefined : undefined,
-          note: state === "failed"
-            ? text(envelope.failure_message) || text(envelope.error) || undefined
-            : undefined,
+          result:
+            state === "succeeded"
+              ? text(envelope.video_url) || undefined
+              : undefined,
+          note:
+            state === "failed"
+              ? text(envelope.failure_message) ||
+                text(envelope.error) ||
+                undefined
+              : undefined,
         };
       },
     },
@@ -342,7 +505,10 @@ export function credentialKeysFor(spec: ProviderSpec): string[] {
 }
 
 /** The credential value for this provider, under whichever name it was set. */
-export function credentialFor(spec: ProviderSpec, env: EnvLike = process.env): string {
+export function credentialFor(
+  spec: ProviderSpec,
+  env: EnvLike = process.env,
+): string {
   for (const key of credentialKeysFor(spec)) {
     const value = text(env[key]);
     if (value) return value;
@@ -351,7 +517,10 @@ export function credentialFor(spec: ProviderSpec, env: EnvLike = process.env): s
 }
 
 /** True when this provider could actually run live right now. */
-export function hasCredentials(id: string, env: EnvLike = process.env): boolean {
+export function hasCredentials(
+  id: string,
+  env: EnvLike = process.env,
+): boolean {
   const p = findProvider(id);
   if (!p) return false;
   if (!p.envKey) return true;
@@ -361,9 +530,16 @@ export function hasCredentials(id: string, env: EnvLike = process.env): boolean 
 /** Providers each spell their statuses differently; collapse to our four. */
 export function normalizeState(raw?: string): ProviderState {
   const s = (raw ?? "").toLowerCase();
-  if (["succeeded", "success", "completed", "complete", "done", "ready"].includes(s)) return "succeeded";
-  if (["failed", "error", "cancelled", "canceled", "rejected"].includes(s)) return "failed";
-  if (["running", "processing", "in_progress", "generating"].includes(s)) return "running";
+  if (
+    ["succeeded", "success", "completed", "complete", "done", "ready"].includes(
+      s,
+    )
+  )
+    return "succeeded";
+  if (["failed", "error", "cancelled", "canceled", "rejected"].includes(s))
+    return "failed";
+  if (["running", "processing", "in_progress", "generating"].includes(s))
+    return "running";
   return "queued";
 }
 
@@ -374,7 +550,10 @@ export function normalizeState(raw?: string): ProviderState {
  * the `editforge_status` tool, so a picker and an assistant cannot disagree
  * about why a run would refuse.
  */
-export function missingSettingsFor(spec: ProviderSpec, env: EnvLike = process.env): string[] {
+export function missingSettingsFor(
+  spec: ProviderSpec,
+  env: EnvLike = process.env,
+): string[] {
   const missing: string[] = [];
   for (const entry of spec.settingKeys ?? []) {
     if (typeof entry === "string") {
@@ -384,8 +563,10 @@ export function missingSettingsFor(spec: ProviderSpec, env: EnvLike = process.en
     // A wildcard stands for a family of names — any member satisfies it.
     const satisfied = entry.anyOf.some((name) =>
       name.endsWith("*")
-        ? Object.keys(env).some((key) => key.startsWith(name.slice(0, -1)) && text(env[key]))
-        : Boolean(text(env[name]))
+        ? Object.keys(env).some(
+            (key) => key.startsWith(name.slice(0, -1)) && text(env[key]),
+          )
+        : Boolean(text(env[name])),
     );
     if (!satisfied) missing.push(entry.label);
   }
@@ -395,19 +576,30 @@ export function missingSettingsFor(spec: ProviderSpec, env: EnvLike = process.en
 /** Whether a submit to this provider would reach it and bill for it. */
 export function providerReadiness(
   spec: ProviderSpec,
-  opts: { artifactStore: boolean; env?: EnvLike }
-): { wired: boolean; credentialSet: boolean; settingsMissing: string[]; ready: boolean } {
+  opts: { artifactStore: boolean; env?: EnvLike },
+): {
+  wired: boolean;
+  credentialSet: boolean;
+  settingsMissing: string[];
+  ready: boolean;
+} {
   const env = opts.env ?? process.env;
   const wired = isLiveWired(spec.id);
   const credentialSet = hasCredentials(spec.id, env);
   const settingsMissing = missingSettingsFor(spec, env);
   // A provider whose submit answers with bytes cannot run at all without
   // somewhere to keep them, so it is not ready until the store exists.
-  const storeOk = !spec.wire?.binary || opts.artifactStore;
+  const storeOk =
+    !(spec.wire?.binary || spec.wire?.jsonMedia) || opts.artifactStore;
   return {
     wired,
     credentialSet,
     settingsMissing,
-    ready: spec.id !== "mock" && wired && credentialSet && storeOk && settingsMissing.length === 0,
+    ready:
+      spec.id !== "mock" &&
+      wired &&
+      credentialSet &&
+      storeOk &&
+      settingsMissing.length === 0,
   };
 }

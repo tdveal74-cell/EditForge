@@ -1,0 +1,44 @@
+{
+  "source": "https://github.com/tdveal74-cell/lagoon-topaz-winter-stone",
+  "commit": "ce683cf05fbbaebd24e6eb8aa57881f2dbf03db4",
+  "date": "2026-09-06",
+  "method": "Native integration into EditForge. Source repository retained. Framework, store and provider adapters replaced at the host boundaries.",
+  "files": [
+    {
+      "path": "src/lib/types.ts",
+      "sha256": "4dfcdf6ce4baa688c8aa62fcfb99afe7c103d0df3c90abfcf85981d11cf9b216"
+    },
+    {
+      "path": "src/lib/templates.ts",
+      "sha256": "8da29166d17940a4ae9c573ebdd012f9fce5662c758df8b127c7b4b3d1a63480"
+    },
+    {
+      "path": "src/lib/store.ts",
+      "sha256": "02173dc62a93c0aa8601c875c55ce965dc710a6a9a1080812b524cb43773d147"
+    },
+    {
+      "path": "src/lib/agent.ts",
+      "sha256": "b1e548ce4bee6310710efe06788f367c31debc81efd0e3580e93339e043a9f62"
+    },
+    {
+      "path": "src/lib/jobs.ts",
+      "sha256": "6c0ae9fc395a091214b8a01b239e7d14d9eb2980eb58e51090f6621da3c8c4dc"
+    },
+    {
+      "path": "src/lib/ai.ts",
+      "sha256": "d7db5980c72a04e0716bdd1393e53fcd185fd304cf84fdb7c90bb926f6b2f04d"
+    },
+    {
+      "path": "src/components/canvas/node-canvas.tsx",
+      "sha256": "7886db7cc80551d28f1dd59b09c94a45106547ab0849a647302ec34eddef07ee"
+    },
+    {
+      "path": "src/components/canvas/studio-app.tsx",
+      "sha256": "61879a0f607697c002d84c024bf92d82050401c8c4b5c340afbdcec5b7c8457a"
+    },
+    {
+      "path": "src/routes/timeline.tsx",
+      "sha256": "569517aa98c53c72e87227625599425045619e6a3cd4479b1ce9bfef43706ad6"
+    }
+  ]
+}

@@ -17,6 +17,7 @@ import {
 } from "./providers";
 
 const KEYS = [
+  "XAI_API_KEY",
   "RUNWAY_API_KEY",
   "RUNWAYML_API_SECRET",
   "KLING_API_KEY",
@@ -55,16 +56,54 @@ function audioResponse(bytes: Uint8Array) {
     ok: true,
     status: 200,
     headers: new Headers({ "content-type": "audio/mpeg" }),
-    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    arrayBuffer: async () =>
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
   } as unknown as Response;
 }
 
 describe("provider boundary", () => {
+  it("stores Grok Imagine image bytes before reporting a finished still", async () => {
+    process.env.XAI_API_KEY = "tok";
+    process.env.EDITFORGE_ARTIFACT_DIR = store;
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: RequestInit) =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [{ b64_json: jpeg.toString("base64") }] }),
+          requestBody: init?.body,
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitToProvider({
+      provider: "xai-image",
+      kind: "gen-image",
+      prompt: "A quiet rooftop at blue hour",
+      idempotencyKey: "still-once",
+      options: { aspect: "9:16" },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state).toBe("succeeded");
+    expect(result.result).toMatch(
+      /^\/api\/artifacts\/xai-image-gen-image-[0-9a-f]{16}\.jpg$/,
+    );
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: "grok-imagine-image-2.0",
+      aspect_ratio: "9:16",
+      response_format: "b64_json",
+    });
+  });
+
   it("routes providers by the kind of work they serve", () => {
     expect(providersFor("voice").map((p) => p.id)).toContain("elevenlabs");
     expect(providersFor("avatar").map((p) => p.id)).toContain("heygen");
     expect(providersFor("gen-video").map((p) => p.id)).toEqual(
-      expect.arrayContaining(["runway", "kling", "veo", "seedream"])
+      expect.arrayContaining(["runway", "kling", "veo", "seedream"]),
     );
   });
 
@@ -81,8 +120,18 @@ describe("provider boundary", () => {
   });
 
   it("mock submits deterministically and never claims to have made media", async () => {
-    const a = await submitToProvider({ provider: "mock", kind: "gen-video", prompt: "x", idempotencyKey: "same" });
-    const b = await submitToProvider({ provider: "mock", kind: "gen-video", prompt: "x", idempotencyKey: "same" });
+    const a = await submitToProvider({
+      provider: "mock",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "same",
+    });
+    const b = await submitToProvider({
+      provider: "mock",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "same",
+    });
     expect(a.ok && b.ok).toBe(true);
     if (a.ok && b.ok) expect(a.externalId).toBe(b.externalId);
 
@@ -116,7 +165,12 @@ describe("provider boundary", () => {
   it("refuses a credentialled provider whose API shape is not implemented", async () => {
     clearKeys();
     process.env.KLING_API_KEY = "tok";
-    const res = await submitToProvider({ provider: "kling", kind: "gen-video", prompt: "x", idempotencyKey: "k3" });
+    const res = await submitToProvider({
+      provider: "kling",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "k3",
+    });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toMatch(/not implemented/i);
   });
@@ -138,7 +192,10 @@ describe("provider boundary", () => {
     // Typed with the fetch signature so the recorded init is inspectable.
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ id: "task_789" }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ id: "task_789" }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -182,16 +239,25 @@ describe("provider boundary", () => {
     clearKeys();
     process.env.RUNWAYML_API_SECRET = "sdk-name";
     expect(hasCredentials("runway")).toBe(true);
-    expect(credentialKeysFor(findProvider("runway")!)).toEqual(["RUNWAY_API_KEY", "RUNWAYML_API_SECRET"]);
+    expect(credentialKeysFor(findProvider("runway")!)).toEqual([
+      "RUNWAY_API_KEY",
+      "RUNWAYML_API_SECRET",
+    ]);
 
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response
+        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
-    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "alias" });
+    const res = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "alias",
+    });
     expect(res.ok).toBe(true);
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit)
+      .headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer sdk-name");
   });
 
@@ -233,7 +299,7 @@ describe("provider boundary", () => {
     process.env.RUNWAY_API_KEY = "tok";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response
+        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -242,9 +308,16 @@ describe("provider boundary", () => {
       kind: "gen-video",
       prompt: "x",
       idempotencyKey: "portrait",
-      options: { aspect: "9:16", durationSec: 8, quality: "social", mode: "text-to-video" },
+      options: {
+        aspect: "9:16",
+        durationSec: 8,
+        quality: "social",
+        mode: "text-to-video",
+      },
     });
-    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    const body = JSON.parse(
+      String((fetchMock.mock.calls[0][1] as RequestInit).body),
+    );
     expect(body.ratio).toBe("720:1280");
     expect(body.duration).toBe(8);
     expect(body).not.toHaveProperty("aspect");
@@ -275,22 +348,35 @@ describe("provider boundary", () => {
     process.env.RUNWAY_API_KEY = "tok";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ status: "RUNNING" }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ status: "RUNNING" }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
     await pollProvider("runway", "task_789");
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe("https://api.dev.runwayml.com/v1/tasks/task_789");
-    expect((init?.headers as Record<string, string>)["X-Runway-Version"]).toBe("2024-11-06");
+    expect((init?.headers as Record<string, string>)["X-Runway-Version"]).toBe(
+      "2024-11-06",
+    );
   });
 
   it("surfaces a provider HTTP error instead of a fabricated success", async () => {
     clearKeys();
     process.env.RUNWAY_API_KEY = "tok";
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 429 }) as unknown as Response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 429 }) as unknown as Response),
+    );
 
-    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k5" });
+    const res = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "k5",
+    });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("429");
   });
@@ -302,14 +388,22 @@ describe("provider boundary", () => {
     process.env.RUNWAY_API_KEY = "tok";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: false,
-        status: 400,
-        text: async () => '{"error":"Invalid value for ratio"}',
-      }) as unknown as Response)
+      vi.fn(
+        async () =>
+          ({
+            ok: false,
+            status: 400,
+            text: async () => '{"error":"Invalid value for ratio"}',
+          }) as unknown as Response,
+      ),
     );
 
-    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k6" });
+    const res = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "k6",
+    });
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.error).toContain("400");
@@ -350,7 +444,12 @@ describe("provider boundary", () => {
 
       // Anything a picker offers must be something the boundary will accept.
       for (const id of ids) {
-        const res = await submitToProvider({ provider: id, kind, prompt: "x", idempotencyKey: `pick-${kind}-${id}` });
+        const res = await submitToProvider({
+          provider: id,
+          kind,
+          prompt: "x",
+          idempotencyKey: `pick-${kind}-${id}`,
+        });
         if (!res.ok) expect(res.error).not.toContain("does not serve");
       }
     }
@@ -366,7 +465,9 @@ describe("ElevenLabs voice", () => {
     process.env.ELEVENLABS_VOICE_ID_AUREN = "auren-voice";
     expect(elevenLabsVoiceId(process.env, "vo-auren")).toBe("auren-voice");
     // A caller that already knows the provider's own id passes it straight on.
-    expect(elevenLabsVoiceId(process.env, "JBFqnCBsd6RMkjVDRZzb")).toBe("JBFqnCBsd6RMkjVDRZzb");
+    expect(elevenLabsVoiceId(process.env, "JBFqnCBsd6RMkjVDRZzb")).toBe(
+      "JBFqnCBsd6RMkjVDRZzb",
+    );
   });
 
   it("refuses before the request when no provider voice is configured", async () => {
@@ -413,7 +514,10 @@ describe("ElevenLabs voice", () => {
     process.env.ELEVENLABS_VOICE_ID = "voice-1";
     process.env.EDITFORGE_ARTIFACT_DIR = store;
     const bytes = new Uint8Array([1, 2, 3, 4, 5]);
-    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => audioResponse(bytes));
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        audioResponse(bytes),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const res = await submitToProvider({
@@ -425,7 +529,7 @@ describe("ElevenLabs voice", () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(
-      "https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=mp3_44100_128"
+      "https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=mp3_44100_128",
     );
     const headers = init?.headers as Record<string, string>;
     // A bearer token here is a 401 that looks exactly like a bad key.
@@ -441,7 +545,9 @@ describe("ElevenLabs voice", () => {
     const stored = await readFile(path.join(store, res.externalId));
     expect(new Uint8Array(stored)).toEqual(bytes);
     expect(res.externalId).toMatch(/^elevenlabs-voice-[0-9a-f]{16}\.mp3$/);
-    expect(res.externalId).toContain(createHash("sha256").update(bytes).digest("hex").slice(0, 16));
+    expect(res.externalId).toContain(
+      createHash("sha256").update(bytes).digest("hex").slice(0, 16),
+    );
   });
 
   it("says the store failed, not that the provider was unreachable", async () => {
@@ -454,7 +560,7 @@ describe("ElevenLabs voice", () => {
     process.env.EDITFORGE_ARTIFACT_DIR = store;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => audioResponse(new Uint8Array()))
+      vi.fn(async () => audioResponse(new Uint8Array())),
     );
 
     const res = await submitToProvider({
@@ -477,11 +583,16 @@ describe("ElevenLabs voice", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await pollProvider("elevenlabs", "elevenlabs-voice-abcdef0123456789.mp3");
+    const res = await pollProvider(
+      "elevenlabs",
+      "elevenlabs-voice-abcdef0123456789.mp3",
+    );
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.state).toBe("succeeded");
-      expect(res.result).toBe("/api/artifacts/elevenlabs-voice-abcdef0123456789.mp3");
+      expect(res.result).toBe(
+        "/api/artifacts/elevenlabs-voice-abcdef0123456789.mp3",
+      );
     }
     // ElevenLabs has no task route; issuing one would 404.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -495,12 +606,22 @@ describe("HeyGen avatar", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const noAvatar = await submitToProvider({ provider: "heygen", kind: "avatar", prompt: "hi", idempotencyKey: "a1" });
+    const noAvatar = await submitToProvider({
+      provider: "heygen",
+      kind: "avatar",
+      prompt: "hi",
+      idempotencyKey: "a1",
+    });
     expect(noAvatar.ok).toBe(false);
     if (!noAvatar.ok) expect(noAvatar.error).toContain("HEYGEN_AVATAR_ID");
 
     process.env.HEYGEN_AVATAR_ID = "look-1";
-    const noVoice = await submitToProvider({ provider: "heygen", kind: "avatar", prompt: "hi", idempotencyKey: "a2" });
+    const noVoice = await submitToProvider({
+      provider: "heygen",
+      kind: "avatar",
+      prompt: "hi",
+      idempotencyKey: "a2",
+    });
     expect(noVoice.ok).toBe(false);
     if (!noVoice.ok) expect(noVoice.error).toContain("HEYGEN_VOICE_ID");
 
@@ -514,7 +635,10 @@ describe("HeyGen avatar", () => {
     process.env.HEYGEN_VOICE_ID = "voice-9";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ data: { id: "vid_xyz789", status: "pending" } }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ data: { id: "vid_xyz789", status: "pending" } }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -546,7 +670,10 @@ describe("HeyGen avatar", () => {
     clearKeys();
     process.env.HEYGEN_API_KEY = "hg-key";
     const respond = (body: unknown) =>
-      vi.fn(async () => ({ ok: true, json: async () => body }) as unknown as Response);
+      vi.fn(
+        async () =>
+          ({ ok: true, json: async () => body }) as unknown as Response,
+      );
 
     vi.stubGlobal("fetch", respond({ data: { status: "processing" } }));
     const running = await pollProvider("heygen", "vid_1");
@@ -554,7 +681,12 @@ describe("HeyGen avatar", () => {
 
     vi.stubGlobal(
       "fetch",
-      respond({ data: { status: "completed", video_url: "https://files.heygen.ai/video/vid_1.mp4" } })
+      respond({
+        data: {
+          status: "completed",
+          video_url: "https://files.heygen.ai/video/vid_1.mp4",
+        },
+      }),
     );
     const done = await pollProvider("heygen", "vid_1");
     expect(done.ok).toBe(true);
@@ -563,7 +695,12 @@ describe("HeyGen avatar", () => {
       expect(done.result).toBe("https://files.heygen.ai/video/vid_1.mp4");
     }
 
-    vi.stubGlobal("fetch", respond({ data: { status: "failed", failure_message: "script too long" } }));
+    vi.stubGlobal(
+      "fetch",
+      respond({
+        data: { status: "failed", failure_message: "script too long" },
+      }),
+    );
     const failed = await pollProvider("heygen", "vid_1");
     expect(failed.ok).toBe(true);
     if (failed.ok) {
@@ -577,10 +714,15 @@ describe("HeyGen avatar", () => {
     process.env.HEYGEN_API_KEY = "hg-key";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ data: { status: "pending" } }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ data: { status: "pending" } }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
     await pollProvider("heygen", "vid_xyz789");
-    expect(String(fetchMock.mock.calls[0][0])).toBe("https://api.heygen.com/v3/videos/vid_xyz789");
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      "https://api.heygen.com/v3/videos/vid_xyz789",
+    );
   });
 });

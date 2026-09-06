@@ -1,121 +1,99 @@
+/* Full document navigation releases the unchanged Scrollcraft runtime on exit. */
+/* eslint-disable @next/next/no-html-link-for-pages */
 "use client";
-
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { clsx } from "clsx";
-
-const groups: { label: string; links: { href: string; label: string }[] }[] = [
+const departments = [
   {
-    label: "Create",
+    name: "Create",
     links: [
-      { href: "/studio", label: "Studio" },
-      { href: "/pipeline", label: "Pipeline" },
-      { href: "/projects", label: "Projects" },
-      { href: "/timeline", label: "Timeline" },
+      ["Canvas", "/canvas"],
+      ["Studio", "/studio"],
+      ["Pipeline", "/pipeline"],
+      ["Projects", "/projects"],
+      ["Timeline", "/timeline"],
     ],
   },
   {
-    label: "AI media",
+    name: "Media",
     links: [
-      { href: "/voice", label: "Voice" },
-      { href: "/avatar", label: "Avatar" },
-      { href: "/gen-video", label: "Gen video" },
-      { href: "/stock", label: "Stock" },
+      ["Voice", "/voice"],
+      ["Avatar", "/avatar"],
+      ["Generative video", "/gen-video"],
+      ["Stock", "/stock"],
+      ["Audio", "/audio"],
     ],
   },
   {
-    label: "Finish",
+    name: "Finish",
     links: [
-      { href: "/color", label: "Grade" },
-      { href: "/longform", label: "Long-form" },
-      { href: "/rubric", label: "Rubric" },
-      { href: "/export", label: "Export" },
+      ["Grade", "/color"],
+      ["Long form", "/longform"],
+      ["Review", "/review"],
+      ["Rubric", "/rubric"],
+      ["Export", "/export"],
     ],
   },
   {
-    label: "Bridges",
+    name: "Systems",
     links: [
-      { href: "/nle", label: "NLE" },
-      { href: "/render", label: "Render" },
-      { href: "/hardware", label: "Hardware" },
+      ["NLE bridge", "/nle"],
+      ["Render", "/render"],
+      ["Hardware", "/hardware"],
+      ["Jobs", "/jobs"],
     ],
   },
 ];
-
-/** Highest-frequency operator destinations on small screens */
-const mobilePriority = [
-  { href: "/studio", label: "Studio" },
-  { href: "/gen-video", label: "Gen" },
-  { href: "/dailies", label: "Dailies" },
-  { href: "/review", label: "Review" },
-  { href: "/jobs", label: "Jobs" },
-];
-
 export function Nav() {
   const pathname = usePathname();
-
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-surface-elevated">
-      <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-center justify-between gap-3">
-          <Link
-            href="/"
-            className="shrink-0 text-xs font-semibold uppercase tracking-[0.24em] text-amber-600 transition-colors duration-flagship hover:text-amber-700"
+    <header className="forge-nav">
+      <a className="forge-brand" href="/" aria-label="EditForge home">
+        <span className="brand-mark" aria-hidden="true">
+          E<span>F</span>
+        </span>
+        <span>
+          EDITFORGE<small>THE PRODUCTION STUDIO</small>
+        </span>
+      </a>
+      <nav aria-label="Main navigation">
+        {[
+          ["Canvas", "/canvas"],
+          ["Studio", "/studio"],
+          ["Dailies", "/dailies"],
+        ].map(([label, href]) => (
+          <a
+            key={href}
+            href={href}
+            aria-current={pathname === href ? "page" : undefined}
           >
-            EditForge
-          </Link>
-          {/* Mobile priority strip — product actions, not full map */}
-          <nav
-            aria-label="Priority"
-            className="flex min-w-0 items-center gap-1 overflow-x-auto sm:gap-2 lg:hidden"
-          >
-            {mobilePriority.map((l) => {
-              const active = pathname === l.href || pathname.startsWith(l.href + "/");
-              return (
-                <Link
-                  key={l.href}
-                  href={l.href}
-                  aria-current={active ? "page" : undefined}
-                  className={clsx(
-                    "inline-flex min-h-11 shrink-0 items-center justify-center rounded-control px-2.5 text-[11px] font-medium transition-colors duration-flagship",
-                    active
-                      ? "bg-navy text-surface"
-                      : "text-navy/65 hover:bg-surface-muted hover:text-navy",
-                  )}
-                >
-                  {l.label}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
-
-        <nav aria-label="Studio" className="hidden flex-wrap items-center gap-x-4 gap-y-1 lg:flex">
-          {groups.map((g, gi) => (
-            <div key={g.label} className="flex items-center gap-x-3">
-              {gi > 0 && <span aria-hidden className="h-3 w-px bg-border-strong" />}
-              {g.links.map((l) => {
-                const active = pathname === l.href || pathname.startsWith(l.href + "/");
-                return (
-                  <Link
-                    key={l.href}
-                    href={l.href}
-                    aria-current={active ? "page" : undefined}
-                    className={clsx(
-                      "relative py-1 text-xs transition-colors duration-flagship",
-                      active
-                        ? "font-semibold text-navy after:absolute after:inset-x-0 after:-bottom-[13px] after:h-0.5 after:bg-amber"
-                        : "text-navy/60 hover:text-navy",
-                    )}
+            {label}
+          </a>
+        ))}
+        <details className="departments-menu">
+          <summary>
+            Departments <span aria-hidden="true">+</span>
+          </summary>
+          <div className="department-dropdown">
+            {departments.map((d) => (
+              <div key={d.name}>
+                <p>{d.name}</p>
+                {d.links.map(([name, href]) => (
+                  <a
+                    key={href}
+                    href={href}
+                    aria-current={pathname === href ? "page" : undefined}
                   >
-                    {l.label}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
-        </nav>
-      </div>
+                    {name}
+                  </a>
+                ))}
+              </div>
+            ))}
+          </div>
+        </details>
+      </nav>
+      <a className="nav-cta" href="/canvas">
+        Enter the studio <span aria-hidden="true">↗</span>
+      </a>
     </header>
   );
 }

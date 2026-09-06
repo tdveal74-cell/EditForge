@@ -15,7 +15,14 @@ describe("genvideo catalogue", () => {
   it("is built from the same registry the boundary dispatches on", () => {
     // Two hand-maintained provider lists is two chances to disagree, and the
     // one that disagreed was the one the UI drew from.
-    expect(GEN_PROVIDERS.map((p) => p.id)).toEqual(["runway", "kling", "veo", "seedream", "mock"]);
+    expect(GEN_PROVIDERS.map((p) => p.id)).toEqual([
+      "xai-video",
+      "runway",
+      "kling",
+      "veo",
+      "seedream",
+      "mock",
+    ]);
     expect(GEN_PROVIDERS.find((p) => p.id === "runway")?.envKeys).toEqual([
       "RUNWAY_API_KEY",
       "RUNWAYML_API_SECRET",

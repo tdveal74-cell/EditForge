@@ -126,8 +126,10 @@ jobs:
           PORT: ${{ secrets.EDITFORGE_VPS_PORT }}
         run: |
           set -euo pipefail
-          scp -P "${PORT:-22}" scripts/hostinger-tag-swap.sh compose.hostinger.yaml \
-            "${USER}@${HOST}:/tmp/"
+          scp -P "${PORT:-22}" scripts/hostinger-tag-swap.sh \
+            "${USER}@${HOST}:/tmp/editforge-hostinger-tag-swap.sh"
+          scp -P "${PORT:-22}" compose.hostinger.yaml \
+            "${USER}@${HOST}:/tmp/editforge-compose.release.yaml"
           ssh -p "${PORT:-22}" "${USER}@${HOST}" \
             "chmod 700 /tmp/editforge-hostinger-tag-swap.sh"
 
@@ -152,4 +154,4 @@ jobs:
             extra=(--apply --health-url "$health")
           fi
           ssh -p "${PORT:-22}" "${USER}@${HOST}" \
-            "bash /tmp/editforge-hostinger-tag-swap.sh --tag '$TAG' --compose-file '$remote_compose' --compose-template '/tmp/compose.hostinger.yaml' ${extra[*]}"
+            "bash /tmp/editforge-hostinger-tag-swap.sh --tag '$TAG' --compose-file '$remote_compose' --compose-template '/tmp/editforge-compose.release.yaml' ${extra[*]}"

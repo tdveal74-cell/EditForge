@@ -7,6 +7,7 @@ const departments = [
     name: "Create",
     links: [
       ["Canvas", "/canvas"],
+      ["Floor Agent", "/canvas?panel=agent"],
       ["Studio", "/studio"],
       ["Pipeline", "/pipeline"],
       ["Projects", "/projects"],

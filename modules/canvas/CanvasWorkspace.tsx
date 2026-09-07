@@ -130,9 +130,11 @@ function Media({
 export function CanvasWorkspace({
   initial,
   savedId,
+  initialPanel = "agent",
 }: {
   initial: Project;
   savedId?: string;
+  initialPanel?: "agent" | "outputs" | "sequence";
 }) {
   const [project, setProject] = useState(initial);
   const current = useRef(project);
@@ -146,7 +148,9 @@ export function CanvasWorkspace({
   const [saved, setSaved] = useState<Saved[]>([]);
   const [view, setView] = useState<"graph" | "list">("graph");
   const [zoom, setZoom] = useState(0.72);
-  const [tab, setTab] = useState<"agent" | "outputs" | "sequence">("agent");
+  const [tab, setTab] = useState<"agent" | "outputs" | "sequence">(
+    initialPanel,
+  );
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [configured, setConfigured] = useState(false);
@@ -442,6 +446,9 @@ export function CanvasWorkspace({
   }
   function selectTab(t: typeof tab) {
     setTab(t);
+    const url = new URL(window.location.href);
+    url.searchParams.set("panel", t);
+    window.history.replaceState(null, "", `${url.pathname}${url.search}`);
     bottom.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   const width = Math.max(1280, ...project.nodes.map((n) => n.x + 310));
@@ -458,6 +465,13 @@ export function CanvasWorkspace({
           <p>Shape the idea. Direct the work. Keep the good take.</p>
         </div>
         <div className="canvas-mast-links">
+          <button
+            className="floor-agent-launch primary"
+            aria-controls="panel-agent"
+            onClick={() => selectTab("agent")}
+          >
+            <span aria-hidden="true">✦</span> Open Floor Agent
+          </button>
           <Link href="/jobs">Job receipts ↗</Link>
           <Link href="/hardware">System readiness ↗</Link>
         </div>

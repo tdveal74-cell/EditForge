@@ -11,13 +11,22 @@ export const dynamic = "force-dynamic";
 export default async function CanvasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ workflow?: string; project?: string }>;
+  searchParams: Promise<{
+    workflow?: string;
+    project?: string;
+    panel?: string;
+  }>;
 }) {
   const query = await searchParams;
+  const initialPanel =
+    query.panel === "outputs" || query.panel === "sequence"
+      ? query.panel
+      : "agent";
   return (
     <CanvasWorkspace
       initial={newProject(query.workflow || "micro-drama")}
       savedId={query.project}
+      initialPanel={initialPanel}
     />
   );
 }

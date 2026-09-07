@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Rewrite EditForge GHCR tags in the Hostinger compose file, then optionally
-# pull and recreate. Never touches volumes, .env, or Caddy data.
+# Install the release Compose topology, rewrite its immutable GHCR tags, then
+# optionally pull and recreate. Never touches volumes, .env, or Caddy data.
 set -euo pipefail
 
 usage() {
@@ -9,6 +9,7 @@ Usage: hostinger-tag-swap.sh --tag <12-hex> --compose-file <path> [options]
 
   --tag TAG                 Immutable 12-char git short SHA published to GHCR
   --compose-file PATH       Host compose file (usually compose.hostinger.yaml)
+  --compose-template PATH   Release Compose template to install before deploy
   --dry-run                 Print current and target tags; do not write
   --apply                   Write tags, pull, and recreate (default if not dry-run)
   --no-compose              Rewrite the file only; skip docker compose
@@ -20,6 +21,7 @@ EOF
 
 TAG=""
 COMPOSE_FILE=""
+COMPOSE_TEMPLATE=""
 DRY_RUN=0
 APPLY=0
 NO_COMPOSE=0
@@ -31,6 +33,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --tag) TAG="${2:-}"; shift 2 ;;
     --compose-file) COMPOSE_FILE="${2:-}"; shift 2 ;;
+    --compose-template) COMPOSE_TEMPLATE="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --apply) APPLY=1; shift ;;
     --no-compose) NO_COMPOSE=1; shift ;;
@@ -48,6 +51,10 @@ if [[ -z "$COMPOSE_FILE" ]]; then
 fi
 if [[ ! -f "$COMPOSE_FILE" ]]; then
   echo "error: compose file not found: $COMPOSE_FILE" >&2
+  exit 2
+fi
+if [[ -n "$COMPOSE_TEMPLATE" && ! -f "$COMPOSE_TEMPLATE" ]]; then
+  echo "error: compose template not found: $COMPOSE_TEMPLATE" >&2
   exit 2
 fi
 
@@ -107,6 +114,9 @@ list_pins "$COMPOSE_FILE"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "target tag=$TAG"
+  if [[ -n "$COMPOSE_TEMPLATE" ]]; then
+    echo "release template=$COMPOSE_TEMPLATE"
+  fi
   echo "dry-run: no files written, no compose invoked"
   exit 0
 fi
@@ -123,7 +133,25 @@ else
   echo "target tag=$TAG"
   cp "$COMPOSE_FILE" "$BACKUP"
   echo "backup=$BACKUP"
-  rewrite_pins "$COMPOSE_FILE" "$COMPOSE_FILE" "$TAG"
+  SOURCE_COMPOSE="$COMPOSE_FILE"
+  if [[ -n "$COMPOSE_TEMPLATE" ]]; then
+    SOURCE_COMPOSE="$COMPOSE_TEMPLATE"
+  fi
+  CANDIDATE="$COMPOSE_FILE.next.$STAMP"
+  rewrite_pins "$SOURCE_COMPOSE" "$CANDIDATE" "$TAG"
+  if [[ "$NO_COMPOSE" -eq 0 ]]; then
+    if ! command -v docker >/dev/null 2>&1; then
+      rm -f "$CANDIDATE"
+      echo "error: docker not on PATH" >&2
+      exit 1
+    fi
+    if ! (cd "$COMPOSE_DIR" && docker compose -f "$(basename "$CANDIDATE")" config --quiet); then
+      rm -f "$CANDIDATE"
+      echo "error: release compose template failed validation; live file unchanged" >&2
+      exit 1
+    fi
+  fi
+  mv "$CANDIDATE" "$COMPOSE_FILE"
 fi
 
 echo "new pins:"
@@ -144,6 +172,9 @@ compose() {
 }
 
 rollback() {
+  echo "deployment diagnostics:" >&2
+  (cd "$COMPOSE_DIR" && compose ps) >&2 || true
+  (cd "$COMPOSE_DIR" && compose logs --tail 120 web worker provider) >&2 || true
   echo "rolling back compose file from $BACKUP" >&2
   if [[ -f "$BACKUP" ]]; then
     cp "$BACKUP" "$COMPOSE_FILE"

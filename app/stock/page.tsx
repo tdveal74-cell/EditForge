@@ -33,8 +33,11 @@ export default function StockPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    fetch("/api/stock", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setItems(data.stock ?? []))
+      .catch((err: Error) => setError(err.message));
+  }, []);
 
   async function add() {
     setBusy(true);

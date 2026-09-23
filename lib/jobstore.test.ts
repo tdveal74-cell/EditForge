@@ -35,7 +35,12 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  for (const key of ["RUNWAY_API_KEY", "ELEVENLABS_API_KEY", "ELEVENLABS_VOICE_ID", "EDITFORGE_ARTIFACT_DIR"]) {
+  for (const key of [
+    "RUNWAY_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "ELEVENLABS_VOICE_ID",
+    "EDITFORGE_ARTIFACT_DIR",
+  ]) {
     delete process.env[key];
   }
   await fs.rm(ARTIFACT_DIR, { recursive: true, force: true });
@@ -53,12 +58,15 @@ describe("submits that finish on the spot", () => {
     const bytes = new Uint8Array([1, 2, 3]);
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: true,
-        status: 200,
-        headers: new Headers({ "content-type": "audio/mpeg" }),
-        arrayBuffer: async () => bytes.buffer.slice(0),
-      }) as unknown as Response)
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            status: 200,
+            headers: new Headers({ "content-type": "audio/mpeg" }),
+            arrayBuffer: async () => bytes.buffer.slice(0),
+          }) as unknown as Response,
+      ),
     );
 
     const job = await createAndQueue({
@@ -67,11 +75,16 @@ describe("submits that finish on the spot", () => {
       note: "queued",
       idempotencyKey: "vo-instant",
     });
-    const submitted = await submitJob(job.id, { provider: "elevenlabs", prompt: "Where are we today?" });
+    const submitted = await submitJob(job.id, {
+      provider: "elevenlabs",
+      prompt: "Where are we today?",
+    });
 
     expect(submitted?.status).toBe("validating");
     expect(submitted?.mode).toBe("live");
-    expect(submitted?.result).toMatch(/^\/api\/artifacts\/elevenlabs-voice-[0-9a-f]{16}\.mp3$/);
+    expect(submitted?.result).toMatch(
+      /^\/api\/artifacts\/elevenlabs-voice-[0-9a-f]{16}\.mp3$/,
+    );
 
     const accepted = await completeJob(job.id);
     expect(accepted?.status).toBe("completed");
@@ -90,7 +103,10 @@ describe("submits that finish on the spot", () => {
       note: "queued",
       idempotencyKey: "vo-nostore",
     });
-    const submitted = await submitJob(job.id, { provider: "elevenlabs", prompt: "x" });
+    const submitted = await submitJob(job.id, {
+      provider: "elevenlabs",
+      prompt: "x",
+    });
     expect(submitted?.status).toBe("failed");
     expect(submitted?.error).toMatch(/EDITFORGE_ARTIFACT_DIR/);
     expect(fetchMock).not.toHaveBeenCalled();
@@ -98,6 +114,37 @@ describe("submits that finish on the spot", () => {
 });
 
 describe("durable job lifecycle", () => {
+  it("claims a queued job before the provider boundary so concurrent submits bill once", async () => {
+    process.env.RUNWAY_API_KEY = "tok";
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const fetchMock = vi.fn(async () => {
+      await gate;
+      return {
+        ok: true,
+        json: async () => ({ id: "task-once" }),
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const job = await createAndQueue({
+      kind: "gen-video",
+      label: "one submit",
+      note: "n",
+      idempotencyKey: "concurrent-submit",
+    });
+
+    const first = submitJob(job.id, { provider: "runway", prompt: "x" });
+    const second = submitJob(job.id, { provider: "runway", prompt: "x" });
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    release();
+    await Promise.all([first, second]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect((await getJob(job.id))?.attempts).toBe(1);
+  });
+
   it("creates, queues, submits, polls, and completes a mock job", async () => {
     const job = await createAndQueue({
       kind: "gen-video",
@@ -108,7 +155,10 @@ describe("durable job lifecycle", () => {
     expect(job.status).toBe("queued");
     expect(job.attempts).toBe(0);
 
-    const submitted = await submitJob(job.id, { provider: "mock", prompt: "empty room" });
+    const submitted = await submitJob(job.id, {
+      provider: "mock",
+      prompt: "empty room",
+    });
     expect(submitted?.status).toBe("running");
     expect(submitted?.mode).toBe("mock");
     expect(submitted?.attempts).toBe(1);
@@ -126,10 +176,22 @@ describe("durable job lifecycle", () => {
   });
 
   it("returns the existing job for a repeated idempotency key", async () => {
-    const a = await createAndQueue({ kind: "voice", label: "VO", note: "n", idempotencyKey: "dupe" });
-    const b = await createAndQueue({ kind: "voice", label: "VO again", note: "n", idempotencyKey: "dupe" });
+    const a = await createAndQueue({
+      kind: "voice",
+      label: "VO",
+      note: "n",
+      idempotencyKey: "dupe",
+    });
+    const b = await createAndQueue({
+      kind: "voice",
+      label: "VO again",
+      note: "n",
+      idempotencyKey: "dupe",
+    });
     expect(b.id).toBe(a.id);
-    expect((await listJobs()).filter((j) => j.idempotencyKey === "dupe")).toHaveLength(1);
+    expect(
+      (await listJobs()).filter((j) => j.idempotencyKey === "dupe"),
+    ).toHaveLength(1);
   });
 
   it("refuses to create a rubric-gated job without a passing decision", async () => {
@@ -140,7 +202,7 @@ describe("durable job lifecycle", () => {
         note: "n",
         idempotencyKey: "gated",
         requiresRubricPass: true,
-      })
+      }),
     ).rejects.toThrow(/Rubric pass/);
 
     // Nothing was persisted by the rejected attempt.
@@ -162,7 +224,12 @@ describe("durable job lifecycle", () => {
 
   it("fails a job whose submit never reached the provider, recording why", async () => {
     delete process.env.RUNWAY_API_KEY;
-    const job = await createAndQueue({ kind: "gen-video", label: "x", note: "n", idempotencyKey: "no-key" });
+    const job = await createAndQueue({
+      kind: "gen-video",
+      label: "x",
+      note: "n",
+      idempotencyKey: "no-key",
+    });
 
     const failed = await submitJob(job.id, { provider: "runway", prompt: "x" });
     // The queued → failed edge exists precisely so this is not laundered
@@ -175,7 +242,12 @@ describe("durable job lifecycle", () => {
 
   it("retries a failed job and clears the stale error and external id", async () => {
     delete process.env.RUNWAY_API_KEY;
-    const job = await createAndQueue({ kind: "gen-video", label: "x", note: "n", idempotencyKey: "retry-me" });
+    const job = await createAndQueue({
+      kind: "gen-video",
+      label: "x",
+      note: "n",
+      idempotencyKey: "retry-me",
+    });
     await submitJob(job.id, { provider: "runway", prompt: "x" });
 
     const requeued = await retryJob(job.id);
@@ -184,7 +256,10 @@ describe("durable job lifecycle", () => {
     expect(requeued?.externalId).toBeUndefined();
 
     // The retry can now succeed against the offline provider.
-    const submitted = await submitJob(job.id, { provider: "mock", prompt: "x" });
+    const submitted = await submitJob(job.id, {
+      provider: "mock",
+      prompt: "x",
+    });
     expect(submitted?.status).toBe("running");
     expect(submitted?.attempts).toBe(2);
   });
@@ -195,12 +270,26 @@ describe("durable job lifecycle", () => {
       "fetch",
       vi.fn(async (url: unknown) =>
         String(url).includes("/tasks/")
-          ? ({ ok: true, json: async () => ({ status: "failed", failure: "content policy" }) } as unknown as Response)
-          : ({ ok: true, json: async () => ({ id: "task_1" }) } as unknown as Response)
-      )
+          ? ({
+              ok: true,
+              json: async () => ({
+                status: "failed",
+                failure: "content policy",
+              }),
+            } as unknown as Response)
+          : ({
+              ok: true,
+              json: async () => ({ id: "task_1" }),
+            } as unknown as Response),
+      ),
     );
 
-    const job = await createAndQueue({ kind: "gen-video", label: "x", note: "n", idempotencyKey: "prov-fail" });
+    const job = await createAndQueue({
+      kind: "gen-video",
+      label: "x",
+      note: "n",
+      idempotencyKey: "prov-fail",
+    });
     await submitJob(job.id, { provider: "runway", prompt: "x" });
     const polled = await pollJob(job.id);
 
@@ -214,12 +303,23 @@ describe("durable job lifecycle", () => {
       "fetch",
       vi.fn(async (url: unknown) =>
         String(url).includes("/tasks/")
-          ? ({ ok: true, json: async () => ({ status: "in_progress" }) } as unknown as Response)
-          : ({ ok: true, json: async () => ({ id: "task_2" }) } as unknown as Response)
-      )
+          ? ({
+              ok: true,
+              json: async () => ({ status: "in_progress" }),
+            } as unknown as Response)
+          : ({
+              ok: true,
+              json: async () => ({ id: "task_2" }),
+            } as unknown as Response),
+      ),
     );
 
-    const job = await createAndQueue({ kind: "gen-video", label: "x", note: "n", idempotencyKey: "still-going" });
+    const job = await createAndQueue({
+      kind: "gen-video",
+      label: "x",
+      note: "n",
+      idempotencyKey: "still-going",
+    });
     await submitJob(job.id, { provider: "runway", prompt: "x" });
     const polled = await pollJob(job.id);
     expect(polled?.status).toBe("running");
@@ -233,13 +333,24 @@ describe("durable job lifecycle", () => {
         String(url).includes("/tasks/")
           ? ({
               ok: true,
-              json: async () => ({ status: "SUCCEEDED", output: ["https://cdn.example.test/a.mp4"] }),
+              json: async () => ({
+                status: "SUCCEEDED",
+                output: ["https://cdn.example.test/a.mp4"],
+              }),
             } as unknown as Response)
-          : ({ ok: true, json: async () => ({ id: "task_3" }) } as unknown as Response)
-      )
+          : ({
+              ok: true,
+              json: async () => ({ id: "task_3" }),
+            } as unknown as Response),
+      ),
     );
 
-    const job = await createAndQueue({ kind: "gen-video", label: "x", note: "n", idempotencyKey: "ok-out" });
+    const job = await createAndQueue({
+      kind: "gen-video",
+      label: "x",
+      note: "n",
+      idempotencyKey: "ok-out",
+    });
     await submitJob(job.id, { provider: "runway", prompt: "x" });
     const polled = await pollJob(job.id);
 
@@ -248,7 +359,12 @@ describe("durable job lifecycle", () => {
   });
 
   it("leaves terminal jobs alone when polled", async () => {
-    const job = await createAndQueue({ kind: "voice", label: "x", note: "n", idempotencyKey: "term" });
+    const job = await createAndQueue({
+      kind: "voice",
+      label: "x",
+      note: "n",
+      idempotencyKey: "term",
+    });
     const cancelled = await cancelJob(job.id);
     expect(cancelled?.status).toBe("cancelled");
 
@@ -259,6 +375,8 @@ describe("durable job lifecycle", () => {
   it("returns null for a job that does not exist", async () => {
     expect(await getJob("nope")).toBeNull();
     expect(await pollJob("nope")).toBeNull();
-    expect(await submitJob("nope", { provider: "mock", prompt: "x" })).toBeNull();
+    expect(
+      await submitJob("nope", { provider: "mock", prompt: "x" }),
+    ).toBeNull();
   });
 });

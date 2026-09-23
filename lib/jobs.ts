@@ -8,6 +8,7 @@ export type JobKind =
   | "grade-pass"
   | "audio-hierarchy"
   | "export"
+  | "gen-image"
   | "gen-video"
   | "voice"
   | "avatar";

@@ -1,10 +1,20 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { SESSION_COOKIE, accessGateEnabled, bearerFrom, createGoogleSession, isAuthenticated, readGoogleSession, secretsMatch, sessionToken } from "./auth";
+import {
+  SESSION_COOKIE,
+  accessGateEnabled,
+  authenticationConfigured,
+  bearerFrom,
+  isAuthenticated,
+  secretsMatch,
+  sessionSecretConfigured,
+  sessionToken,
+} from "./auth";
 
 afterEach(() => {
-  delete process.env.EDITFORGE_ACCESS_PASSWORD;
   delete process.env.EDITFORGE_MCP_TOKEN;
   delete process.env.EDITFORGE_SESSION_SECRET;
+  delete process.env.GOOGLE_CLIENT_ID;
+  delete process.env.GOOGLE_CLIENT_SECRET;
   delete process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL;
 });
 
@@ -18,14 +28,22 @@ describe("secret comparison", () => {
 });
 
 describe("session token", () => {
-  it("is stable for a password and different for another", async () => {
-    const a = await sessionToken("hunter2");
-    expect(await sessionToken("hunter2")).toBe(a);
-    expect(await sessionToken("hunter3")).not.toBe(a);
+  it("is stable for a configured signing secret", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "signing-secret";
+    const a = await sessionToken();
+    expect(await sessionToken()).toBe(a);
   });
 
-  it("does not contain the password it was derived from", async () => {
-    expect(await sessionToken("hunter2")).not.toContain("hunter2");
+  it("does not contain the secret it was derived from", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "signing-secret";
+    expect(await sessionToken()).not.toContain("signing-secret");
+  });
+
+  it("invalidates sessions when the signing secret rotates", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "first-secret";
+    const first = await sessionToken();
+    process.env.EDITFORGE_SESSION_SECRET = "second-secret";
+    expect(await sessionToken()).not.toBe(first);
   });
 });
 
@@ -44,49 +62,17 @@ describe("authentication", () => {
     expect(await isAuthenticated({ authorization: "Bearer wrong-01" })).toBe(false);
   });
 
-  it("accepts a session cookie derived from the access password", async () => {
-    process.env.EDITFORGE_ACCESS_PASSWORD = "studio-pass";
-    const cookie = await sessionToken("studio-pass");
+  it("accepts a session cookie derived from the signing secret", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "studio-signing-secret";
+    const cookie = await sessionToken();
     expect(await isAuthenticated({ sessionCookie: cookie })).toBe(true);
     expect(await isAuthenticated({ sessionCookie: "not-the-token" })).toBe(false);
-  });
-
-  it("rejects a cookie minted from a different password", async () => {
-    const stale = await sessionToken("old-password");
-    process.env.EDITFORGE_ACCESS_PASSWORD = "new-password";
-    // Rotating the password must invalidate sessions issued under the old one.
-    expect(await isAuthenticated({ sessionCookie: stale })).toBe(false);
   });
 
   it("accepts the MCP token from the URL when one is offered", async () => {
     process.env.EDITFORGE_MCP_TOKEN = "tok-123";
     expect(await isAuthenticated({ urlToken: "tok-123" })).toBe(true);
     expect(await isAuthenticated({ urlToken: "tok-999" })).toBe(false);
-  });
-
-  it("accepts a signed Google session for the allowed account", async () => {
-    process.env.EDITFORGE_SESSION_SECRET = "a-long-session-secret-for-tests";
-    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
-    const cookie = await createGoogleSession("OWNER@example.com");
-    expect((await readGoogleSession(cookie))?.email).toBe("owner@example.com");
-    expect(await isAuthenticated({ sessionCookie: cookie })).toBe(true);
-  });
-
-  it("rejects tampered, expired, and wrong-account Google sessions", async () => {
-    process.env.EDITFORGE_SESSION_SECRET = "a-long-session-secret-for-tests";
-    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
-    const cookie = await createGoogleSession("owner@example.com", 1_000_000);
-    expect(await readGoogleSession(`${cookie}x`, 1_000_001)).toBeNull();
-    expect(await readGoogleSession(cookie, 1_000_000 + 31 * 24 * 60 * 60 * 1000)).toBeNull();
-    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "someone@example.com";
-    expect(await readGoogleSession(cookie, 1_000_001)).toBeNull();
-  });
-
-  it("does not accept the access password as a URL token", async () => {
-    // The URL token is the MCP credential only; the password is for browsers
-    // and must not become a shareable link.
-    process.env.EDITFORGE_ACCESS_PASSWORD = "studio-pass";
-    expect(await isAuthenticated({ urlToken: "studio-pass" })).toBe(false);
   });
 
   it("authenticates nobody when nothing is configured", async () => {
@@ -99,11 +85,32 @@ describe("authentication", () => {
 
   it("reports whether the access gate is on", () => {
     expect(accessGateEnabled()).toBe(false);
-    process.env.EDITFORGE_ACCESS_PASSWORD = "x";
+    process.env.EDITFORGE_SESSION_SECRET = "session-secret";
+    process.env.GOOGLE_CLIENT_ID = "client";
+    process.env.GOOGLE_CLIENT_SECRET = "secret";
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
     expect(accessGateEnabled()).toBe(true);
   });
 
-  it("names the cookie once, so middleware and the login route cannot disagree", () => {
+  it("reports configured API auth and session signing independently", () => {
+    expect(authenticationConfigured()).toBe(false);
+    expect(sessionSecretConfigured()).toBe(false);
+    process.env.EDITFORGE_MCP_TOKEN = "token";
+    process.env.EDITFORGE_SESSION_SECRET = "secret";
+    expect(authenticationConfigured()).toBe(true);
+    expect(sessionSecretConfigured()).toBe(true);
+  });
+
+  it("requires a session signing secret for Google browser authentication", () => {
+    process.env.GOOGLE_CLIENT_ID = "client";
+    process.env.GOOGLE_CLIENT_SECRET = "secret";
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
+    expect(authenticationConfigured()).toBe(false);
+    process.env.EDITFORGE_SESSION_SECRET = "session-secret";
+    expect(authenticationConfigured()).toBe(true);
+  });
+
+  it("names the cookie once, so middleware and identity routes cannot disagree", () => {
     expect(SESSION_COOKIE).toBe("editforge_session");
   });
 });

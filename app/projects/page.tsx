@@ -28,7 +28,9 @@ export default function ProjectsPage() {
   }
 
   useEffect(() => {
-    load()
+    fetch("/api/cuts")
+      .then((res) => res.json())
+      .then((data) => setCuts(data.cuts || []))
       .catch(() => setError("Could not load cuts"))
       .finally(() => setLoading(false));
   }, []);

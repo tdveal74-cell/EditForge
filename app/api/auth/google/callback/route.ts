@@ -1,50 +1,75 @@
-import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { GOOGLE_STATE_COOKIE, SESSION_COOKIE, createGoogleSession, secretsMatch } from "@/lib/auth";
+import { NextRequest, NextResponse } from "next/server";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import { SESSION_COOKIE, secretsMatch, sessionToken } from "@/lib/auth";
+import {
+  GOOGLE_STATE_COOKIE,
+  GOOGLE_VERIFIER_COOKIE,
+  googleAuthConfig,
+  googleAuthOrigin,
+} from "@/lib/google-auth";
 
 export const dynamic = "force-dynamic";
-type TokenInfo = { aud?: string; email?: string; email_verified?: string; exp?: string; iss?: string };
+export const runtime = "nodejs";
 
-function failure(req: Request, reason: string) {
-  const publicOrigin = process.env.EDITFORGE_GOOGLE_REDIRECT_ORIGIN?.trim() || new URL(req.url).origin;
-  const url = new URL("/login", publicOrigin);
-  url.searchParams.set("error", reason);
-  return NextResponse.redirect(url);
+const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
+
+function clearCeremonyCookies(response: NextResponse) {
+  response.cookies.set(GOOGLE_STATE_COOKIE, "", { path: "/api/auth/google", maxAge: 0 });
+  response.cookies.set(GOOGLE_VERIFIER_COOKIE, "", { path: "/api/auth/google", maxAge: 0 });
 }
 
-export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const state = url.searchParams.get("state") ?? "";
-  const expectedState = (await cookies()).get(GOOGLE_STATE_COOKIE)?.value ?? "";
-  if (!state || !expectedState || !secretsMatch(state, expectedState)) return failure(req, "state");
-  const code = url.searchParams.get("code");
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
-  const allowedEmail = process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL?.trim().toLowerCase();
-  const origin = process.env.EDITFORGE_GOOGLE_REDIRECT_ORIGIN?.trim() || url.origin;
-  if (!code || !clientId || !clientSecret || !allowedEmail) return failure(req, "configuration");
-  const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ code, client_id: clientId, client_secret: clientSecret, redirect_uri: `${origin.replace(/\/$/, "")}/api/auth/google/callback`, grant_type: "authorization_code" }),
-    cache: "no-store",
-  });
-  if (!tokenResponse.ok) return failure(req, "exchange");
-  const idToken = ((await tokenResponse.json()) as { id_token?: string }).id_token;
-  if (!idToken) return failure(req, "identity");
-  const verifyResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`, { cache: "no-store" });
-  if (!verifyResponse.ok) return failure(req, "identity");
-  const identity = (await verifyResponse.json()) as TokenInfo;
-  const issuerOk = identity.iss === "accounts.google.com" || identity.iss === "https://accounts.google.com";
-  if (!issuerOk || Number(identity.exp ?? 0) <= Math.floor(Date.now() / 1000) || identity.aud !== clientId || identity.email_verified !== "true" || identity.email?.toLowerCase() !== allowedEmail) {
-    return failure(req, "account");
+export async function GET(req: NextRequest) {
+  const config = googleAuthConfig();
+  const fallbackOrigin = config?.origin || googleAuthOrigin();
+  const fail = () => {
+    const response = NextResponse.redirect(new URL("/login?auth=google-failed", fallbackOrigin));
+    clearCeremonyCookies(response);
+    return response;
+  };
+  if (!config) return fail();
+
+  const code = req.nextUrl.searchParams.get("code") || "";
+  const state = req.nextUrl.searchParams.get("state") || "";
+  const expectedState = req.cookies.get(GOOGLE_STATE_COOKIE)?.value || "";
+  const verifier = req.cookies.get(GOOGLE_VERIFIER_COOKIE)?.value || "";
+  if (!code || !state || !expectedState || !verifier || !secretsMatch(state, expectedState)) return fail();
+
+  try {
+    const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: config.clientId,
+        client_secret: config.clientSecret,
+        redirect_uri: `${config.origin}/api/auth/google/callback`,
+        grant_type: "authorization_code",
+        code_verifier: verifier,
+      }),
+      cache: "no-store",
+    });
+    if (!tokenResponse.ok) return fail();
+    const tokens = (await tokenResponse.json()) as { id_token?: string };
+    if (!tokens.id_token) return fail();
+
+    const { payload } = await jwtVerify(tokens.id_token, googleKeys, {
+      issuer: ["https://accounts.google.com", "accounts.google.com"],
+      audience: config.clientId,
+    });
+    const email = String(payload.email || "").toLowerCase();
+    if (payload.email_verified !== true || !config.allowedEmails.includes(email)) return fail();
+
+    const response = NextResponse.redirect(new URL("/", config.origin));
+    clearCeremonyCookies(response);
+    response.cookies.set(SESSION_COOKIE, await sessionToken(), {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 12,
+    });
+    return response;
+  } catch {
+    return fail();
   }
-  const returnTo = decodeURIComponent(state.split(".").slice(1).join(".") || "/presenter-broll");
-  const destination = returnTo.startsWith("/") && !returnTo.startsWith("//") ? returnTo : "/presenter-broll";
-  // Behind the self-hosted Docker proxy, req.url can use the container's
-  // 0.0.0.0 origin. Always return the browser to the configured public origin.
-  const response = NextResponse.redirect(new URL(destination, origin));
-  response.cookies.set(SESSION_COOKIE, await createGoogleSession(allowedEmail), { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 60 * 60 * 24 * 30 });
-  response.cookies.set(GOOGLE_STATE_COOKIE, "", { path: "/", maxAge: 0 });
-  return response;
 }

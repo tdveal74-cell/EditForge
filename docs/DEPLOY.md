@@ -1,15 +1,22 @@
 # EditForge — deployment and durable store
 
-EditForge supports two deployment shapes:
+EditForge supports three deployment shapes:
 
 - `compose.yaml` self-hosts the Next.js control plane, FFmpeg worker, private
   identity-locked provider adapter, durable state, and artifact volumes. This is
-  the recommended DEVON-operated shape. See
+  the recommended DEVON-operated shape, and it is what production runs on. See
   `docs/DEVON_EXECUTION.md`.
+- `compose.local.yaml` is the same stack without the identity-locked provider: the
+  control plane and the FFmpeg worker on one machine, for DEVON operation that
+  calls no hosted studio and cannot spend at a provider. See
+  `docs/LOCAL_OPERATION.md`.
 - Vercel hosts the control plane. A separately deployed worker is still required for
   real edit execution.
 
-The existing hosted control plane runs on Vercel at **https://editforge.vercel.app**.
+The production studio is self-hosted at **https://editforge.online**, on a
+Hostinger VPS. That host is not Vercel, so nothing below about git-connected
+deploys or preview builds applies to it; those describe the Vercel control plane,
+which remains at **https://editforge.vercel.app**.
 
 **Both setup steps below are done** (2026-08-12): the project is git-connected and a
 Redis store is live. They are kept here as the record of how the deployment is wired,
@@ -118,3 +125,18 @@ this is visible before anyone tries.
 
 Voice belongs on the self-hosted stack, where `compose.yaml` already mounts a shared
 volume at `/artifacts`. Runway and HeyGen return URLs and are fine on Vercel.
+
+Moving voice there takes two things, and the artifact volume is only the first. The
+studio also needs `ELEVENLABS_VOICE_ID` — the value `compose.yaml` forwards and
+`lib/provider-registry.ts` reads. Binding the voice in the identity registry alone
+configures the DEVON adapter and leaves the studio's own `/voice` page refusing, so
+run the setup script rather than editing the registry by hand:
+
+```bash
+python3 scripts/configure-provider-credentials.py --select-elevenlabs-voice
+python3 scripts/configure-provider-credentials.py --check
+```
+
+`--check` reports `studioVoiceConfigured` for exactly this. HeyGen is configured the
+same way with `--select-heygen-avatar`; see
+[`CREDENTIALS.md`](CREDENTIALS.md#secure-self-hosted-setup).

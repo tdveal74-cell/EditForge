@@ -33,8 +33,11 @@ export default function AssetsPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    fetch("/api/assets", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setAssets(data.assets ?? []))
+      .catch((err: Error) => setError(err.message));
+  }, []);
 
   async function add() {
     setBusy(true);

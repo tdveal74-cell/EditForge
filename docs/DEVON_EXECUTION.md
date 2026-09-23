@@ -47,6 +47,12 @@ Master commands additionally require the named cut to have a recorded rubric pas
 
 ## Self-hosted deployment
 
+For picture and finishing work only — no clone voice, full motion, or lip sync —
+`compose.local.yaml` runs the control plane and the FFmpeg worker alone, with no
+provider credentials and no identity registry. That is the shortest path to
+operating DEVON on one machine; see `docs/LOCAL_OPERATION.md`. The rest of this
+section is the full stack.
+
 The canonical self-hosted shape is `compose.yaml`: a private Next.js control plane,
 an FFmpeg/FFprobe worker, a private identity-locked provider adapter, durable state
 volumes, and artifact volumes. Only the web service publishes a host port.
@@ -54,7 +60,10 @@ volumes, and artifact volumes. Only the web service publishes a host port.
 Create `.env` from `.env.example` and set at least:
 
 ```dotenv
-EDITFORGE_ACCESS_PASSWORD=<random browser password>
+GOOGLE_CLIENT_ID=<Google Web OAuth client id>
+GOOGLE_CLIENT_SECRET=<Google Web OAuth client secret>
+EDITFORGE_GOOGLE_ALLOWED_EMAIL=<owner Google account>
+EDITFORGE_SESSION_SECRET=<different random session signing secret>
 EDITFORGE_MCP_TOKEN=<random DEVON bearer token>
 EDITFORGE_WORKER_TOKEN=<different random worker token>
 EDITFORGE_PUBLIC_URL=http://localhost:3100

@@ -7,7 +7,7 @@ import type { JobKind } from "@/lib/jobs";
 
 export const dynamic = "force-dynamic";
 
-const MEDIA_KINDS: JobKind[] = ["gen-video", "voice", "avatar"];
+const MEDIA_KINDS: JobKind[] = ["gen-image", "gen-video", "voice", "avatar"];
 
 /** Would a submit to this provider reach a real, paid service? */
 function willBill(provider: string): boolean {

@@ -36,7 +36,7 @@ export async function GET() {
       credentialSet: p.envKey ? readiness.credentialSet : undefined,
       /** Further env this provider needs before a live run will be accepted. */
       settingsMissing: readiness.settingsMissing,
-      requiresArtifactStore: Boolean(p.wire?.binary) || undefined,
+      requiresArtifactStore: Boolean(p.wire?.binary || p.wire?.jsonMedia) || undefined,
     };
   });
 

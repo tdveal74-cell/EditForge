@@ -1,27 +1,47 @@
+import { createHash, randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
-import { GOOGLE_STATE_COOKIE } from "@/lib/auth";
+import {
+  GOOGLE_STATE_COOKIE,
+  GOOGLE_VERIFIER_COOKIE,
+  googleAuthConfig,
+  googleAuthOrigin,
+} from "@/lib/google-auth";
+import { sessionSecretConfigured } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-function safeReturnTo(value: string | null): string {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/presenter-broll";
-}
+export async function GET() {
+  const config = googleAuthConfig();
+  if (!config || !sessionSecretConfigured()) {
+    return NextResponse.redirect(new URL("/login?auth=google-unavailable", googleAuthOrigin()));
+  }
 
-export async function GET(req: Request) {
-  const clientId = process.env.GOOGLE_CLIENT_ID?.trim();
-  if (!clientId) return NextResponse.json({ error: "Google sign-in is not configured" }, { status: 503 });
-  const requestUrl = new URL(req.url);
-  const origin = process.env.EDITFORGE_GOOGLE_REDIRECT_ORIGIN?.trim() || requestUrl.origin;
-  const redirectUri = `${origin.replace(/\/$/, "")}/api/auth/google/callback`;
-  const state = `${crypto.randomUUID()}.${encodeURIComponent(safeReturnTo(requestUrl.searchParams.get("returnTo")))}`;
-  const authUrl = new URL("https://accounts.google.com/o/oauth2/v2/auth");
-  authUrl.searchParams.set("client_id", clientId);
-  authUrl.searchParams.set("redirect_uri", redirectUri);
-  authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("scope", "openid email profile");
-  authUrl.searchParams.set("state", state);
-  authUrl.searchParams.set("prompt", "select_account");
-  const response = NextResponse.redirect(authUrl);
-  response.cookies.set(GOOGLE_STATE_COOKIE, state, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: 600 });
+  const state = randomBytes(24).toString("base64url");
+  const verifier = randomBytes(48).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const redirectUri = `${config.origin}/api/auth/google/callback`;
+  const authorization = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  authorization.search = new URLSearchParams({
+    client_id: config.clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    prompt: "select_account",
+  }).toString();
+
+  const response = NextResponse.redirect(authorization);
+  const cookie = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/api/auth/google",
+    maxAge: 10 * 60,
+  };
+  response.cookies.set(GOOGLE_STATE_COOKIE, state, cookie);
+  response.cookies.set(GOOGLE_VERIFIER_COOKIE, verifier, cookie);
   return response;
 }

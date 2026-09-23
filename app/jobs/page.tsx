@@ -33,8 +33,21 @@ export default function JobsPage() {
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    fetch("/api/jobs", { cache: "no-store" })
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
+        return data;
+      })
+      .then((data) => {
+        setLive(data.jobs ?? []);
+        setLoadError(null);
+      })
+      .catch((err: Error) => {
+        setLoadError(err.message);
+        setLive([]);
+      });
+  }, []);
 
   // The cut carries the rubric decision. This page used to ask the operator
   // whether they had passed and send the answer as the gate's input.

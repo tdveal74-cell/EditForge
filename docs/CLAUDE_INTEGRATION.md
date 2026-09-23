@@ -21,7 +21,7 @@ actual studio.
 The server is part of the app — no separate service to run. It lives at:
 
 ```
-https://editforge.vercel.app/api/mcp
+https://editforge.online/api/mcp
 ```
 
 **Add it on claude.ai:** Settings → Connectors → Add custom connector, and paste
@@ -30,8 +30,19 @@ that URL.
 **Add it in Claude Code:**
 
 ```bash
-claude mcp add --transport http editforge https://editforge.vercel.app/api/mcp
+claude mcp add --transport http editforge https://editforge.online/api/mcp
 ```
+
+**Against a local studio:** this repository's `.mcp.json` reads the address from
+`EDITFORGE_MCP_URL` and falls back to the hosted deployment when it is unset.
+Export it, with the token, before starting Claude Code:
+
+```bash
+export EDITFORGE_MCP_URL=http://localhost:3100/api/mcp
+export EDITFORGE_MCP_TOKEN=<the local studio's token>
+```
+
+`docs/LOCAL_OPERATION.md` covers bringing that studio up.
 
 ### Authentication, and why writes are gated
 
@@ -61,7 +72,7 @@ Some MCP clients only accept a URL — there is no field to put an
 parameter:
 
 ```
-https://editforge.vercel.app/api/mcp?key=YOUR_TOKEN
+https://editforge.online/api/mcp?key=YOUR_TOKEN
 ```
 
 Paste that as the whole connector URL and it authenticates exactly as the
@@ -78,14 +89,17 @@ Vercel SSO session. A browser signed into the account gets through; an MCP clien
 never does. `Project → Settings → Deployment Protection` shows the current
 setting. Two ways out: attach a custom domain (protection skips those), or turn
 Vercel Authentication off and let the app's own gate do the work —
-`EDITFORGE_ACCESS_PASSWORD` makes the whole deployment private and
-`EDITFORGE_MCP_TOKEN` gates the write tools, which is what they are for. Do not
-turn it off without setting at least one of those first.
+the allowlisted Google identity makes the browser private and
+`EDITFORGE_MCP_TOKEN` gates the write tools. Do not turn it off without setting
+both production identities first.
 
 **Client-side egress rules.** Some Claude environments only reach an allowlist of
-hosts. A `403` on `CONNECT editforge.vercel.app:443`, or a connector that reports
-a rejected `Authorization` header without the app ever logging a request, is that
-— not a bad token. Add the host to the environment's network settings.
+hosts. A `403` on `CONNECT editforge.online:443` — or on any host you point the
+connector at — or a connector that reports a rejected `Authorization` header
+without the app ever logging a request, is that, not a bad token. The refusal
+names whichever host was tried, so a corrected URL that still fails the same way
+is confirmation of the egress rule rather than evidence the URL is wrong. Add
+the host to the environment's network settings.
 
 Either way, `curl -s https://<your-deployment>/api/health` from the machine
 running the client is the fastest test: if that does not answer with EditForge's
@@ -98,33 +112,20 @@ offers one. The URL token authenticates **only** `/api/mcp` — it will not
 unlock the rest of the app, so it cannot become a shareable link to a private
 studio.
 
-### Interaction with the access gate
+### Interaction with the identity gate
 
-`EDITFORGE_ACCESS_PASSWORD` makes the whole deployment private, and that
-includes `/api/mcp`. The two variables are independent, but the combination
-matters:
-
-| `ACCESS_PASSWORD` | `MCP_TOKEN` | What the connector can do |
-|---|---|---|
-| unset | unset | Read tools only; no billable work by anyone |
-| unset | set | Everything, with the bearer token |
-| set | unset | **Nothing — not even reads.** The gate needs a credential and there is none for MCP |
-| set | set | Everything, with the bearer token |
-
-The third row is the one that surprises: turning on the access password without
-also setting an MCP token takes the connector offline entirely. Set both if you
-want a private studio that Claude can still reach.
+The browser and MCP use separate identities. The browser begins with the exact
+Google account in `EDITFORGE_GOOGLE_ALLOWED_EMAIL`, then may use an enrolled
+passkey. Claude uses `EDITFORGE_MCP_TOKEN`. Configure the Google identity and
+the MCP token on production so both operator paths remain available.
 
 ### What the gate does not do
 
-The login route is not rate-limited, so a weak access password is brute-forcible
-by anyone who can reach the deployment. Use a generated value
-(`openssl rand -hex 32`), not something memorable — you type it once per browser.
-
-When the access gate is off, the non-billable write routes (`POST /api/cuts`,
+When the identity gate is off, the non-billable write routes (`POST /api/cuts`,
 and the poll/complete/retry/cancel actions on `/api/jobs/[id]`) remain open.
 They cannot spend money, but anyone reaching the deployment could disturb job
-and cut state. Turning on the access password closes them too.
+and cut state. The production runtime therefore fails closed until Google owner
+identity and session signing are configured.
 
 ### Tools
 
@@ -186,7 +187,7 @@ Commands it adds:
 ## Verifying it works
 
 ```bash
-curl -s https://editforge.vercel.app/api/mcp \
+curl -s https://editforge.online/api/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | head -40
 ```
@@ -197,7 +198,7 @@ Without a bearer token you should see the read tools and **not**
 A quick end-to-end check that costs nothing:
 
 ```bash
-curl -s https://editforge.vercel.app/api/mcp \
+curl -s https://editforge.online/api/mcp \
   -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call",
        "params":{"name":"check_restraint_grade","arguments":{"exposure":0.45}}}'

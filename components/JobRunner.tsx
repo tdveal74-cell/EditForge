@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JobKind, JobStatus, StudioJob } from "@/lib/jobs";
 import { idempotencyKeyFor } from "@/lib/idempotency";
+import { decideSpendClick } from "@/lib/billable-confirmation";
 import { isPlayableAudio, isPlayableVideo } from "@/lib/media";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,10 +14,12 @@ export type ProviderChoice = { id: string; label: string };
 
 type ProviderReadiness = {
   id: string;
-  billing?: "paid" | "local" | "offline";
-  runnable?: boolean;
   billable: boolean;
   wired: boolean;
+  /** "local" runs on this VPS and costs nothing; "paid" bills a provider. */
+  billing?: "paid" | "local" | "offline";
+  /** Ready to run now, paid or local. Older APIs omit it and billable stands in. */
+  runnable?: boolean;
   envKey?: string;
   envKeys?: string[];
   credentialSet?: boolean;
@@ -57,7 +60,8 @@ export function JobRunner({
   const [readiness, setReadiness] = useState<Record<string, ProviderReadiness>>({});
   const [artifactStore, setArtifactStore] = useState(true);
   const [polls, setPolls] = useState(0);
-  const [confirmingSpend, setConfirmingSpend] = useState(false);
+  const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
+  const [providersLoaded, setProvidersLoaded] = useState(false);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -77,6 +81,8 @@ export function JobRunner({
         setReadiness(Object.fromEntries(data.providers.map((p) => [p.id, p])));
       } catch {
         // degraded picker is fine
+      } finally {
+        if (alive.current) setProvidersLoaded(true);
       }
     })();
   }, []);
@@ -84,12 +90,17 @@ export function JobRunner({
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
   const missingSettings = chosen?.settingsMissing ?? [];
+  const liveReady =
+    Boolean(chosen?.billable) && missingSettings.length === 0 && providersLoaded;
+  const spend = decideSpendClick({
+    billable: liveReady,
+    readinessKnown: providersLoaded && Boolean(chosen),
+    currentKey: key,
+    confirmedKey,
+  });
+  const waitingOnReadiness = provider !== "mock" && !providersLoaded;
 
-  useEffect(() => {
-    setConfirmingSpend(false);
-  }, [provider, key]);
-
-  async function run(confirmBillable = false) {
+  async function run() {
     setBusy(true);
     setError(null);
     setPolls(0);
@@ -105,7 +116,10 @@ export function JobRunner({
           options,
           idempotencyKey: key,
           requiresRubricPass,
-          confirmBillable,
+          // The API refuses a live billable submit without this. The client
+          // only reaches run() for a paid provider after the confirm click
+          // bound confirmedKey to this exact brief.
+          confirmBillable: liveReady && confirmedKey === key,
         }),
       });
       const data = await res.json();
@@ -114,11 +128,21 @@ export function JobRunner({
         return;
       }
       setJob(data.job);
+      setConfirmedKey(null);
     } catch (err) {
       setError(`Could not reach the studio API: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
+  }
+
+  function onPrimaryClick() {
+    if (spend === "confirm") {
+      setConfirmedKey(key);
+      return;
+    }
+    if (spend === "wait") return;
+    void run();
   }
 
   const act = useCallback(async (id: string, action: "poll" | "complete" | "retry" | "cancel") => {
@@ -157,6 +181,13 @@ export function JobRunner({
 
   const tracking = job !== null && !SETTLED.includes(job.status);
   const stalled = tracking && polls >= MAX_POLLS;
+  const primaryDisabled =
+    busy ||
+    tracking ||
+    Boolean(blockedReason) ||
+    !prompt.trim() ||
+    waitingOnReadiness ||
+    spend === "wait";
 
   return (
     <section className="mt-6 rounded-card border border-border bg-surface-elevated p-5">
@@ -168,13 +199,14 @@ export function JobRunner({
               // "live" has to mean runnable, not merely credentialled: a
               // provider whose key is set but whose look id is not would other-
               // wise be offered as live and refuse on click.
-              const ready = Boolean(r?.runnable) && (r?.settingsMissing?.length ?? 0) === 0;
+              const ready =
+                Boolean(r?.runnable ?? r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
               const mark = !r
                 ? ""
                 : ready && r.billing === "local"
                   ? " · local/free"
-                  : ready && r.billing === "paid"
-                    ? " · paid/live"
+                  : ready
+                    ? " · live"
                     : p.id === "mock"
                       ? ""
                       : " · unavailable";
@@ -191,32 +223,16 @@ export function JobRunner({
           type="button"
           variant="accent"
           className="min-h-11 w-full sm:w-auto"
-          onClick={() => {
-            if (chosen?.billable) setConfirmingSpend(true);
-            else void run(false);
-          }}
-          disabled={busy || tracking || Boolean(blockedReason) || !prompt.trim()}
+          onClick={onPrimaryClick}
+          disabled={primaryDisabled}
         >
-          {busy && !job ? "Submitting…" : "Run job"}
+          {busy && !job
+            ? "Submitting…"
+            : spend === "confirm"
+              ? "Confirm paid run"
+              : "Run job"}
         </Button>
       </div>
-
-      {confirmingSpend && chosen?.billable && !tracking && (
-        <div className="mt-3 rounded-card border border-amber-300 bg-amber-50 p-4" role="alert">
-          <p className="text-sm font-semibold text-navy">Confirm paid provider run</p>
-          <p className="mt-1 text-xs leading-relaxed text-navy/65">
-            This submits real work to {providers.find((p) => p.id === provider)?.label ?? provider} and consumes provider credits.
-          </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <Button type="button" variant="accent" className="min-h-11" onClick={() => void run(true)} disabled={busy}>
-              {busy ? "Submitting…" : "Confirm and run paid job"}
-            </Button>
-            <Button type="button" variant="ghost" className="min-h-11" onClick={() => setConfirmingSpend(false)} disabled={busy}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
 
       {chosen && (
         <p className="mt-2.5 text-xs">
@@ -227,6 +243,7 @@ export function JobRunner({
           ) : chosen.billable && missingSettings.length === 0 ? (
             <span className="text-amber-700">
               Live provider — running this bills real work against {chosen.envKey}.
+              {spend === "confirm" ? " Confirm the exact brief before it is submitted." : ""}
             </span>
           ) : chosen.id === "mock" ? (
             <span className="text-navy/50">Offline path — no spend, and no media produced.</span>
@@ -245,8 +262,6 @@ export function JobRunner({
               is nowhere to keep it. It will refuse rather than spend.
             </span>
           ) : missingSettings.length > 0 ? (
-            // Without this, a HeyGen render refused for a missing look id reads
-            // as a bad API key — the one thing that is not wrong.
             <span className="text-navy/50">
               The key is set, but {missingSettings.join(" and ")}{" "}
               {missingSettings.length > 1 ? "are" : "is"} not — this will refuse until{" "}
@@ -274,14 +289,18 @@ export function JobRunner({
         <div className="mt-3 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
           <p>{error}</p>
           {error.toLowerCase().includes("authentication") && (
-            <a className="mt-2 inline-block font-semibold underline underline-offset-2" href="/api/auth/google/start?returnTo=/presenter-broll">Sign in with Google</a>
+            <a
+              className="mt-2 inline-block font-semibold underline underline-offset-2"
+              href="/api/auth/google/start"
+            >
+              Sign in with Google
+            </a>
           )}
         </div>
       )}
 
       {job && (
         <div className="mt-4 space-y-3">
-          {/* Result stage */}
           {(job.status === "completed" || job.status === "validating") && (
             <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
               <div className="flex min-h-[8rem] flex-col items-center justify-center bg-navy/[0.03] px-4 py-8">
@@ -290,9 +309,6 @@ export function JobRunner({
                     <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">
                       Result ready
                     </p>
-                    {/* Play it here. A finished VO that can only be opened in
-                        another tab is a link, not a result — and judging a take
-                        is the whole reason to come back to this page. */}
                     {isPlayableAudio(job.result) ? (
                       <audio className="mt-3 w-full max-w-md" controls preload="metadata" src={job.result} />
                     ) : isPlayableVideo(job.result) ? (

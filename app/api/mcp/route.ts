@@ -102,8 +102,12 @@ export async function POST(req: Request) {
         // Say plainly when the tool exists but the caller may not use it,
         // rather than pretending it does not exist and inviting a retry loop.
         const gated = findTool(name, true);
+        // Not every gated tool is a write — some are reads over private data —
+        // so say which it is rather than telling a caller its lookup "changes
+        // state" when it does not.
+        const reason = gated?.mutating ? "changes state" : "reads private data";
         const message = gated
-          ? `Tool "${name}" changes state and requires authentication. Set EDITFORGE_MCP_TOKEN on the server and send it as a bearer token.`
+          ? `Tool "${name}" ${reason} and requires authentication. Set EDITFORGE_MCP_TOKEN on the server and send it as a bearer token.`
           : `Unknown tool "${name}"`;
         return ok(id, { content: [{ type: "text", text: message }], isError: true });
       }

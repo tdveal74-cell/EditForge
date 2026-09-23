@@ -34,7 +34,9 @@ export async function getJob(id: string): Promise<StudioJob | null> {
 }
 
 /** Find an existing job by its idempotency key, so a retried submit is a no-op. */
-export async function findByIdempotencyKey(key: string): Promise<StudioJob | null> {
+export async function findByIdempotencyKey(
+  key: string,
+): Promise<StudioJob | null> {
   const all = await jobs.list();
   return all.find((j) => j.idempotencyKey === key) ?? null;
 }
@@ -65,7 +67,7 @@ export async function createAndQueue(input: CreateInput): Promise<StudioJob> {
   // Throws before anything is persisted if the rubric gate is not satisfied.
   const authorized = authorizeJob(
     createJob({ ...input, id: newId(input.kind, input.idempotencyKey) }),
-    input.rubricDecision
+    input.rubricDecision,
   );
   const queued = advanceJob(authorized, "queued");
 
@@ -83,7 +85,10 @@ export async function createAndQueue(input: CreateInput): Promise<StudioJob> {
 }
 
 /** Apply a change to a stored job through the state machine, and persist it. */
-async function update(id: string, fn: (job: StudioJob) => void): Promise<StudioJob | null> {
+async function update(
+  id: string,
+  fn: (job: StudioJob) => void,
+): Promise<StudioJob | null> {
   let out: StudioJob | null = null;
   await jobs.mutate((all) => {
     const i = all.findIndex((j) => j.id === id);
@@ -105,11 +110,22 @@ async function update(id: string, fn: (job: StudioJob) => void): Promise<StudioJ
  */
 export async function submitJob(
   id: string,
-  req: { provider: string; prompt: string; options?: Record<string, unknown> }
+  req: { provider: string; prompt: string; options?: Record<string, unknown> },
 ): Promise<StudioJob | null> {
-  const job = await getJob(id);
-  if (!job) return null;
-  if (job.status !== "queued") return job;
+  // Claim before crossing the paid boundary. Two callers can observe `queued`
+  // together; only the winner of this durable mutation may submit it.
+  let claimed = false;
+  const job = await update(id, (j) => {
+    claimed = false;
+    if (j.status !== "queued") return;
+    claimed = true;
+    j.status = advanceJob(j, "running").status;
+    j.attempts += 1;
+    j.provider = req.provider;
+    j.note =
+      "Submitting to provider. Do not resubmit while the result is unknown.";
+  });
+  if (!job || !claimed) return job;
 
   const res = await submitToProvider({
     provider: req.provider,
@@ -120,17 +136,23 @@ export async function submitJob(
   });
 
   return update(id, (j) => {
-    j.attempts += 1;
     j.provider = res.provider;
     j.mode = res.mode;
+    // A cancellation during submit stops local tracking, not provider billing.
+    // Keep its receipt without reviving the cancelled job.
+    if (j.status !== "running") {
+      if (res.ok) {
+        j.externalId = res.externalId;
+        if (res.result) j.result = res.result;
+      }
+      return;
+    }
     if (!res.ok) {
       advanceJob(j, "failed"); // asserts the edge exists
       j.status = "failed";
       j.error = res.error;
       return;
     }
-    advanceJob(j, "running");
-    j.status = "running";
     j.externalId = res.externalId;
     j.note = res.note;
     delete j.error;
@@ -162,6 +184,7 @@ export async function pollJob(id: string): Promise<StudioJob | null> {
   const res = await pollProvider(job.provider, job.externalId);
 
   return update(id, (j) => {
+    if (j.status !== "running") return;
     if (!res.ok) {
       advanceJob(j, "failed");
       j.status = "failed";

@@ -16,6 +16,7 @@ describe("genvideo catalogue", () => {
     // Two hand-maintained provider lists is two chances to disagree, and the
     // one that disagreed was the one the UI drew from.
     expect(GEN_PROVIDERS.map((p) => p.id)).toEqual([
+      "xai-video",
       "runway",
       "kling",
       "veo",

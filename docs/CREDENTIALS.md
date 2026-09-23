@@ -76,11 +76,11 @@ Files are content-addressed — the same bytes always land on the same name, so 
 retried submit does not accumulate near-duplicates. `/api/artifacts/[name]`
 serves them behind the same authentication as the rest of the app.
 
-That last part has a consequence worth knowing: a browser authenticates with the
-session cookie from `/login`, which only exists when `EDITFORGE_ACCESS_PASSWORD`
-is set. On a deployment holding only `EDITFORGE_MCP_TOKEN`, jobs run fine through
-MCP but nobody can open the result in a browser. **Set the access password on any
-deployment where people will watch or listen to what it renders.**
+That last part has a consequence worth knowing: a browser authenticates with a
+session cookie minted after an allowlisted Google or passkey sign-in. On a
+deployment holding only `EDITFORGE_MCP_TOKEN`, jobs run fine through
+MCP but nobody can open the result in a browser. **Configure at least one browser
+sign-in method on any deployment where people will watch or listen to renders.**
 
 **On Vercel this store is not durable.** A serverless filesystem is per-instance
 and vanishes between invocations, so voice belongs on the self-hosted stack (or
@@ -92,13 +92,33 @@ link that 404s a minute later.
 
 | Variable | What it does |
 |---|---|
-| `EDITFORGE_ACCESS_PASSWORD` | Makes the whole deployment private: pages redirect to `/login`, APIs answer 401. |
+| `EDITFORGE_SESSION_SECRET` | Signs browser sessions. Use a long random value dedicated to this purpose. |
+| `EDITFORGE_PASSKEY_RP_ID` | WebAuthn relying-party hostname. Production defaults to `editforge.online`. |
+| `EDITFORGE_PASSKEY_ORIGIN` | Exact HTTPS origin accepted for passkey ceremonies. |
+| `EDITFORGE_PASSKEY_NAME` | Human-readable service name shown by the device during enrollment. |
+| `GOOGLE_CLIENT_ID` | Google Web OAuth client ID. The button remains hidden when Google configuration is incomplete. |
+| `GOOGLE_CLIENT_SECRET` | Google Web OAuth client secret. Server-side only. |
+| `EDITFORGE_GOOGLE_ALLOWED_EMAIL` | Exact verified Google account allowed into the studio. Accepts a comma-separated allowlist. |
+| `EDITFORGE_GOOGLE_REDIRECT_ORIGIN` | Public origin used to form the fixed OAuth callback. Production is `https://editforge.online`. |
 | `EDITFORGE_MCP_TOKEN` | Lets an MCP client run the state-changing tools. |
 
-Spending money always requires authentication, whether or not a password is set.
-With **neither** configured nothing can authenticate, so no billable provider is
-reachable at all — live keys on an open deployment then cost nothing rather than
-everything. Set at least one before setting any provider key.
+Spending money always requires authentication. With neither Google owner
+identity nor an MCP request credential configured, production fails closed and
+local development cannot reach billable providers. Keep
+`EDITFORGE_SESSION_SECRET` and `EDITFORGE_MCP_TOKEN` different.
+
+The Google Cloud Web OAuth client must list this exact authorized redirect URI:
+
+```text
+https://editforge.online/api/auth/google/callback
+```
+
+Google sign-in uses Authorization Code with PKCE, validates the one-time state,
+verifies the signed ID token issuer and audience, requires `email_verified`, and
+accepts only an address in `EDITFORGE_GOOGLE_ALLOWED_EMAIL`. It never stores a
+Google access token. Google is the first sign-in and recovery identity. After
+that first sign-in, the owner enrolls a passkey at `/security`. There is no
+access-password endpoint or password verifier.
 
 ## Durable store
 
@@ -128,25 +148,52 @@ Set on the worker and provider services, never on the control plane. See
 
 ### Secure self-hosted setup
 
-On a self-hosted EditForge server, configure Runway and ElevenLabs without
-placing either secret in shell history:
+On a self-hosted EditForge server, configure Runway, ElevenLabs and HeyGen
+without placing any secret in shell history:
 
 ```bash
 cd /opt/editforge/app
 python3 scripts/configure-provider-credentials.py
 ```
 
-If the canonical ElevenLabs voice ID is already known, validate and bind that
-exact voice instead of choosing from a display-name list:
+Runway and ElevenLabs are required. **HeyGen is optional** — leave its prompt
+blank, or pass `--skip-avatar`, and the avatar path is left alone rather than
+written half-configured.
+
+If the ids are already known, validate and bind them exactly instead of choosing
+from a display-name list:
 
 ```bash
-python3 scripts/configure-provider-credentials.py --elevenlabs-voice-id VOICE_ID
+python3 scripts/configure-provider-credentials.py \
+  --elevenlabs-voice-id VOICE_ID \
+  --heygen-avatar-id AVATAR_ID --heygen-voice-id VOICE_ID
+```
+
+Either selection can be redone later against the already stored key, without
+re-entering any secret:
+
+```bash
+python3 scripts/configure-provider-credentials.py --select-elevenlabs-voice
+python3 scripts/configure-provider-credentials.py --select-heygen-avatar
 ```
 
 The script uses hidden prompts, writes `.env` and the identity registry
 atomically with mode `0600`, verifies the private Runway character reference,
-and can select the canonical ElevenLabs voice by display name while keeping its
-internal ID out of the command line. It never prints either API key.
+and selects voices and avatar looks by display name while keeping their internal
+ids off the command line. It never prints an API key.
+
+#### The voice is bound to two places
+
+The two provider boundaries above each read the ElevenLabs voice from their own
+source: the DEVON adapter reads `elevenlabsVoiceId` from the identity registry,
+and the studio's `/voice` path reads `ELEVENLABS_VOICE_ID` from the environment.
+The script writes **both**, because writing only the registry produced a server
+whose setup reported success and whose voice page still refused for a missing
+voice id.
+
+A server configured before this was fixed has the registry entry and not the
+environment one. Re-run `--select-elevenlabs-voice` to bind it; `--check` reports
+`studioVoiceConfigured: false` until you do.
 
 Confirm only non-secret configuration state with:
 
@@ -154,13 +201,17 @@ Confirm only non-secret configuration state with:
 python3 scripts/configure-provider-credentials.py --check
 ```
 
+It exits non-zero if anything required is missing. HeyGen's absence is not a
+failure — but a HeyGen key with no avatar or voice id behind it is, since every
+avatar render would refuse.
+
 ## Where to set them
 
 **Vercel** — Project → Settings → Environment Variables, Production and Preview.
 Redeploy after changing them; Next.js reads `process.env` at request time on the
 server, but a running deployment keeps the values it booted with.
 
-Suitable there: `RUNWAY_API_KEY`, `HEYGEN_*`, `EDITFORGE_ACCESS_PASSWORD`,
+Suitable there: `RUNWAY_API_KEY`, `HEYGEN_*`, `GOOGLE_CLIENT_ID`,
 `EDITFORGE_MCP_TOKEN`, `KV_REST_API_*`.
 Not suitable there: `ELEVENLABS_*` (needs the durable artifact store) and the
 whole DEVON path (needs the worker and provider services).

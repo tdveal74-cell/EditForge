@@ -27,7 +27,10 @@ export default function VfxPage() {
   }, []);
 
   useEffect(() => {
-    void load();
+    fetch("/api/vfx", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setShots(data.shots ?? []))
+      .catch((err: Error) => setError(err.message));
     fetch("/api/cuts", { cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
@@ -36,7 +39,7 @@ export default function VfxPage() {
         setCutId((prev) => prev || list[0]?.id || "");
       })
       .catch(() => setCuts([]));
-  }, [load]);
+  }, []);
 
   async function move(shotId: string, status: ShotStatus) {
     setError(null);

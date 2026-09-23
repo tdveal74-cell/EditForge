@@ -10,6 +10,7 @@ export type StudioModule = {
 };
 
 export const STUDIO_MODULES: StudioModule[] = [
+  { id: "canvas", dept: "Production", label: "Canvas & Floor Agent", href: "/canvas", status: "ai-media", studioRole: "Connected shot graphs, micro drama, generation and rough cuts" },
   { id: "pipeline", dept: "Production", label: "Pipeline", href: "/pipeline", status: "operational", studioRole: "Stage map ingest → deliver" },
   { id: "projects", dept: "Production", label: "Projects / bins", href: "/projects", status: "operational", studioRole: "Cut tracking" },
   { id: "dailies", dept: "Production", label: "Dailies", href: "/dailies", status: "operational", studioRole: "Day roll queue" },

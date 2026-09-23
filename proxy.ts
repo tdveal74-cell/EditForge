@@ -7,6 +7,7 @@ import {
   isAuthenticated,
   secretsMatch,
 } from "@/lib/auth";
+import { SIGNIN_MARKER_COOKIE } from "@/lib/google-auth";
 
 /**
  * Makes the whole studio private when any application credential is set.
@@ -64,7 +65,13 @@ export async function proxy(req: NextRequest) {
     // credential, so it opens the one door that needs it rather than the app.
     urlToken: pathname === "/api/mcp" ? req.nextUrl.searchParams.get(URL_TOKEN_PARAM) : null,
   });
-  if (authed) return NextResponse.next();
+  if (authed) {
+    if (!req.cookies.get(SIGNIN_MARKER_COOKIE)?.value) return NextResponse.next();
+    // The session came back, so the sign-in marker has done its job.
+    const response = NextResponse.next();
+    response.cookies.set(SIGNIN_MARKER_COOKIE, "", { sameSite: "none", secure: true, path: "/", maxAge: 0 });
+    return response;
+  }
 
   // An API caller gets a status it can act on; a browser gets the login form.
   if (pathname.startsWith("/api/")) {
@@ -74,6 +81,19 @@ export async function proxy(req: NextRequest) {
   const url = req.nextUrl.clone();
   url.pathname = "/login";
   url.search = "";
+  // A Google sign-in finished minutes ago, yet no valid session came with this
+  // request. Name it rather than show a login page that looks untouched.
+  // Only for a page the browser is navigating to: an image or frame another
+  // site pulls in is not the owner arriving, and must not spend the marker.
+  const dest = req.headers.get("sec-fetch-dest");
+  if (req.cookies.get(SIGNIN_MARKER_COOKIE)?.value && (dest === null || dest === "document")) {
+    const reason = req.cookies.get(SESSION_COOKIE)?.value ? "session-invalid" : "session-not-sent";
+    url.search = new URLSearchParams({ auth: "google-failed", reason }).toString();
+    console.warn(JSON.stringify({ event: "google_signin_failed", reason, detail: "" }));
+    const response = NextResponse.redirect(url);
+    response.cookies.set(SIGNIN_MARKER_COOKIE, "", { sameSite: "none", secure: true, path: "/", maxAge: 0 });
+    return response;
+  }
   return NextResponse.redirect(url);
 }
 

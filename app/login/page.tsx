@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { googleFailureMessage } from "@/lib/google-auth";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -19,13 +20,14 @@ export default function LoginPage() {
       .then((res) => res.json())
       .then((data) => setGoogleAvailable(Boolean(data.available)))
       .catch(() => setGoogleAvailable(false));
-    const authError = new URLSearchParams(window.location.search).get("auth");
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get("auth");
     if (authError) {
       queueMicrotask(() =>
         setError(
           authError === "google-unavailable"
             ? "Google sign-in is not configured for this studio."
-            : "Google sign-in could not be verified for this studio."
+            : googleFailureMessage(params.get("reason"), params.get("detail"))
         )
       );
     }

@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import {
   GOOGLE_STATE_COOKIE,
   GOOGLE_VERIFIER_COOKIE,
@@ -11,10 +11,19 @@ import { sessionSecretConfigured } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const config = googleAuthConfig();
   if (!config || !sessionSecretConfigured()) {
     return NextResponse.redirect(new URL("/login?auth=google-unavailable", googleAuthOrigin()));
+  }
+
+  // Google always returns to the configured origin, so the ceremony cookies
+  // have to be set there too. Started from any other host (an alias, the bare
+  // IP), they would be missing at the callback. canonical=1 stops a proxy that
+  // rewrites Host from turning this into a loop: worst case is the old path.
+  const host = (req.headers.get("x-forwarded-host") || req.headers.get("host") || "").split(",")[0].trim().toLowerCase();
+  if (host && host !== new URL(config.origin).host && !req.nextUrl.searchParams.has("canonical")) {
+    return NextResponse.redirect(new URL("/api/auth/google/start?canonical=1", config.origin));
   }
 
   const state = randomBytes(24).toString("base64url");

@@ -38,7 +38,14 @@ describe("proxy after a Google sign-in", () => {
   const cleared = (res: Response) =>
     res.headers
       .getSetCookie()
-      .some((c) => /^editforge_signin_marker=;/.test(c) && /Max-Age=0/.test(c) && /;\s*Secure/i.test(c) && /SameSite=none/i.test(c));
+      .some(
+        (c) =>
+          /^editforge_signin_marker=;/.test(c) &&
+          /Max-Age=0/.test(c) &&
+          /;\s*Secure/i.test(c) &&
+          /SameSite=none/i.test(c) &&
+          /;\s*Path=\/(;|$)/i.test(c),
+      );
   const logged = () => vi.mocked(console.warn).mock.calls.map((c) => JSON.parse(String(c[0])));
 
   it("names a session the browser did not send back, on the page and in the log", async () => {
@@ -54,7 +61,7 @@ describe("proxy after a Google sign-in", () => {
     expect(logged()).toEqual([{ event: "google_signin_failed", reason: "session-invalid", detail: "" }]);
   });
 
-  it.each(["image", "iframe", "empty", "script"])(
+  it.each(["image", "iframe", "empty", "script", "style", "font", "video", "worker", "frame", "embed"])(
     "a %s request does not spend the marker",
     async (dest) => {
       const req = page("/jobs", { editforge_signin_marker: "1" });

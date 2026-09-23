@@ -156,8 +156,10 @@ const FAILURE_MESSAGES: Record<GoogleFailure, string> = {
 // anything else shows the reason alone and stays in the server log. The
 // domain of a disallowed account is never shown on the page.
 
-// Every code jose 6.2.12 defines (node_modules/jose/dist/webapi/util/errors.js).
-const JOSE_CODES = [
+// Every code jose 6.2.12 defines (node_modules/jose/dist/webapi/util/errors.js);
+// a test compares this list with jose/errors at runtime, so an upgrade that
+// adds or removes a code fails loudly instead of dropping it off the page.
+export const JOSE_CODES = [
   "ERR_JOSE_ALG_NOT_ALLOWED",
   "ERR_JOSE_GENERIC",
   "ERR_JOSE_NOT_SUPPORTED",
@@ -174,10 +176,15 @@ const JOSE_CODES = [
   "ERR_JWT_EXPIRED",
   "ERR_JWT_INVALID",
 ];
-// Network, DNS and TLS codes a fetch from the box to Google can fail with.
+// The common network, DNS and TLS codes a fetch from the box to Google can
+// fail with. A code not listed here still reaches the server log in full.
 const NETWORK_CODES = [
   "ENOTFOUND",
   "EAI_AGAIN",
+  "EAI_FAIL",
+  "EPROTO",
+  "ENETDOWN",
+  "EADDRNOTAVAIL",
   "ECONNREFUSED",
   "ECONNRESET",
   "ECONNABORTED",
@@ -191,13 +198,21 @@ const NETWORK_CODES = [
   "UND_ERR_SOCKET",
   "UND_ERR_CLOSED",
   "UND_ERR_ABORTED",
+  "UND_ERR_HTTP_PARSER",
+  "UND_ERR_HEADERS_OVERFLOW",
+  "UND_ERR_RES_CONTENT_LENGTH_MISMATCH",
   "CERT_HAS_EXPIRED",
   "CERT_NOT_YET_VALID",
   "SELF_SIGNED_CERT_IN_CHAIN",
   "DEPTH_ZERO_SELF_SIGNED_CERT",
   "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
   "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "CERT_UNTRUSTED",
+  "CERT_REVOKED",
   "ERR_TLS_CERT_ALTNAME_INVALID",
+  "ERR_SSL_WRONG_VERSION_NUMBER",
+  "ERR_SSL_PACKET_LENGTH_TOO_LONG",
 ];
 const ERROR_NAMES = ["Error", "TypeError", "SyntaxError", "RangeError", "AbortError", "TimeoutError", "unknown"];
 const CLAIMS = ["iss", "aud", "exp", "nbf", "iat", "sub"];

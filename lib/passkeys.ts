@@ -37,9 +37,12 @@ export function passkeyConfig() {
   const production = process.env.NODE_ENV === "production";
   return {
     rpID: process.env.EDITFORGE_PASSKEY_RP_ID?.trim() || (production ? "editforge.online" : "localhost"),
-    origin:
+    // Trimmed the same way as the Google origin, so one value with a trailing
+    // slash cannot leave Google sign-in working and every passkey failing.
+    origin: (
       process.env.EDITFORGE_PASSKEY_ORIGIN?.trim() ||
-      (production ? "https://editforge.online" : "http://localhost:3000"),
+      (production ? "https://editforge.online" : "http://localhost:3000")
+    ).replace(/\/+$/, ""),
     rpName: process.env.EDITFORGE_PASSKEY_NAME?.trim() || "EditForge",
   };
 }

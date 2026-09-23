@@ -68,4 +68,9 @@ describe("relying party configuration", () => {
       rpName: "Studio",
     });
   });
+
+  it("trims a trailing slash from the origin, as the Google origin does", () => {
+    process.env.EDITFORGE_PASSKEY_ORIGIN = "https://studio.example.com/";
+    expect(passkeyConfig().origin).toBe("https://studio.example.com");
+  });
 });

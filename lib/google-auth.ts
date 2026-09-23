@@ -27,3 +27,12 @@ export function googleAuthConfig(): GoogleAuthConfig | null {
   if (!clientId || !clientSecret || allowedEmails.length === 0) return null;
   return { clientId, clientSecret, allowedEmails, origin };
 }
+
+/**
+ * Where a fresh Google sign-in lands. Google is the recovery door; the passkey
+ * is the everyday one. Until a passkey exists, send the owner straight to
+ * enrollment instead of leaving it three menus deep under Departments.
+ */
+export function postSignInPath(passkeyCount: number): string {
+  return passkeyCount > 0 ? "/" : "/security?welcome=1";
+}

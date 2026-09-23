@@ -23,6 +23,7 @@ const statusTone: Record<ModuleStatus, "neutral" | "outline" | "accent" | "quiet
 };
 
 const createLanes = [
+  { href: "/presenter-broll", label: "Presenter B-roll", note: "TQO + NCO Forge · Tee identity lock" },
   { href: "/gen-video", label: "Gen video", note: "Text-to-video under quality bar" },
   { href: "/voice", label: "Voice", note: "Clone / TTS with consent" },
   { href: "/avatar", label: "Avatar", note: "HeyGen · talking head" },

@@ -6,7 +6,9 @@ import {
   GOOGLE_VERIFIER_COOKIE,
   googleAuthConfig,
   googleAuthOrigin,
+  postSignInPath,
 } from "@/lib/google-auth";
+import { listPasskeys } from "@/lib/passkeys";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,7 +61,9 @@ export async function GET(req: NextRequest) {
     const email = String(payload.email || "").toLowerCase();
     if (payload.email_verified !== true || !config.allowedEmails.includes(email)) return fail();
 
-    const response = NextResponse.redirect(new URL("/", config.origin));
+    // A store read failure must not strand a verified owner; fall back home.
+    const passkeyCount = await listPasskeys().then((keys) => keys.length, () => 1);
+    const response = NextResponse.redirect(new URL(postSignInPath(passkeyCount), config.origin));
     clearCeremonyCookies(response);
     response.cookies.set(SESSION_COOKIE, await sessionToken(), {
       httpOnly: true,

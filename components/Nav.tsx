@@ -20,6 +20,8 @@ const departments = [
       ["Voice", "/voice"],
       ["Avatar", "/avatar"],
       ["Generative video", "/gen-video"],
+      ["Presenter b-roll", "/presenter-broll"],
+      ["HyperFrames", "/hyperframes"],
       ["Stock", "/stock"],
       ["Audio", "/audio"],
     ],

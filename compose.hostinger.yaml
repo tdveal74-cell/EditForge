@@ -1,12 +1,14 @@
-# Hostinger production topology for release 648c73d83e74.
-# Live runtime on the VPS is /opt/editforge/app/compose.yaml with the same pins.
+# Hostinger production topology. Worker and provider pins match what the VPS
+# ran on 2026-09-23 (b00ab77829bb); the deploy workflow rewrites every pin to
+# the tag it is given. The deploy installs this file over the live
+# /opt/editforge/app/compose.yaml, so anything the VPS needs has to be here.
 # Application data volumes are external so project replacement cannot remove them.
 # The init job makes root-owned mode-0600 identity inputs readable by the non-root provider.
 name: editforge
 
 services:
   web:
-    image: ghcr.io/tdveal74-cell/editforge-web:648c73d83e74
+    image: ghcr.io/tdveal74-cell/editforge-web:b00ab77829bb
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -41,12 +43,19 @@ services:
       HEYGEN_API_KEY: ${HEYGEN_API_KEY:-}
       HEYGEN_AVATAR_ID: ${HEYGEN_AVATAR_ID:-}
       HEYGEN_VOICE_ID: ${HEYGEN_VOICE_ID:-}
+      # Folded in from the VPS overlay compose.local-hyperframes.yaml: the
+      # local Kokoro and HyperFrames tools service on the host, and the
+      # presenter reference image Runway works from.
+      EDITFORGE_PROVIDER_TOKEN: ${EDITFORGE_PROVIDER_TOKEN:?set EDITFORGE_PROVIDER_TOKEN}
+      EDITFORGE_LOCAL_TOOLS_URL: ${EDITFORGE_LOCAL_TOOLS_URL:-http://172.16.8.1:3410}
+      EDITFORGE_RUNWAY_CHARACTER_FILE: /run/presenter/tee-primary.png
     ports:
       - "127.0.0.1:${EDITFORGE_PORT:-3000}:3000"
     volumes:
       - editforge_web_data:/data
       - editforge_artifacts:/artifacts
       - ${EDITFORGE_SOURCE_MEDIA_HOST_DIR:-./media}:/sources:ro
+      - ${EDITFORGE_PRESENTER_REFERENCE_FILE:-/opt/editforge/presenter-broll/references/tee-primary.png}:/run/presenter/tee-primary.png:ro
     depends_on:
       worker:
         condition: service_healthy
@@ -56,13 +65,13 @@ services:
       timeout: 5s
       retries: 8
       start_period: 30s
-    networks: [control, render]
+    networks: [control, render, local_tools]
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
   worker:
-    image: ghcr.io/tdveal74-cell/editforge-worker:648c73d83e74
+    image: ghcr.io/tdveal74-cell/editforge-worker:b00ab77829bb
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -127,7 +136,7 @@ services:
       options: { max-size: "1m", max-file: "1" }
 
   provider:
-    image: ghcr.io/tdveal74-cell/editforge-provider:648c73d83e74
+    image: ghcr.io/tdveal74-cell/editforge-provider:b00ab77829bb
     pull_policy: always
     restart: unless-stopped
     init: true
@@ -169,7 +178,6 @@ services:
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     cap_add: [NET_BIND_SERVICE]
-    command: ["caddy", "reverse-proxy", "--from", "${EDITFORGE_DOMAIN:-editforge.online}", "--to", "http://web:3000"]
     ports:
       - "80:80"
       - "443:443"
@@ -177,6 +185,13 @@ services:
     volumes:
       - editforge_caddy_data:/data
       - editforge_caddy_config:/config
+      # The Caddyfile is held on the host, not in this repository. The edge
+      # serves every *.editforge.online site on the box (the studio, meta,
+      # rakazo, hud, tqohr, tsws and a basic_auth studio), and that file
+      # carries a password hash. A single-site reverse-proxy command here
+      # took all of those down on the next deploy.
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/devon/static:/srv/static:ro
     depends_on:
       web:
         condition: service_healthy
@@ -208,3 +223,6 @@ volumes:
 networks:
   control:
   render:
+  local_tools:
+    external: true
+    name: editforge_local_tools

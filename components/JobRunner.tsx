@@ -16,6 +16,10 @@ type ProviderReadiness = {
   id: string;
   billable: boolean;
   wired: boolean;
+  /** "local" runs on this VPS and costs nothing; "paid" bills a provider. */
+  billing?: "paid" | "local" | "offline";
+  /** Ready to run now, paid or local. Older APIs omit it and billable stands in. */
+  runnable?: boolean;
   envKey?: string;
   envKeys?: string[];
   credentialSet?: boolean;
@@ -112,6 +116,10 @@ export function JobRunner({
           options,
           idempotencyKey: key,
           requiresRubricPass,
+          // The API refuses a live billable submit without this. The client
+          // only reaches run() for a paid provider after the confirm click
+          // bound confirmedKey to this exact brief.
+          confirmBillable: liveReady && confirmedKey === key,
         }),
       });
       const data = await res.json();
@@ -191,8 +199,17 @@ export function JobRunner({
               // "live" has to mean runnable, not merely credentialled: a
               // provider whose key is set but whose look id is not would other-
               // wise be offered as live and refuse on click.
-              const ready = Boolean(r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
-              const mark = !r ? "" : ready ? " · live" : p.id === "mock" ? "" : " · unavailable";
+              const ready =
+                Boolean(r?.runnable ?? r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
+              const mark = !r
+                ? ""
+                : ready && r.billing === "local"
+                  ? " · local/free"
+                  : ready
+                    ? " · live"
+                    : p.id === "mock"
+                      ? ""
+                      : " · unavailable";
               return (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -219,7 +236,11 @@ export function JobRunner({
 
       {chosen && (
         <p className="mt-2.5 text-xs">
-          {chosen.billable && missingSettings.length === 0 ? (
+          {chosen.runnable && chosen.billing === "local" && missingSettings.length === 0 ? (
+            <span className="text-emerald-700">
+              Local provider. Uses this VPS and does not consume provider credits.
+            </span>
+          ) : chosen.billable && missingSettings.length === 0 ? (
             <span className="text-amber-700">
               Live provider — running this bills real work against {chosen.envKey}.
               {spend === "confirm" ? " Confirm the exact brief before it is submitted." : ""}
@@ -265,9 +286,17 @@ export function JobRunner({
       </p>
 
       {error && (
-        <p className="mt-3 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
-        </p>
+        <div className="mt-3 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <p>{error}</p>
+          {error.toLowerCase().includes("authentication") && (
+            <a
+              className="mt-2 inline-block font-semibold underline underline-offset-2"
+              href="/api/auth/google/start"
+            >
+              Sign in with Google
+            </a>
+          )}
+        </div>
       )}
 
       {job && (

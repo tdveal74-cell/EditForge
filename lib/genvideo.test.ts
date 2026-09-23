@@ -21,6 +21,7 @@ describe("genvideo catalogue", () => {
       "kling",
       "veo",
       "seedream",
+      "hyperframes-local",
       "mock",
     ]);
     expect(GEN_PROVIDERS.find((p) => p.id === "runway")?.envKeys).toEqual([

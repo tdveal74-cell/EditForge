@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -32,6 +32,7 @@ const KEYS = [
   "EDITFORGE_ARTIFACT_DIR",
   "EDITFORGE_ARTIFACT_BASE_URL",
   "EDITFORGE_PUBLIC_URL",
+  "EDITFORGE_RUNWAY_CHARACTER_FILE",
 ];
 
 function clearKeys() {
@@ -324,6 +325,53 @@ describe("provider boundary", () => {
     expect(body).not.toHaveProperty("quality");
     expect(body).not.toHaveProperty("durationSec");
     expect(body).not.toHaveProperty("mode");
+  });
+
+  it("keeps the private presenter path server-side and submits Runway image-to-video", async () => {
+    clearKeys();
+    process.env.RUNWAY_API_KEY = "tok";
+    const reference = path.join(store, "tee.png");
+    await writeFile(reference, new Uint8Array([137, 80, 78, 71]));
+    process.env.EDITFORGE_RUNWAY_CHARACTER_FILE = reference;
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        ({ ok: true, json: async () => ({ id: "presenter-1" }) }) as unknown as Response
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "subtle motion",
+      idempotencyKey: "presenter",
+      options: { mode: "image-to-video", aspect: "16:9", durationSec: 5 },
+    });
+
+    expect(result.ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(String(url)).toBe("https://api.dev.runwayml.com/v1/image_to_video");
+    expect(body.promptImage).toBe("data:image/png;base64,iVBORw==");
+    expect(body).not.toHaveProperty("EDITFORGE_RUNWAY_CHARACTER_FILE");
+  });
+
+  it("refuses presenter B-roll before network use when the private reference is missing", async () => {
+    clearKeys();
+    process.env.RUNWAY_API_KEY = "tok";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "subtle motion",
+      idempotencyKey: "missing-presenter",
+      options: { mode: "image-to-video", aspect: "16:9", durationSec: 5 },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/EDITFORGE_RUNWAY_CHARACTER_FILE/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("refuses an aspect Runway text-to-video does not render", async () => {

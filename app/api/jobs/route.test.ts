@@ -39,6 +39,28 @@ afterEach(() => {
 });
 
 describe("spend gate on POST /api/jobs", () => {
+  it("names what is missing instead of asking to confirm a provider that cannot run", async () => {
+    // Keyed and voiced, but with nowhere to keep the audio it returns: the
+    // picker shows this provider as not ready, so there is no confirm step to
+    // take, and asking for one leaves the operator stuck.
+    process.env.ELEVENLABS_API_KEY = "live-key";
+    process.env.ELEVENLABS_VOICE_ID = "voice-1";
+    const savedArtifactDir = process.env.EDITFORGE_ARTIFACT_DIR;
+    delete process.env.EDITFORGE_ARTIFACT_DIR;
+    try {
+      const res = await POST(submit({ kind: "voice", prompt: "x", provider: "elevenlabs", idempotencyKey: "unready-1" }));
+      expect(res.status).toBe(409);
+      const { error } = await res.json();
+      expect(error).not.toMatch(/confirm/i);
+      expect(error).toMatch(/not ready/i);
+      expect(error).toMatch(/artifact store/i);
+    } finally {
+      delete process.env.ELEVENLABS_API_KEY;
+      delete process.env.ELEVENLABS_VOICE_ID;
+      if (savedArtifactDir !== undefined) process.env.EDITFORGE_ARTIFACT_DIR = savedArtifactDir;
+    }
+  });
+
   it("lets anyone reach the offline provider", async () => {
     const res = await POST(submit({ kind: "voice", prompt: "x", provider: "mock", idempotencyKey: "open-1" }));
     expect(res.status).toBe(201);
@@ -48,7 +70,7 @@ describe("spend gate on POST /api/jobs", () => {
     process.env.RUNWAY_API_KEY = "live-key";
 
     const res = await POST(
-      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-1" })
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-1", confirmBillable: true })
     );
 
     // The property that matters: a live key on a reachable deployment is
@@ -65,7 +87,7 @@ describe("spend gate on POST /api/jobs", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "task_1" }) }) as unknown as Response));
 
     const res = await POST(
-      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-2" }, "tok-abcdef")
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-2", confirmBillable: true }, "tok-abcdef")
     );
     expect(res.status).toBe(201);
     const { job } = await res.json();
@@ -78,9 +100,24 @@ describe("spend gate on POST /api/jobs", () => {
     process.env.EDITFORGE_MCP_TOKEN = "tok-abcdef";
 
     const res = await POST(
-      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-3" }, "tok-wrongxx")
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-3", confirmBillable: true }, "tok-wrongxx")
     );
     expect(res.status).toBe(401);
+  });
+
+  it("requires a second explicit confirmation before a billable submit", async () => {
+    process.env.RUNWAY_API_KEY = "live-key";
+    process.env.EDITFORGE_MCP_TOKEN = "tok-abcdef";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "confirm-1" }, "tok-abcdef")
+    );
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/confirm/i);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not gate a provider that has no credentials — it cannot bill anyway", async () => {

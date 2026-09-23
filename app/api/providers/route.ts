@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PROVIDERS, credentialKeysFor, providerReadiness } from "@/lib/providers";
+import { PROVIDERS, billingFor, credentialKeysFor, providerReadiness } from "@/lib/providers";
 import { artifactStoreConfigured } from "@/lib/artifacts";
 
 export const dynamic = "force-dynamic";
@@ -24,8 +24,10 @@ export async function GET() {
       id: p.id,
       label: p.label,
       kind: p.kind,
+      billing: billingFor(p),
+      runnable: p.id === "mock" || readiness.ready,
       /** True when a run would reach a real provider and bill for it. */
-      billable: readiness.ready,
+      billable: billingFor(p) === "paid" && readiness.ready,
       /** Whether the live path is implemented at all for this provider. */
       wired: readiness.wired,
       envKey: p.envKey || undefined,

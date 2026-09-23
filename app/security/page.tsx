@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+
+const noSubscription = () => () => {};
 import { browserSupportsWebAuthn, startRegistration } from "@simplewebauthn/browser";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -20,6 +22,13 @@ export default function SecurityPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  // Set by the Google callback when no passkey exists yet. Read from the URL
+  // without a render-time mismatch: the server snapshot is always false.
+  const welcome = useSyncExternalStore(
+    noSubscription,
+    () => new URLSearchParams(window.location.search).get("welcome") === "1",
+    () => false,
+  );
 
   const load = useCallback(async () => {
     const res = await fetch("/api/passkeys", { cache: "no-store" });
@@ -94,6 +103,12 @@ export default function SecurityPage() {
         title="Security"
         description="Create a phishing-resistant passkey for EditForge. Your device keeps the private key; the studio stores only the public credential."
       />
+      {welcome && passkeys.length === 0 && (
+        <p className="mt-8 rounded-card border border-amber-300 bg-amber-50 p-4 text-sm leading-relaxed text-navy" role="status">
+          Signed in with Google. Add a passkey for this device now, and next time you are one tap from the studio.
+          Google stays as your recovery if the device is lost.
+        </p>
+      )}
       <section className="mt-10 overflow-hidden rounded-card border border-border bg-surface-elevated shadow-card">
         <div className="grid gap-8 p-6 md:grid-cols-[1fr_auto] md:items-end">
           <div>

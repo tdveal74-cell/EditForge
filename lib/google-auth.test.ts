@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { googleAuthConfig, googleAuthOrigin } from "./google-auth";
+import { googleAuthConfig, googleAuthOrigin, postSignInPath } from "./google-auth";
 
 const ENV = [
   "GOOGLE_CLIENT_ID",
@@ -35,5 +35,16 @@ describe("Google authentication configuration", () => {
   it("uses the explicit fixed redirect origin when configured", () => {
     process.env.EDITFORGE_GOOGLE_REDIRECT_ORIGIN = " https://studio.example.com ";
     expect(googleAuthOrigin()).toBe("https://studio.example.com");
+  });
+});
+
+describe("postSignInPath", () => {
+  it("sends a first Google sign-in to passkey enrollment", () => {
+    expect(postSignInPath(0)).toBe("/security?welcome=1");
+  });
+
+  it("goes straight home once a passkey exists", () => {
+    expect(postSignInPath(1)).toBe("/");
+    expect(postSignInPath(3)).toBe("/");
   });
 });

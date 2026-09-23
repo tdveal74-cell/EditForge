@@ -594,7 +594,7 @@ describe("ship_to_n8n", () => {
   };
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete process.env.EDITFORGE_N8N_HANDOFF_URL;
+    delete process.env.EDITFORGE_N8N_WEBHOOK_BASE;
   });
 
   it("is hidden without the token", async () => {
@@ -625,5 +625,62 @@ describe("ship_to_n8n", () => {
     const res = await callTool("ship_to_n8n", ARGS, TOKEN);
     expect(res.parsed.handedOff).toBeUndefined();
     expect(res.parsed.error).toBe("n8n answered HTTP 400");
+  });
+});
+
+describe("Drive and QC tools", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.EDITFORGE_N8N_WEBHOOK_BASE;
+  });
+
+  it("hides Drive and QC from an unauthenticated caller", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const names: string[] = open.result.tools.map((t: { name: string }) => t.name);
+    for (const gated of ["drive_search", "drive_read", "record_qc"]) expect(names).not.toContain(gated);
+  });
+
+  it("routes each tool to its webhook, signed with the server's token", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const calls: { url: string; auth: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({
+        url,
+        auth: (init.headers as Record<string, string>).Authorization,
+        body: JSON.parse(String(init.body)),
+      });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    await callTool("drive_search", { name: "TQO_CANON" }, TOKEN);
+    await callTool("drive_read", { fileId: "abc123XYZ" }, TOKEN);
+    await callTool(
+      "record_qc",
+      { frameId: "TQO-2026-09-24-x", brand: "The Quiet Operator", stage: "qc", recordedBy: "QC Inspector", qcVerdict: "SHIP", qcScore: 85, script: "s" },
+      TOKEN,
+    );
+    expect(calls.map((c) => c.url)).toEqual([
+      "https://n8n.editforge.online/webhook/bot-drive-read",
+      "https://n8n.editforge.online/webhook/bot-drive-read",
+      "https://n8n.editforge.online/webhook/bot-qc",
+    ]);
+    expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
+    expect(calls[0].body).toEqual({ action: "search", name: "TQO_CANON" });
+    expect(calls[1].body).toEqual({ action: "read", fileId: "abc123XYZ" });
+    expect(calls[2].body.stage).toBe("qc");
+  });
+
+  it("passes an n8n QA/QC refusal back as an error, not a handoff", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ ok: false, error: "QA/QC gate refused X: no QC verdict recorded" }), { status: 400 }),
+    );
+    const res = await callTool(
+      "ship_to_n8n",
+      { frameId: "TQO-2026-09-24-x", outputUrl: "https://e/x.mp4", brand: "The Quiet Operator", approvedBy: "Tee", slots: [{ platform: "TikTok", scheduledFor: "2026-09-25T13:00:00Z" }] },
+      TOKEN,
+    );
+    expect(res.parsed.handedOff).toBeUndefined();
+    expect(res.parsed.n8n.error).toMatch(/QA\/QC gate refused/);
   });
 });

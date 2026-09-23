@@ -42,6 +42,35 @@ import { POST as planGenVideoRoute } from "@/app/api/gen-video/plan/route";
 import { POST as planVoiceRoute } from "@/app/api/voice/plan/route";
 import { POST as planAvatarRoute } from "@/app/api/avatar/plan/route";
 
+/**
+ * POST to one of the n8n webhooks built for the Rakazo bots, signed with this
+ * server's own EDITFORGE_MCP_TOKEN, which n8n's "EditForge MCP Token"
+ * credential holds under the Authorization header. No other secret is involved.
+ */
+async function postToN8n(path: string, body: unknown, timeoutMs = 20000) {
+  const token = process.env.EDITFORGE_MCP_TOKEN?.trim();
+  if (!token) return { error: "EDITFORGE_MCP_TOKEN is not set on this server, so n8n cannot authenticate the call." };
+  const base = (process.env.EDITFORGE_N8N_WEBHOOK_BASE?.trim() || "https://n8n.editforge.online/webhook").replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const text = await res.text();
+    let parsed: unknown = text;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // n8n answers plain text for some refusals; pass it through as is.
+    }
+    return res.ok ? { ok: true, status: res.status, n8n: parsed } : { error: `n8n answered HTTP ${res.status}`, n8n: parsed };
+  } catch (err) {
+    return { error: `could not reach n8n: ${(err as Error).name}` };
+  }
+}
+
 /** The planners are pure and live in their routes; call them rather than copy them. */
 async function viaPlanner(handler: (req: Request) => Promise<Response>, body: Record<string, unknown>) {
   const res = await handler(
@@ -843,28 +872,71 @@ export const TOOLS: Tool[] = [
       ["frameId", "outputUrl", "brand", "approvedBy", "slots"]
     ),
     run: async (args) => {
-      const token = process.env.EDITFORGE_MCP_TOKEN?.trim();
-      if (!token) return { error: "EDITFORGE_MCP_TOKEN is not set on this server, so n8n cannot authenticate the handoff." };
-      const url = process.env.EDITFORGE_N8N_HANDOFF_URL?.trim() || "https://n8n.editforge.online/webhook/bot-handoff";
-      try {
-        const res = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify(args),
-          signal: AbortSignal.timeout(20000),
-        });
-        const text = await res.text();
-        let body: unknown = text;
-        try {
-          body = JSON.parse(text);
-        } catch {
-          // n8n answers plain text for some refusals; pass it through as is.
-        }
-        return res.ok ? { handedOff: true, status: res.status, n8n: body } : { error: `n8n answered HTTP ${res.status}`, n8n: body };
-      } catch (err) {
-        return { error: `could not reach n8n: ${(err as Error).name}` };
-      }
+      const r = await postToN8n("bot-handoff", args);
+      return "ok" in r ? { handedOff: true, status: r.status, n8n: r.n8n } : r;
     },
+  },
+  {
+    name: "drive_search",
+    description:
+      "Search Tee's Google Drive, read only: by name, by text inside files, by folder id, or modified after a date. Returns up to 100 files, newest first, with id, name, type, modified time and link. Superseded files are named SUPERSEDED_; check before treating one as canon.",
+    privileged: true,
+    inputSchema: obj({
+      name: str("Part of the file name"),
+      text: str("Text that appears inside the file"),
+      folderId: str("Only direct children of this folder"),
+      modifiedAfter: str("ISO 8601 date"),
+      limit: num("1 to 100, default 50"),
+    }),
+    run: async (args) => postToN8n("bot-drive-read", { action: "search", ...args }, 40000),
+  },
+  {
+    name: "drive_read",
+    description:
+      "Read one Google Drive file as text, read only: Google Docs as markdown, Sheets as CSV, Slides as text, and text files as they are. Up to 200,000 characters; says when it cut. Images, video and PDFs are refused rather than guessed at.",
+    privileged: true,
+    inputSchema: obj({ fileId: str("Drive file id from drive_search") }, ["fileId"]),
+    run: async (args) => postToN8n("bot-drive-read", { action: "read", fileId: args.fileId }, 70000),
+  },
+  {
+    name: "record_qc",
+    description:
+      "Record a QA/QC verdict for a frame; ship_to_n8n refuses until the frame's latest verdicts clear. stage 'script': send the full script with title, description, learningObjective, checklist, broll and the doctor and originality scores, and n8n re-runs V5's Script Gate on the text itself (1,200 to 2,400 words, no dashes, doctor 70, rhythm and similarity 50, and for TQO the objective in the first 70 words, 3 to 5 steps, a comments question, b-roll 6). stage 'qc': send the same script with qcVerdict SHIP or HOLD and qcScore; it clears at SHIP 80. stage 'human': only after Tee has watched it end to end, with reviewedBy and aiDisclosure. Recorded by the QC Inspector, never by the bot that made the piece.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        frameId: str("The asset id the verdict belongs to"),
+        brand: {
+          type: "string",
+          enum: ["The Quiet Operator", "The Shadow We Share", "NCO Forge", "Ascension Caudex"],
+          description: "The lane's brand",
+        },
+        stage: { type: "string", enum: ["script", "qc", "human"], description: "Which verdict" },
+        recordedBy: str("Which bot or person is recording this"),
+        script: str("The full script text, for script and qc"),
+        title: str("script stage"),
+        description: str("script stage"),
+        learningObjective: str("script stage, TQO"),
+        checklist: { type: "array", items: { type: "string" }, description: "script stage, TQO: 3 to 5 steps" },
+        broll: { type: "array", items: { type: "string" }, description: "script stage: b-roll phrases" },
+        doctorVerdict: str("script stage: the script doctor's verdict"),
+        doctorScore: num("script stage: 0 to 100"),
+        rhythmScore: num("script stage: originality rhythm, 0 to 100"),
+        similarityScore: num("script stage: originality similarity, 0 to 100"),
+        qcVerdict: { type: "string", enum: ["SHIP", "HOLD"], description: "qc stage" },
+        qcScore: num("qc stage: 0 to 100"),
+        findings: str("Findings or notes"),
+        humanReview: bool("human stage: Tee watched or listened end to end"),
+        reviewedBy: str("human stage: who, and when"),
+        aiDisclosure: {
+          type: "string",
+          enum: ["Not required", "Disclosed in description", "Disclosed on-screen + description"],
+          description: "human stage",
+        },
+      },
+      ["frameId", "brand", "stage", "recordedBy"]
+    ),
+    run: async (args) => postToN8n("bot-qc", args, 30000),
   },
 ];
 

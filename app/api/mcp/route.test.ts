@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
 import { GET, POST } from "./route";
@@ -581,5 +581,49 @@ describe("Edit worker, catalog, stock and planner tools", () => {
     process.env.EDITFORGE_MCP_TOKEN = TOKEN;
     const res = await callTool("add_stock", { kind: "music", title: "Test bed", licenseNote: " " }, TOKEN);
     expect(res.parsed.error).toMatch(/licen/i);
+  });
+});
+
+describe("ship_to_n8n", () => {
+  const ARGS = {
+    frameId: "TQO-2026-09-24-first-cut",
+    outputUrl: "https://editforge.online/api/artifacts/master.mp4",
+    brand: "The Quiet Operator",
+    approvedBy: "Tee in thread, 2026-09-24",
+    slots: [{ platform: "TikTok", scheduledFor: "2026-09-25T13:00:00Z" }],
+  };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.EDITFORGE_N8N_HANDOFF_URL;
+  });
+
+  it("is hidden without the token", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    expect(open.result.tools.map((t: { name: string }) => t.name)).not.toContain("ship_to_n8n");
+  });
+
+  it("posts the handoff to n8n signed with the server's own token", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const seen: { url?: string; auth?: string; body?: unknown } = {};
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      seen.url = url;
+      seen.auth = (init.headers as Record<string, string>).Authorization;
+      seen.body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ ok: true, slots: ["TQO-2026-09-24-first-cut:TikTok"] }), { status: 200 });
+    });
+    const res = await callTool("ship_to_n8n", ARGS, TOKEN);
+    expect(res.parsed.handedOff).toBe(true);
+    expect(seen.url).toBe("https://n8n.editforge.online/webhook/bot-handoff");
+    expect(seen.auth).toBe(`Bearer ${TOKEN}`);
+    expect(seen.body).toEqual(ARGS);
+  });
+
+  it("reports an n8n refusal as an error, not a handoff", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ ok: false, error: "brand must be one of" }), { status: 400 }));
+    const res = await callTool("ship_to_n8n", ARGS, TOKEN);
+    expect(res.parsed.handedOff).toBeUndefined();
+    expect(res.parsed.error).toBe("n8n answered HTTP 400");
   });
 });

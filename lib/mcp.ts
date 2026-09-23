@@ -808,6 +808,64 @@ export const TOOLS: Tool[] = [
     inputSchema: obj({ prompt: str("The brief"), designSource: str("Design source") }),
     run: async (args) => viaPlanner(planAvatarRoute, args),
   },
+  {
+    name: "ship_to_n8n",
+    description:
+      "Hand an approved master to n8n: writes one render row and one Pending publishing slot per platform, which V5's repurpose lane drops into each platform's folder at 9:00 or 21:00 New York once the slot's time has passed. Call this ONLY after Tee has said ship in the thread, and put who approved it and when in approvedBy. This does not post anything itself. Resending the same frameId updates its rows rather than duplicating them.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        frameId: str("Asset id: lane code, date, slug, e.g. TQO-2026-09-24-first-cut"),
+        outputUrl: str("https URL of the approved master that n8n can download"),
+        brand: {
+          type: "string",
+          enum: ["The Quiet Operator", "The Shadow We Share", "NCO Forge", "Ascension Caudex"],
+          description: "The lane's brand",
+        },
+        approvedBy: str("Who said ship, and when"),
+        modelUsed: str("Provider or model that made the master"),
+        qcNotes: str("What was checked"),
+        slots: {
+          type: "array",
+          description: "1 to 12 platforms",
+          items: {
+            type: "object",
+            properties: {
+              platform: str("YouTube, YouTube Shorts, TikTok, Instagram, Facebook, LinkedIn, X, Threads, Pinterest, Newsletter, Community, Blog or Podcast"),
+              scheduledFor: str("ISO 8601 time the slot becomes due"),
+              caption: str("Approved caption"),
+            },
+            required: ["platform", "scheduledFor"],
+            additionalProperties: false,
+          },
+        },
+      },
+      ["frameId", "outputUrl", "brand", "approvedBy", "slots"]
+    ),
+    run: async (args) => {
+      const token = process.env.EDITFORGE_MCP_TOKEN?.trim();
+      if (!token) return { error: "EDITFORGE_MCP_TOKEN is not set on this server, so n8n cannot authenticate the handoff." };
+      const url = process.env.EDITFORGE_N8N_HANDOFF_URL?.trim() || "https://n8n.editforge.online/webhook/bot-handoff";
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(args),
+          signal: AbortSignal.timeout(20000),
+        });
+        const text = await res.text();
+        let body: unknown = text;
+        try {
+          body = JSON.parse(text);
+        } catch {
+          // n8n answers plain text for some refusals; pass it through as is.
+        }
+        return res.ok ? { handedOff: true, status: res.status, n8n: body } : { error: `n8n answered HTTP ${res.status}`, n8n: body };
+      } catch (err) {
+        return { error: `could not reach n8n: ${(err as Error).name}` };
+      }
+    },
+  },
 ];
 
 /** Tools a caller may see, given whether it authenticated. */

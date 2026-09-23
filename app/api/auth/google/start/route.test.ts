@@ -34,6 +34,18 @@ describe("Google start sets the ceremony cookies on the host Google will return 
     expect(new URL(res.headers.get("location") || "").host).toBe("accounts.google.com");
   });
 
+  it("compares hosts without regard to case", async () => {
+    const res = await start("/api/auth/google/start", { host: "STUDIO.Example.COM" });
+    expect(new URL(res.headers.get("location") || "").host).toBe("accounts.google.com");
+  });
+
+  it("reads the first entry of a forwarded host list", async () => {
+    const ok = await start("/api/auth/google/start", { host: "web:3000", "x-forwarded-host": "studio.example.com, evil.example" });
+    expect(new URL(ok.headers.get("location") || "").host).toBe("accounts.google.com");
+    const other = await start("/api/auth/google/start", { host: "web:3000", "x-forwarded-host": "evil.example, studio.example.com" });
+    expect(other.headers.get("location")).toBe("https://studio.example.com/api/auth/google/start?canonical=1");
+  });
+
   it("sends any other host to the configured one first, without setting cookies there", async () => {
     const res = await start("/api/auth/google/start", { host: "203.0.113.7" });
     expect(res.headers.get("location")).toBe("https://studio.example.com/api/auth/google/start?canonical=1");

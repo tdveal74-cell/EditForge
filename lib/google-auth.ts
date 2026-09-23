@@ -151,7 +151,13 @@ const FAILURE_MESSAGES: Record<GoogleFailure, string> = {
 
 // What a detail may look like for each reason. The login page reads these
 // from its own URL, so anything that does not fit is dropped rather than shown.
-const CODE = /^[A-Za-z][A-Za-z0-9_]{0,39}(-[a-z]{2,5})?$/;
+// A thrown error is shown only in the shapes real ones take: a jose code
+// (ERR_...), a Node or undici network code (ECONNRESET, UND_ERR_...), an
+// error class name, with the jose claim that failed. The domain of a
+// disallowed account stays in the redirect and the log, never on the page,
+// because a crafted link could otherwise show any domain-shaped text.
+const CODE =
+  /^(ERR_[A-Z0-9_]{3,40}|E[A-Z]{3,20}|UND_ERR_[A-Z_]{1,30}|[A-Z][A-Za-z]{0,30}Error|Error|unknown)(-(iss|aud|exp|nbf|iat|sub))?$/;
 const DETAIL_PATTERNS: Partial<Record<GoogleFailure, RegExp>> = {
   "google-error": new RegExp(`^(${[...GOOGLE_ERROR_CODES, "other"].join("|")})$`),
   "state-cookie": /^(state|verifier|state-verifier)$/,
@@ -159,7 +165,6 @@ const DETAIL_PATTERNS: Partial<Record<GoogleFailure, RegExp>> = {
     `^([1-5][0-9]{2}-(${[...TOKEN_ERROR_CODES, "other", "no-error-field", "unparseable"].join("|")})|network-[A-Za-z0-9_]{1,40})$`,
   ),
   "id-token": CODE,
-  "email-not-allowed": /^(([a-z0-9-]+\.)+[a-z]{2,24}|no-email)$/,
   session: CODE,
 };
 

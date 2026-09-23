@@ -213,6 +213,15 @@ describe("Google callback success", () => {
     );
   });
 
+  it("a passkey store that answers with something other than a list still signs the owner in", async () => {
+    tokenOk();
+    jwtVerify.mockResolvedValue({ payload: { email: "owner@example.com", email_verified: true } });
+    listPasskeys.mockResolvedValue(null);
+    const res = await GET(callback("code=c&state=s1"));
+    expect(landing(res).path).toBe("/");
+    expect(res.headers.getSetCookie().some((c) => c.startsWith("editforge_session="))).toBe(true);
+  });
+
   it("a passkey store that throws synchronously still signs the owner in", async () => {
     tokenOk();
     jwtVerify.mockResolvedValue({ payload: { email: "owner@example.com", email_verified: true } });
@@ -251,13 +260,22 @@ describe("login page message", () => {
     const shown = (reason: string, detail: string) => googleFailureMessage(reason, detail).includes(detail);
     expect(shown("google-error", "access_denied")).toBe(true);
     expect(shown("google-error", "Session-expired-call-555-0100")).toBe(false);
-    expect(shown("email-not-allowed", "gmail.com")).toBe(true);
-    expect(shown("email-not-allowed", "Call-555-0100-to-restore-owner-access")).toBe(false);
+    // The domain stays in the redirect and the log; the page never shows it.
+    expect(shown("email-not-allowed", "gmail.com")).toBe(false);
+    expect(shown("email-not-allowed", "editforge-owner-recovery.com")).toBe(false);
     expect(shown("token-exchange", "401-invalid_client")).toBe(true);
     expect(shown("token-exchange", "400-redirect_uri_mismatch")).toBe(true);
     expect(shown("token-exchange", "network-ENOTFOUND")).toBe(true);
     expect(shown("token-exchange", "Re-verify-at-evil-example.com")).toBe(false);
     expect(shown("id-token", "ERR_JWT_CLAIM_VALIDATION_FAILED-nbf")).toBe(true);
+    expect(shown("id-token", "ERR_JWKS_TIMEOUT")).toBe(true);
+    expect(shown("id-token", "ECONNRESET")).toBe(true);
+    expect(shown("id-token", "UND_ERR_CONNECT_TIMEOUT")).toBe(true);
+    expect(shown("id-token", "TypeError")).toBe(true);
+    expect(shown("id-token", "CALL_18005550100_TO_RESTORE_ACCESS")).toBe(false);
+    expect(shown("session", "Error")).toBe(true);
+    expect(shown("session", "SyntaxError")).toBe(true);
+    expect(shown("session", "Reverify_at_editforge_help-com")).toBe(false);
     expect(shown("state-cookie", "state-verifier")).toBe(true);
     expect(shown("state-mismatch", "anything")).toBe(false);
     expect(googleFailureMessage("google-error", "Session-expired")).toBe("Google did not complete the sign-in. (google-error)");

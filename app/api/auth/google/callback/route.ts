@@ -115,10 +115,12 @@ export async function GET(req: NextRequest) {
     // putting anyone's address in a URL or a log.
     if (!config.allowedEmails.includes(email)) return fail("email-not-allowed", emailDomain(email) || "no-email");
 
-    // A store read failure must not strand a verified owner; fall back home.
+    // A store read failure, or a store that answers with something other than
+    // a list, must not strand a verified owner; fall back home.
     const passkeyCount = await Promise.resolve()
       .then(listPasskeys)
-      .then((keys) => keys.length, () => 1);
+      .then((keys) => (Array.isArray(keys) ? keys.length : 1))
+      .catch(() => 1);
     const landing = postSignInPath(passkeyCount);
     const response = NextResponse.redirect(new URL(landing, config.origin));
     clearCeremonyCookies(response);
@@ -134,7 +136,9 @@ export async function GET(req: NextRequest) {
       maxAge: 60 * 60 * 12,
     });
     // No secret in it. It lets the proxy name a session that did not come back
-    // on the next request instead of showing a blank login page.
+    // on the next request instead of showing a blank login page. Always Secure,
+    // so over plain http on anything but localhost it is not stored and the
+    // proxy falls back to a plain login page.
     response.cookies.set(SIGNIN_MARKER_COOKIE, "1", { sameSite: "none", secure: true, path: "/", maxAge: 5 * 60 });
     console.info(JSON.stringify({ event: "google_signin_succeeded", landing: landing.split("?")[0] }));
     return response;

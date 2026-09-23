@@ -13,8 +13,8 @@ export function PageHeader({ eyebrow, title, description, actions }: Props) {
     "/canvas/stills/cinematic.webp",
     "/canvas/stills/film.webp",
     "/canvas/stills/product.webp",
-    "/canvas/stills/talent.webp",
-    "/canvas/stills/social.webp",
+    "/canvas/stills/presenter-window.webp",
+    "/canvas/stills/presenter-desk.webp",
   ][title.length % 5];
   return (
     <header className="page-header-premium">

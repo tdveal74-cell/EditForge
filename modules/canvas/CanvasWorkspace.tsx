@@ -168,6 +168,7 @@ export function CanvasWorkspace({
   const importer = useRef<HTMLInputElement>(null);
   const graph = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const messagesBox = useRef<HTMLDivElement>(null);
   const drag = useRef<{
     id: string;
     px: number;
@@ -274,6 +275,12 @@ export function CanvasWorkspace({
       active = false;
     };
   }, [project.id]);
+  // The conversation is its own scroll box; keep the newest turn in view, so a
+  // reply or a failure lands where the producer is looking.
+  useEffect(() => {
+    const box = messagesBox.current;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [turns]);
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -437,13 +444,30 @@ export function CanvasWorkspace({
       });
       const data = await res.json();
       if (!res.ok) {
-        // The route stores a failed turn with its reason; show it in the
-        // conversation, beside the composer, and not only at the top.
-        await fetch(`/api/canvas/agent?projectId=${encodeURIComponent(p.id)}`)
-          .then((r) => r.json())
-          .then((history) => setTurns(history.turns || []))
-          .catch(() => {});
-        throw new Error(data.error || "Agent request failed.");
+        // Show the failure in the conversation, beside the composer, and not
+        // only at the top of the page. The route stores most failed turns with
+        // their reason; a refusal before the turn is claimed (no key, the
+        // hourly limit, a reply still pending) stores nothing, so that one is
+        // shown as an unsaved turn.
+        const reason = data.error || "Agent request failed.";
+        const history = await fetch(
+          `/api/canvas/agent?projectId=${encodeURIComponent(p.id)}`,
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const saved: Turn[] | null = Array.isArray(history?.turns)
+          ? history.turns
+          : null;
+        setTurns((all) => {
+          const list = saved ?? all.filter((t) => t.id !== requestId);
+          return list.some((t) => t.id === requestId)
+            ? list
+            : [
+                ...list,
+                { id: requestId, message: text, status: "error", error: reason },
+              ];
+        });
+        throw new Error(reason);
       }
       if (!data.turn) throw new Error("No conversation receipt returned.");
       setTurns((all) => [
@@ -1215,7 +1239,11 @@ export function CanvasWorkspace({
                 </p>
               </div>
               <div className="agent-conversation">
-                <div className="agent-messages" aria-live="polite">
+                <div
+                  className="agent-messages"
+                  aria-live="polite"
+                  ref={messagesBox}
+                >
                   {!turns.length && (
                     <div className="agent-empty">
                       <p>What are we making?</p>

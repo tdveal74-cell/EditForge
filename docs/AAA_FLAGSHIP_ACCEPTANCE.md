@@ -50,9 +50,9 @@ perfect.
 - `ANTHROPIC_API_KEY` enables Floor Agent chat through Claude, which takes
   precedence when both keys are set. Create it scoped to one workspace.
   `ANTHROPIC_AGENT_MODEL` defaults to `claude-sonnet-5`. Claude's replies are
-  held to the reply schema by structured outputs, with thinking turned off so
-  a turn's length and time stay predictable inside the route's 100 second
-  limit. The project data travels in the newest user turn as marked data,
+  held to the reply schema by structured outputs, with thinking turned off (or
+  held to low effort on the models that cannot turn it off) so a turn's length
+  and time stay predictable inside the route's 100 second limit. The project data travels in the newest user turn as marked data,
   never in the system prompt. Each turn logs its stop reason and token counts
   as a `floor_agent_turn` line, and each failure a `floor_agent_provider_error`
   line; neither carries the key.

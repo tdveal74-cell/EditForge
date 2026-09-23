@@ -22,6 +22,19 @@ export const DEFAULT_XAI_AGENT_MODEL = "grok-4.6";
 export const ANTHROPIC_VERSION = "2023-06-01";
 export const AGENT_MAX_TOKENS = 8000;
 
+// Models on which thinking cannot be turned off; they return a 400 for
+// thinking {type: "disabled"} (Anthropic, build-with-claude/thinking). They
+// get low effort instead, which the effort docs name for chat.
+const THINKING_ALWAYS_ON = /^claude-(fable-5|mythos-|opus-5-5)/;
+export function anthropicThinking(model: string): {
+  thinking?: { type: "disabled" };
+  effort?: "low";
+} {
+  return THINKING_ALWAYS_ON.test(model)
+    ? { effort: "low" }
+    : { thinking: { type: "disabled" } };
+}
+
 export function agentProvider(
   env: Record<string, string | undefined> = process.env,
 ): AgentProvider | null {
@@ -132,6 +145,8 @@ function anthropicFailure(status: number, type: string | null, message: string):
     return `The Anthropic account has reached its spend limit. Raise it in the Anthropic console, then try again. ${NO_RENDER}`;
   if (/anthropic-workspace-id/i.test(message))
     return `The Anthropic key is not tied to one workspace. Create a key scoped to a workspace in the Anthropic console and install it instead. ${NO_RENDER}`;
+  if (status === 400 && /thinking|effort|output_config/i.test(message))
+    return `The Claude model set in ANTHROPIC_AGENT_MODEL does not accept the Floor Agent's request. ${NO_RENDER}`;
   if (status === 403)
     return `The Anthropic key is not permitted to make this request. Check the key's organization and workspace access. ${NO_RENDER}`;
   if (status === 404)
@@ -152,15 +167,18 @@ async function callAnthropic(
   signal: AbortSignal,
 ): Promise<unknown> {
   // The project data rides in the newest user turn, marked as data, so the
-  // system prompt carries the studio's instructions and nothing else.
+  // system prompt carries the studio's instructions and nothing else. Every
+  // "<" in it is escaped, so project text cannot close the block early.
   const last = turns[turns.length - 1];
+  const data = context.replace(/</g, "\\u003c");
   const messages: ChatTurn[] = [
     ...turns.slice(0, -1),
     {
       role: "user",
-      content: `<project_data>\n${context}\n</project_data>\n\n${last?.content ?? ""}`,
+      content: `<project_data>\n${data}\n</project_data>\n\n${last?.content ?? ""}`,
     },
   ];
+  const posture = anthropicThinking(provider.model);
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -173,11 +191,14 @@ async function callAnthropic(
       max_tokens: AGENT_MAX_TOKENS,
       // Thinking off, chosen rather than inherited: some models think by
       // default, and thinking shares max_tokens with the answer, so a long
-      // plan could be cut off or run past the route's time limit.
-      thinking: { type: "disabled" },
+      // plan could be cut off or run past the route's time limit. Where
+      // thinking cannot be turned off, it is held to low effort instead.
+      // (A field left undefined is dropped from the JSON body.)
+      thinking: posture.thinking,
       system,
       messages,
       output_config: {
+        effort: posture.effort,
         format: { type: "json_schema", schema: FLOOR_REPLY_SCHEMA },
       },
     }),

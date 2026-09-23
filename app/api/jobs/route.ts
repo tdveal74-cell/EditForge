@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAndQueue, listJobs, submitJob } from "@/lib/jobstore";
-import { findProvider, hasCredentials, isBillable, isLiveWired } from "@/lib/providers";
+import { findProvider, hasCredentials, isBillable, isLiveWired, providerReadiness } from "@/lib/providers";
+import { artifactStoreConfigured } from "@/lib/artifacts";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE, isAuthenticated } from "@/lib/auth";
 import type { JobKind } from "@/lib/jobs";
@@ -62,6 +63,21 @@ export async function POST(req: Request) {
   // the server too. This prevents a stale tab or direct POST from bypassing the
   // required second confirmation for any live billable provider.
   if (willBill(provider) && body.confirmBillable !== true) {
+    // The picker offers no confirm step for a provider it shows as not ready,
+    // so asking for a confirmation here would leave the operator stuck. Name
+    // what is missing instead; the run could not have gone out either way.
+    const spec = findProvider(provider)!;
+    const readiness = providerReadiness(spec, { artifactStore: artifactStoreConfigured() });
+    if (!readiness.ready) {
+      const missing = [
+        ...readiness.settingsMissing,
+        ...(readiness.settingsMissing.length === 0 ? ["an artifact store (EDITFORGE_ARTIFACT_DIR)"] : []),
+      ];
+      return NextResponse.json(
+        { error: `${spec.label} is not ready: needs ${missing.join(", ")}` },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: "Confirm this paid provider job before submitting it" },
       { status: 409 }

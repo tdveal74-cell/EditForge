@@ -39,6 +39,28 @@ afterEach(() => {
 });
 
 describe("spend gate on POST /api/jobs", () => {
+  it("names what is missing instead of asking to confirm a provider that cannot run", async () => {
+    // Keyed and voiced, but with nowhere to keep the audio it returns: the
+    // picker shows this provider as not ready, so there is no confirm step to
+    // take, and asking for one leaves the operator stuck.
+    process.env.ELEVENLABS_API_KEY = "live-key";
+    process.env.ELEVENLABS_VOICE_ID = "voice-1";
+    const savedArtifactDir = process.env.EDITFORGE_ARTIFACT_DIR;
+    delete process.env.EDITFORGE_ARTIFACT_DIR;
+    try {
+      const res = await POST(submit({ kind: "voice", prompt: "x", provider: "elevenlabs", idempotencyKey: "unready-1" }));
+      expect(res.status).toBe(409);
+      const { error } = await res.json();
+      expect(error).not.toMatch(/confirm/i);
+      expect(error).toMatch(/not ready/i);
+      expect(error).toMatch(/artifact store/i);
+    } finally {
+      delete process.env.ELEVENLABS_API_KEY;
+      delete process.env.ELEVENLABS_VOICE_ID;
+      if (savedArtifactDir !== undefined) process.env.EDITFORGE_ARTIFACT_DIR = savedArtifactDir;
+    }
+  });
+
   it("lets anyone reach the offline provider", async () => {
     const res = await POST(submit({ kind: "voice", prompt: "x", provider: "mock", idempotencyKey: "open-1" }));
     expect(res.status).toBe(201);

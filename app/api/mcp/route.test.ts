@@ -427,3 +427,88 @@ describe("the studio's other gates, over MCP", () => {
     expect(res.parsed.error).toMatch(/Rubric pass/);
   });
 });
+
+describe("Canvas tools", () => {
+  const CANVAS_FILE = path.join(DATA_DIR, "canvas.json");
+  beforeEach(async () => {
+    await fs.rm(CANVAS_FILE, { force: true });
+  });
+
+  it("hides every Canvas tool from an unauthenticated caller and offers no render", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const openNames: string[] = open.result.tools.map((t: { name: string }) => t.name);
+    expect(openNames.filter((n) => n.startsWith("canvas_"))).toEqual([]);
+
+    const authed = await (await POST(rpc("tools/list", undefined, TOKEN))).json();
+    const names: string[] = authed.result.tools.map((t: { name: string }) => t.name);
+    expect(names.filter((n) => n.startsWith("canvas_")).sort()).toEqual([
+      "canvas_create_project",
+      "canvas_get_project",
+      "canvas_list_projects",
+      "canvas_render_plan",
+      "canvas_save_project",
+    ]);
+    // Paid generation from Canvas stays with a signed-in person on the page.
+    expect(names.some((n) => n.startsWith("canvas_") && /render(?!_plan)/.test(n))).toBe(false);
+  });
+
+  it("creates a project from a template with the brief written in, then reads it back", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const created = await callTool(
+      "canvas_create_project",
+      { templateId: "micro-drama", name: "TSWS test episode", brief: "Auren and Vespera at the threshold." },
+      TOKEN,
+    );
+    expect(created.isError).toBe(false);
+    const project = created.parsed.project;
+    expect(project.name).toBe("TSWS test episode");
+    expect(project.revision).toBe(1);
+    expect(project.nodes.find((n: { kind: string }) => n.kind === "prompt").prompt).toBe(
+      "Auren and Vespera at the threshold.",
+    );
+
+    const listed = await callTool("canvas_list_projects", {}, TOKEN);
+    expect(listed.parsed.projects.map((p: { id: string }) => p.id)).toContain(project.id);
+    expect(listed.parsed.templates.map((t: { id: string }) => t.id)).toContain("micro-drama");
+
+    const read = await callTool("canvas_get_project", { id: project.id }, TOKEN);
+    expect(read.parsed.project.id).toBe(project.id);
+  });
+
+  it("refuses an unknown template rather than silently using another", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await callTool("canvas_create_project", { templateId: "nope" }, TOKEN);
+    expect(res.parsed.error).toMatch(/templateId must be one of/);
+  });
+
+  it("saves an edit at the read revision and refuses a stale one", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const { parsed } = await callTool("canvas_create_project", { templateId: "micro-drama" }, TOKEN);
+    const read = parsed.project;
+    const edited = { ...read, name: "Renamed by a bot" };
+    const saved = await callTool("canvas_save_project", { project: edited }, TOKEN);
+    expect(saved.parsed.project.name).toBe("Renamed by a bot");
+    expect(saved.parsed.project.revision).toBe(read.revision + 1);
+
+    // The same stale revision again is a concurrent edit, not an overwrite.
+    const stale = await callTool("canvas_save_project", { project: { ...read, name: "Lost update" } }, TOKEN);
+    expect(stale.parsed.error).toMatch(/changed in another tab/);
+    const after = await callTool("canvas_get_project", { id: read.id }, TOKEN);
+    expect(after.parsed.project.name).toBe("Renamed by a bot");
+  });
+
+  it("previews a render plan without starting a job", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const { parsed } = await callTool("canvas_create_project", { templateId: "micro-drama" }, TOKEN);
+    const node = parsed.project.nodes.find((n: { kind: string }) => ["image", "video", "voice"].includes(n.kind));
+    const plan = await callTool("canvas_render_plan", { projectId: parsed.project.id, nodeIds: [node.id] }, TOKEN);
+    expect(plan.isError).toBe(false);
+    expect(plan.parsed.items).toHaveLength(1);
+    expect(plan.parsed.items[0].nodeId).toBe(node.id);
+    // The confirmation hash is what authorizes a paid render; it is not handed out.
+    expect(plan.parsed.confirmation).toBeUndefined();
+    const jobs = await callTool("list_jobs", {}, TOKEN);
+    expect(jobs.parsed.jobs).toEqual([]);
+  });
+});

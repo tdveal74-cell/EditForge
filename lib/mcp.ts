@@ -22,6 +22,10 @@ import {
 } from "./handoff";
 import { SAMPLE_TIMELINE } from "./timeline";
 import type { JobKind } from "./jobs";
+import { getProject, listProjects, saveProject } from "@/modules/canvas/server-store";
+import { newProject } from "@/modules/canvas/model";
+import { renderPlan } from "@/modules/canvas/render";
+import { TEMPLATES } from "@/modules/canvas/templates";
 
 /**
  * EditForge as an MCP server.
@@ -508,6 +512,102 @@ export const TOOLS: Tool[] = [
 
         default:
           return { error: "kind must be one of edl, stems, shots, paths" };
+      }
+    },
+  },
+  {
+    name: "canvas_list_projects",
+    description:
+      "Canvas department (editforge.online/canvas): the saved shot graph projects, newest first, and the templates a new project can start from. Micro Drama is the series template.",
+    privileged: true,
+    inputSchema: obj({}),
+    run: async () => ({
+      projects: (await listProjects()).map(({ id, name, templateId, updatedAt, revision }) => ({
+        id,
+        name,
+        templateId,
+        updatedAt,
+        revision,
+      })),
+      templates: TEMPLATES.map(({ id, name, category, tagline }) => ({ id, name, category, tagline })),
+    }),
+  },
+  {
+    name: "canvas_get_project",
+    description:
+      "One Canvas project in full: its nodes (brief, still, motion, look, dialogue, output), the edges connecting them, library assets and the cut sequence. Save changes with canvas_save_project, passing back the revision you read.",
+    privileged: true,
+    inputSchema: obj({ id: str("Project id") }, ["id"]),
+    run: async (args) => {
+      const project = await getProject(String(args.id));
+      return project ? { project } : { error: `No Canvas project with id ${String(args.id)}` };
+    },
+  },
+  {
+    name: "canvas_create_project",
+    description:
+      "Start a Canvas project from a template, with the brief written into its brief node. Nothing renders and nothing is spent: generation happens only when a signed-in person renders from the Canvas page.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        templateId: str("Template id from canvas_list_projects, e.g. micro-drama"),
+        name: str("Project name; defaults to the template name"),
+        brief: str("The brief for the brief node, under 6,000 characters"),
+      },
+      ["templateId"]
+    ),
+    run: async (args) => {
+      const templateId = String(args.templateId);
+      if (!TEMPLATES.some((t) => t.id === templateId)) {
+        return { error: `templateId must be one of ${TEMPLATES.map((t) => t.id).join(", ")}` };
+      }
+      const draft = newProject(templateId, args.brief === undefined ? undefined : String(args.brief));
+      const name = args.name === undefined ? "" : String(args.name).trim();
+      if (name) draft.name = name;
+      try {
+        return { project: await saveProject(draft) };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "canvas_save_project",
+    description:
+      "Save a whole Canvas project: edit what canvas_get_project returned and send it back with the same revision. A project changed since you read it is refused rather than overwritten; read it again and reapply. Validation is the same as the Canvas page: at most 60 nodes and 120 edges. Saving never renders or spends.",
+    mutating: true,
+    inputSchema: obj({ project: { type: "object", description: "The full project, including id and revision" } }, ["project"]),
+    run: async (args) => {
+      try {
+        const saved = await saveProject(args.project as never);
+        return { project: saved };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "canvas_render_plan",
+    description:
+      "Preview what rendering some Canvas nodes would do: per node, the provider, the prompt with its connected context, duration, aspect, and whether it is ready or why not. Read-only. There is no render tool here on purpose: paid generation from Canvas is started by a signed-in person on the Canvas page.",
+    privileged: true,
+    inputSchema: obj(
+      {
+        projectId: str("Project id"),
+        nodeIds: { type: "array", items: { type: "string" }, description: "1 to 12 still, motion or dialogue node ids" },
+      },
+      ["projectId", "nodeIds"]
+    ),
+    run: async (args) => {
+      const project = await getProject(String(args.projectId));
+      if (!project) return { error: `No Canvas project with id ${String(args.projectId)}` };
+      const raw: unknown = args.nodeIds;
+      const ids = Array.isArray(raw) ? raw.map(String) : [];
+      try {
+        const { items, projectId, revision } = renderPlan(project, ids);
+        return { projectId, revision, items };
+      } catch (err) {
+        return { error: (err as Error).message };
       }
     },
   },

@@ -48,7 +48,7 @@ describe("spend gate on POST /api/jobs", () => {
     process.env.RUNWAY_API_KEY = "live-key";
 
     const res = await POST(
-      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-1" })
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-1", confirmBillable: true })
     );
 
     // The property that matters: a live key on a reachable deployment is
@@ -65,7 +65,7 @@ describe("spend gate on POST /api/jobs", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "task_1" }) }) as unknown as Response));
 
     const res = await POST(
-      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-2" }, "tok-abcdef")
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-2", confirmBillable: true }, "tok-abcdef")
     );
     expect(res.status).toBe(201);
     const { job } = await res.json();
@@ -78,9 +78,24 @@ describe("spend gate on POST /api/jobs", () => {
     process.env.EDITFORGE_MCP_TOKEN = "tok-abcdef";
 
     const res = await POST(
-      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-3" }, "tok-wrongxx")
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "billable-3", confirmBillable: true }, "tok-wrongxx")
     );
     expect(res.status).toBe(401);
+  });
+
+  it("requires a second explicit confirmation before a billable submit", async () => {
+    process.env.RUNWAY_API_KEY = "live-key";
+    process.env.EDITFORGE_MCP_TOKEN = "tok-abcdef";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await POST(
+      submit({ kind: "gen-video", prompt: "x", provider: "runway", idempotencyKey: "confirm-1" }, "tok-abcdef")
+    );
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toMatch(/confirm/i);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not gate a provider that has no credentials — it cannot bill anyway", async () => {

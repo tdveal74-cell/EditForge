@@ -20,6 +20,8 @@ const groups: { label: string; links: { href: string; label: string }[] }[] = [
       { href: "/voice", label: "Voice" },
       { href: "/avatar", label: "Avatar" },
       { href: "/gen-video", label: "Gen video" },
+      { href: "/presenter-broll", label: "Presenter" },
+      { href: "/hyperframes", label: "HyperFrames" },
       { href: "/stock", label: "Stock" },
     ],
   },
@@ -46,6 +48,8 @@ const groups: { label: string; links: { href: string; label: string }[] }[] = [
 const mobilePriority = [
   { href: "/studio", label: "Studio" },
   { href: "/gen-video", label: "Gen" },
+  { href: "/presenter-broll", label: "Presenter" },
+  { href: "/hyperframes", label: "Frames" },
   { href: "/dailies", label: "Dailies" },
   { href: "/review", label: "Review" },
   { href: "/jobs", label: "Jobs" },

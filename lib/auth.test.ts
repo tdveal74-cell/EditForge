@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { SESSION_COOKIE, accessGateEnabled, bearerFrom, isAuthenticated, secretsMatch, sessionToken } from "./auth";
+import { SESSION_COOKIE, accessGateEnabled, bearerFrom, createGoogleSession, isAuthenticated, readGoogleSession, secretsMatch, sessionToken } from "./auth";
 
 afterEach(() => {
   delete process.env.EDITFORGE_ACCESS_PASSWORD;
   delete process.env.EDITFORGE_MCP_TOKEN;
+  delete process.env.EDITFORGE_SESSION_SECRET;
+  delete process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL;
 });
 
 describe("secret comparison", () => {
@@ -60,6 +62,24 @@ describe("authentication", () => {
     process.env.EDITFORGE_MCP_TOKEN = "tok-123";
     expect(await isAuthenticated({ urlToken: "tok-123" })).toBe(true);
     expect(await isAuthenticated({ urlToken: "tok-999" })).toBe(false);
+  });
+
+  it("accepts a signed Google session for the allowed account", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "a-long-session-secret-for-tests";
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
+    const cookie = await createGoogleSession("OWNER@example.com");
+    expect((await readGoogleSession(cookie))?.email).toBe("owner@example.com");
+    expect(await isAuthenticated({ sessionCookie: cookie })).toBe(true);
+  });
+
+  it("rejects tampered, expired, and wrong-account Google sessions", async () => {
+    process.env.EDITFORGE_SESSION_SECRET = "a-long-session-secret-for-tests";
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "owner@example.com";
+    const cookie = await createGoogleSession("owner@example.com", 1_000_000);
+    expect(await readGoogleSession(`${cookie}x`, 1_000_001)).toBeNull();
+    expect(await readGoogleSession(cookie, 1_000_000 + 31 * 24 * 60 * 60 * 1000)).toBeNull();
+    process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL = "someone@example.com";
+    expect(await readGoogleSession(cookie, 1_000_001)).toBeNull();
   });
 
   it("does not accept the access password as a URL token", async () => {

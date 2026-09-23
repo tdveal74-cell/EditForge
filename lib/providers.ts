@@ -1,4 +1,6 @@
 import { artifactStoreConfigured, artifactUrl, storeArtifact } from "./artifacts";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
 import {
   DEFAULT_AUTH,
   credentialFor,
@@ -98,6 +100,43 @@ function missingCredential(spec: ProviderSpec): string {
 
 type Ready = { spec: ProviderSpec; settings: WireSettings };
 
+const MAX_RUNWAY_DATA_URI_SOURCE_BYTES = 3_300_000;
+
+/**
+ * Add the approved server-side presenter reference to a Runway image-to-video
+ * request. The browser never supplies a path and never receives the source
+ * bytes, so a caller cannot turn this into an arbitrary file reader.
+ */
+async function withPrivateRunwayImage(req: SubmitRequest, env: EnvLike): Promise<SubmitRequest> {
+  if (req.provider !== "runway" || req.options?.mode !== "image-to-video") return req;
+
+  const configured = String(env.EDITFORGE_RUNWAY_CHARACTER_FILE ?? "").trim();
+  if (!configured) {
+    throw new Error(
+      "EDITFORGE_RUNWAY_CHARACTER_FILE is not configured. Presenter B-roll requires the approved private reference"
+    );
+  }
+
+  const extension = path.extname(configured).toLowerCase();
+  const mime = extension === ".png" ? "image/png" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : extension === ".webp" ? "image/webp" : "";
+  if (!mime) throw new Error("Presenter reference must be PNG, JPEG, or WebP");
+
+  const info = await stat(configured);
+  if (!info.isFile()) throw new Error("Presenter reference is not a regular file");
+  if (info.size > MAX_RUNWAY_DATA_URI_SOURCE_BYTES) {
+    throw new Error("Presenter reference is too large for a safe Runway data URI; keep the source at or below 3.3 MB");
+  }
+
+  const bytes = await readFile(configured);
+  return {
+    ...req,
+    options: {
+      ...(req.options ?? {}),
+      promptImage: `data:${mime};base64,${bytes.toString("base64")}`,
+    },
+  };
+}
+
 /**
  * Everything that must hold before a request is worth making.
  *
@@ -147,7 +186,19 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
     };
   }
 
-  const ready = prepare(req, process.env);
+  let hydrated = req;
+  try {
+    hydrated = await withPrivateRunwayImage(req, process.env);
+  } catch (err) {
+    return {
+      ok: false,
+      provider: spec?.id ?? req.provider,
+      mode: "live",
+      error: `Runway: ${(err as Error).message}`,
+    };
+  }
+
+  const ready = prepare(hydrated, process.env);
   if ("error" in ready) {
     return { ok: false, provider: spec?.id ?? req.provider, mode: ready.mode, error: ready.error };
   }
@@ -155,7 +206,7 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
   const wire = ready.spec.wire!;
 
   try {
-    const res = await fetch(`${ready.spec.endpoint}${wire.submitPath(req, settings)}`, {
+    const res = await fetch(`${ready.spec.endpoint}${wire.submitPath(hydrated, settings)}`, {
       method: "POST",
       headers: {
         ...authHeaders(ready.spec, process.env),
@@ -164,7 +215,7 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
         "Idempotency-Key": req.idempotencyKey,
         ...(wire.headers ?? {}),
       },
-      body: JSON.stringify(wire.buildBody(req, settings)),
+      body: JSON.stringify(wire.buildBody(hydrated, settings)),
       cache: "no-store",
     });
     if (!res.ok) {
@@ -187,7 +238,7 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
         stored = await storeArtifact({
           bytes,
           extension: wire.binary.extension,
-          prefix: `${ready.spec.id}-${req.kind}`,
+          prefix: `${ready.spec.id}-${hydrated.kind}`,
         });
       } catch (err) {
         // Deliberately not inside the outer catch: the provider answered, and

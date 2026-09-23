@@ -12,6 +12,7 @@ import type { JobKind } from "./jobs";
  */
 
 export type ProviderMode = "mock" | "live";
+export type ProviderBilling = "paid" | "local" | "offline";
 
 /** Provider-side lifecycle, deliberately narrower than the studio's job states. */
 export type ProviderState = "queued" | "running" | "succeeded" | "failed";
@@ -86,6 +87,8 @@ export type ProviderSpec = {
   id: string;
   kind: JobKind;
   label: string;
+  /** Whether execution consumes provider credits, local compute, or nothing. */
+  billing?: ProviderBilling;
   /** Env var holding the credential; empty means the provider needs none. */
   envKey: string;
   /**
@@ -119,7 +122,7 @@ const RUNWAY_API_VERSION = "2024-11-06";
 
 /**
  * Runway carries the output resolution in `ratio`; aspect names are refused.
- * `text_to_video` offers landscape and portrait only — there is no square.
+ * The supported Runway lanes here offer landscape and portrait only.
  */
 const RUNWAY_RATIOS = ["1280:720", "720:1280"];
 const RUNWAY_ASPECT_RATIOS: Record<string, string> = { "16:9": "1280:720", "9:16": "720:1280" };
@@ -165,6 +168,10 @@ export const PROVIDERS: ProviderSpec[] = [
       // through: Runway rejects a body carrying fields it does not define, so
       // spreading the studio's own brief into it made every live submit fail.
       settings: (_env, req) => {
+        const mode = text(req.options?.mode) || "text-to-video";
+        if (!['text-to-video', 'image-to-video'].includes(mode)) {
+          return { ok: false, error: "Runway mode must be text-to-video or image-to-video" };
+        }
         const asked = text(req.options?.ratio);
         const aspect = text(req.options?.aspect);
         if (asked && !RUNWAY_RATIOS.includes(asked)) {
@@ -173,7 +180,7 @@ export const PROVIDERS: ProviderSpec[] = [
         if (!asked && aspect && !RUNWAY_ASPECT_RATIOS[aspect]) {
           return {
             ok: false,
-            error: `Runway text-to-video renders ${Object.keys(RUNWAY_ASPECT_RATIOS).join(" or ")}, not ${aspect}`,
+            error: `Runway renders ${Object.keys(RUNWAY_ASPECT_RATIOS).join(" or ")}, not ${aspect}`,
           };
         }
         const duration = Number(req.options?.duration ?? req.options?.durationSec ?? 5);
@@ -183,16 +190,20 @@ export const PROVIDERS: ProviderSpec[] = [
         return {
           ok: true,
           value: {
+            mode,
             ratio: asked || RUNWAY_ASPECT_RATIOS[aspect] || RUNWAY_RATIOS[0],
             duration: String(duration),
+            promptImage: text(req.options?.promptImage),
           },
         };
       },
       // Creation is per-modality; there is no generic task-creation route.
-      submitPath: () => "/text_to_video",
+      submitPath: (_req, settings) =>
+        settings.mode === "image-to-video" ? "/image_to_video" : "/text_to_video",
       buildBody: (req, settings) => ({
         model: text(req.options?.model) || "gen4.5",
         promptText: req.prompt,
+        ...(settings.mode === "image-to-video" ? { promptImage: settings.promptImage } : {}),
         ratio: settings.ratio,
         duration: Number(settings.duration),
       }),
@@ -249,6 +260,64 @@ export const PROVIDERS: ProviderSpec[] = [
       }),
     },
   },
+  {
+    id: "kokoro-local",
+    kind: "voice",
+    label: "Kokoro (local, free)",
+    billing: "local",
+    // Reuse the provider token already managed by the deployment. The local
+    // adapter is private, but it still refuses unauthenticated requests.
+    envKey: "EDITFORGE_PROVIDER_TOKEN",
+    endpoint: process.env.EDITFORGE_LOCAL_TOOLS_URL || "http://172.16.2.1:3410",
+    wire: {
+      binary: { extension: ".wav" },
+      settings: (_env, req) => {
+        if (!req.prompt.trim()) return { ok: false, error: "Kokoro needs a script to speak" };
+        const speed = Number(req.options?.speed ?? 1);
+        if (!Number.isFinite(speed) || speed < 0.5 || speed > 2) {
+          return { ok: false, error: "Kokoro speed must be from 0.5 to 2" };
+        }
+        return {
+          ok: true,
+          value: {
+            voiceId: text(req.options?.voiceId) || "af_sarah",
+            speed: String(speed),
+            lang: text(req.options?.lang) || "en-us",
+          },
+        };
+      },
+      submitPath: () => "/v1/kokoro",
+      buildBody: (req, settings) => ({
+        text: req.prompt,
+        voice: settings.voiceId,
+        speed: Number(settings.speed),
+        lang: settings.lang,
+      }),
+    },
+  },
+  {
+    id: "hyperframes-local",
+    kind: "gen-video",
+    label: "HyperFrames (local render)",
+    billing: "local",
+    envKey: "EDITFORGE_PROVIDER_TOKEN",
+    endpoint: process.env.EDITFORGE_LOCAL_TOOLS_URL || "http://172.16.2.1:3410",
+    wire: {
+      binary: { extension: ".mp4" },
+      settings: (_env, req) => {
+        const project = text(req.options?.project) || "hyperframes-smoke";
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(project)) {
+          return { ok: false, error: "HyperFrames project must be a safe project slug" };
+        }
+        return { ok: true, value: { project } };
+      },
+      submitPath: () => "/v1/hyperframes",
+      buildBody: (req, settings) => ({
+        project: settings.project,
+        note: req.prompt,
+      }),
+    },
+  },
 
   // Avatar. HeyGen renders the talking head; EditForge owns the brief, the cut
   // linkage and the rubric gate.
@@ -299,8 +368,18 @@ export const PROVIDERS: ProviderSpec[] = [
   },
 
   // Always available, never charges, never pretends.
-  { id: "mock", kind: "gen-video", label: "Mock (offline)", envKey: "" },
+  { id: "mock", kind: "gen-video", label: "Mock (offline)", billing: "offline", envKey: "" },
 ];
+
+export function billingFor(spec: ProviderSpec): ProviderBilling {
+  if (spec.id === "mock") return "offline";
+  return spec.billing ?? "paid";
+}
+
+export function isBillable(id: string): boolean {
+  const spec = findProvider(id);
+  return Boolean(spec && billingFor(spec) === "paid");
+}
 
 function clamp01(value: unknown, fallback: number): number {
   const n = Number(value);

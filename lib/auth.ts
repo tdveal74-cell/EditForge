@@ -14,6 +14,9 @@
  */
 
 export const SESSION_COOKIE = "editforge_session";
+export const GOOGLE_STATE_COOKIE = "editforge_google_state";
+const GOOGLE_SESSION_VERSION = "g1";
+const GOOGLE_SESSION_MAX_AGE = 60 * 60 * 24 * 30;
 
 /** Constant-time compare, so a wrong value cannot be found a character at a time. */
 export function secretsMatch(provided: string, expected: string): boolean {
@@ -39,6 +42,55 @@ export async function sessionToken(password: string): Promise<string> {
 export function bearerFrom(header: string | null): string {
   const value = header ?? "";
   return value.startsWith("Bearer ") ? value.slice(7) : "";
+}
+
+function bytesToBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function textToBase64Url(value: string): string {
+  return bytesToBase64Url(new TextEncoder().encode(value));
+}
+
+function base64UrlToText(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized + "=".repeat((4 - (normalized.length % 4)) % 4));
+  return new TextDecoder().decode(Uint8Array.from(binary, (char) => char.charCodeAt(0)));
+}
+
+async function hmac(value: string, secret: string): Promise<string> {
+  const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return bytesToBase64Url(new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(value))));
+}
+
+export type GoogleSession = { email: string; exp: number };
+
+export async function createGoogleSession(email: string, now = Date.now()): Promise<string> {
+  const secret = process.env.EDITFORGE_SESSION_SECRET?.trim();
+  if (!secret) throw new Error("EDITFORGE_SESSION_SECRET is required");
+  const payload = textToBase64Url(JSON.stringify({ email: email.trim().toLowerCase(), exp: Math.floor(now / 1000) + GOOGLE_SESSION_MAX_AGE } satisfies GoogleSession));
+  const unsigned = `${GOOGLE_SESSION_VERSION}.${payload}`;
+  return `${unsigned}.${await hmac(unsigned, secret)}`;
+}
+
+export async function readGoogleSession(token: string, now = Date.now()): Promise<GoogleSession | null> {
+  const secret = process.env.EDITFORGE_SESSION_SECRET?.trim();
+  const allowed = process.env.EDITFORGE_GOOGLE_ALLOWED_EMAIL?.trim().toLowerCase();
+  if (!secret || !allowed || !token) return null;
+  const [version, payload, signature, ...extra] = token.split(".");
+  if (version !== GOOGLE_SESSION_VERSION || !payload || !signature || extra.length) return null;
+  const expected = await hmac(`${version}.${payload}`, secret);
+  if (!secretsMatch(signature, expected)) return null;
+  try {
+    const parsed = JSON.parse(base64UrlToText(payload)) as Partial<GoogleSession>;
+    if (typeof parsed.email !== "string" || typeof parsed.exp !== "number") return null;
+    if (parsed.email.toLowerCase() !== allowed || parsed.exp <= Math.floor(now / 1000)) return null;
+    return { email: parsed.email.toLowerCase(), exp: parsed.exp };
+  } catch {
+    return null;
+  }
 }
 
 /** Query parameter carrying the MCP token when headers are not available. */
@@ -70,6 +122,8 @@ export async function isAuthenticated(opts: {
     const fromUrl = opts.urlToken ?? "";
     if (fromUrl && secretsMatch(fromUrl, mcpToken)) return true;
   }
+
+  if (await readGoogleSession(opts.sessionCookie ?? "")) return true;
 
   const password = process.env.EDITFORGE_ACCESS_PASSWORD;
   if (!password) return false;

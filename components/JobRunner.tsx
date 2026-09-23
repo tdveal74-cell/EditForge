@@ -13,6 +13,8 @@ export type ProviderChoice = { id: string; label: string };
 
 type ProviderReadiness = {
   id: string;
+  billing?: "paid" | "local" | "offline";
+  runnable?: boolean;
   billable: boolean;
   wired: boolean;
   envKey?: string;
@@ -55,6 +57,7 @@ export function JobRunner({
   const [readiness, setReadiness] = useState<Record<string, ProviderReadiness>>({});
   const [artifactStore, setArtifactStore] = useState(true);
   const [polls, setPolls] = useState(0);
+  const [confirmingSpend, setConfirmingSpend] = useState(false);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -82,7 +85,11 @@ export function JobRunner({
   const chosen = readiness[provider];
   const missingSettings = chosen?.settingsMissing ?? [];
 
-  async function run() {
+  useEffect(() => {
+    setConfirmingSpend(false);
+  }, [provider, key]);
+
+  async function run(confirmBillable = false) {
     setBusy(true);
     setError(null);
     setPolls(0);
@@ -98,6 +105,7 @@ export function JobRunner({
           options,
           idempotencyKey: key,
           requiresRubricPass,
+          confirmBillable,
         }),
       });
       const data = await res.json();
@@ -160,8 +168,16 @@ export function JobRunner({
               // "live" has to mean runnable, not merely credentialled: a
               // provider whose key is set but whose look id is not would other-
               // wise be offered as live and refuse on click.
-              const ready = Boolean(r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
-              const mark = !r ? "" : ready ? " · live" : p.id === "mock" ? "" : " · unavailable";
+              const ready = Boolean(r?.runnable) && (r?.settingsMissing?.length ?? 0) === 0;
+              const mark = !r
+                ? ""
+                : ready && r.billing === "local"
+                  ? " · local/free"
+                  : ready && r.billing === "paid"
+                    ? " · paid/live"
+                    : p.id === "mock"
+                      ? ""
+                      : " · unavailable";
               return (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -175,16 +191,40 @@ export function JobRunner({
           type="button"
           variant="accent"
           className="min-h-11 w-full sm:w-auto"
-          onClick={run}
+          onClick={() => {
+            if (chosen?.billable) setConfirmingSpend(true);
+            else void run(false);
+          }}
           disabled={busy || tracking || Boolean(blockedReason) || !prompt.trim()}
         >
           {busy && !job ? "Submitting…" : "Run job"}
         </Button>
       </div>
 
+      {confirmingSpend && chosen?.billable && !tracking && (
+        <div className="mt-3 rounded-card border border-amber-300 bg-amber-50 p-4" role="alert">
+          <p className="text-sm font-semibold text-navy">Confirm paid provider run</p>
+          <p className="mt-1 text-xs leading-relaxed text-navy/65">
+            This submits real work to {providers.find((p) => p.id === provider)?.label ?? provider} and consumes provider credits.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <Button type="button" variant="accent" className="min-h-11" onClick={() => void run(true)} disabled={busy}>
+              {busy ? "Submitting…" : "Confirm and run paid job"}
+            </Button>
+            <Button type="button" variant="ghost" className="min-h-11" onClick={() => setConfirmingSpend(false)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       {chosen && (
         <p className="mt-2.5 text-xs">
-          {chosen.billable && missingSettings.length === 0 ? (
+          {chosen.runnable && chosen.billing === "local" && missingSettings.length === 0 ? (
+            <span className="text-emerald-700">
+              Local provider. Uses this VPS and does not consume provider credits.
+            </span>
+          ) : chosen.billable && missingSettings.length === 0 ? (
             <span className="text-amber-700">
               Live provider — running this bills real work against {chosen.envKey}.
             </span>
@@ -231,9 +271,12 @@ export function JobRunner({
       </p>
 
       {error && (
-        <p className="mt-3 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
-        </p>
+        <div className="mt-3 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <p>{error}</p>
+          {error.toLowerCase().includes("authentication") && (
+            <a className="mt-2 inline-block font-semibold underline underline-offset-2" href="/api/auth/google/start?returnTo=/presenter-broll">Sign in with Google</a>
+          )}
+        </div>
       )}
 
       {job && (

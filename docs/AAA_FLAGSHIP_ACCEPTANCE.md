@@ -47,8 +47,13 @@ perfect.
 
 ## Configuration dependencies
 
-- `XAI_API_KEY` enables Floor Agent chat, transcription, Grok Imagine stills and
-  Grok Imagine motion. `XAI_AGENT_MODEL` defaults to `grok-4.6`.
+- `ANTHROPIC_API_KEY` enables Floor Agent chat through Claude, which takes
+  precedence when both keys are set. `ANTHROPIC_AGENT_MODEL` defaults to
+  `claude-sonnet-5`. Claude's replies are held to the reply schema by
+  structured outputs.
+- `XAI_API_KEY` enables transcription, Grok Imagine stills and Grok Imagine
+  motion, and Floor Agent chat through Grok when no Anthropic key is set.
+  `XAI_AGENT_MODEL` defaults to `grok-4.6`.
 - `EDITFORGE_ARTIFACT_DIR` is required for uploaded files, generated images and
   provider-returned audio.
 - ElevenLabs voice and identity settings remain separate from voice input.

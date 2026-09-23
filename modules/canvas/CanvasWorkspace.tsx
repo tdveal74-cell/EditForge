@@ -154,6 +154,7 @@ export function CanvasWorkspace({
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [configured, setConfigured] = useState(false);
+  const [agentLabel, setAgentLabel] = useState<string | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [voiceConsent, setVoiceConsent] = useState(false);
   const [proposal, setProposal] = useState<AgentReply | null>(null);
@@ -245,6 +246,7 @@ export function CanvasWorkspace({
         if (data.error) throw new Error(data.error);
         setSaved(data.projects);
         setConfigured(data.agentConfigured);
+        setAgentLabel(data.agentProvider ?? null);
         if (p?.project) {
           setProject(p.project);
           current.current = p.project;
@@ -1194,7 +1196,9 @@ export function CanvasWorkspace({
                   className={`agent-connection ${configured ? "ready" : ""}`}
                 >
                   {configured
-                    ? "Live agent configured"
+                    ? agentLabel
+                      ? `Live agent configured · ${agentLabel}`
+                      : "Live agent configured"
                     : "Agent connection needed"}
                 </span>
                 <p className="small">

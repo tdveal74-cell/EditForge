@@ -10,6 +10,7 @@ import {
 } from "@/modules/canvas/server-store";
 import { parseProject, studioTimeline } from "@/modules/canvas/model";
 import { renderNode, renderPlan, syncJobs } from "@/modules/canvas/render";
+import { agentProvider } from "@/modules/canvas/agent-provider";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -36,7 +37,8 @@ export async function GET(req: Request) {
     );
     return NextResponse.json({
       projects,
-      agentConfigured: Boolean(process.env.XAI_API_KEY?.trim()),
+      agentConfigured: Boolean(agentProvider()),
+      agentProvider: agentProvider()?.label ?? null,
     });
   } catch {
     return NextResponse.json(

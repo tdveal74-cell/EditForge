@@ -349,6 +349,7 @@ const reelFrames = [
   },
   {
     src: "/canvas/stills/presenter-listening.webp",
+    alt: "Tee, listening, in a close portrait",
     label: "Performance",
     caption: "Presence before polish.",
   },
@@ -359,6 +360,7 @@ const reelFrames = [
   },
   {
     src: "/canvas/stills/presenter-standing.webp",
+    alt: "Tee, standing with his arms folded",
     label: "Vertical",
     caption: "Designed for the first thumb-stop.",
   },
@@ -378,7 +380,7 @@ function ProductionReel() {
             <div className="reel-image">
               <Image
                 src={frame.src}
-                alt={`${frame.label} production reference`}
+                alt={frame.alt ?? `${frame.label} production reference`}
                 width={720}
                 height={900}
                 sizes="(max-width: 700px) 72vw, 25vw"

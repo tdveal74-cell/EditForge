@@ -30,6 +30,7 @@ changes only grammar and world will fail it.
 |---|---|---|---|---|---|---|---|---|
 | EditForge Canvas | split stage | Divider is the chrome. Wordmark plus CREATE/FINISH folio. No marketing bar. | Pin. Two rooms at 50/50. Layered photographic plates. Both headlines greet. | pin, flow, pin, flow, pin. 5 acts, about 8.8vh. | Collapse. Finish takes the frame. Open Canvas holds. Footer inside the stage. | Plate drop: a still translates from the create node onto a timeline slot. | Photographic EditForge stills, navy/amber/paper | live preview |
 | EditForge House | house of rooms | Department strip. Wordmark plus five rooms. No marketing CTA. | Per room: live graph, object one of the roll, GATE at poster scale. House threshold is the shipped split landing. | Rooms, not one act stack. Dailies pan ~7 items. Timeline 1vh cuts. Rubric pin 2.2 / flow / pin 1.4. Outside the 6 to 7 act / 13.6vh band. | Rubric gate bar. Lifts to paper or holds navy. Smallest type, Open Canvas as a line of text. | Stamp: a plate presses into a fixed strip that is the cut in miniature. | Photographic EditForge stills, navy/amber/paper | live preview |
+| EditForge integrated (home) | Production dossier | Compact task nav with Departments menu, always usable | Photographic plates beside type, restrained parallax | cover > method > reel > pinned desk (peak) > rooms > close | Native brief input that opens Canvas with the chosen workflow | Conform Desk: scroll scrubs the chosen take until the visitor takes the controls | Photographic studio examples | 4500 |
 
 ---
 

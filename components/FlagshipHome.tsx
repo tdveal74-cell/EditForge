@@ -92,7 +92,7 @@ function MotionPortrait() {
           loop
           playsInline
           preload="none"
-          poster="/films/tsws-a.webp"
+          poster="/films/tsws-a.jpg"
           aria-label="TSWS studio example: Auren and Vespera in the labyrinth"
         />
         <button
@@ -116,7 +116,53 @@ function ConformDesk() {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState("");
   const video = useRef<HTMLVideoElement>(null);
+  const act = useRef<HTMLElement>(null);
+  // Scroll moves the frame until the visitor takes the controls. Play or a
+  // drag on the slider hands it over; choosing another take hands it back.
+  const handsOn = useRef(false);
   const t = takes[take];
+  useEffect(() => {
+    const section = act.current;
+    const v = video.current;
+    if (!section || !v) return;
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+    const connection = (
+      navigator as Navigator & { connection?: { saveData?: boolean } }
+    ).connection;
+    if (reduce.matches || connection?.saveData) return;
+    let frame = 0;
+    let inView = false;
+    let last = -1;
+    const tick = () => {
+      frame = 0;
+      if (!inView || handsOn.current) return;
+      const p = parseFloat(getComputedStyle(section).getPropertyValue("--sc-p")) || 0;
+      const target = Math.min(Math.max(p, 0), 1) * t.duration * 0.98;
+      if (Math.abs(target - last) >= 1 / 24) {
+        last = target;
+        if (!v.getAttribute("src")) {
+          v.preload = "auto";
+          v.src = `/films/tsws-${t.id}.mp4`;
+          setLoaded(true);
+        }
+        if (v.readyState >= 1) v.currentTime = target;
+        setPosition(target);
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        inView = entry.isIntersecting;
+        if (inView && !frame) frame = requestAnimationFrame(tick);
+      },
+      { threshold: 0.2 },
+    );
+    observer.observe(section);
+    return () => {
+      observer.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [t.id, t.duration]);
   useEffect(() => {
     const v = video.current;
     if (!v) return;
@@ -136,6 +182,7 @@ function ConformDesk() {
     };
   }, []);
   function choose(i: number) {
+    handsOn.current = false;
     video.current?.pause();
     setPlaying(false);
     setTake(i);
@@ -146,6 +193,7 @@ function ConformDesk() {
   async function play() {
     const v = video.current;
     if (!v) return;
+    handsOn.current = true;
     if (playing) {
       v.pause();
       setPlaying(false);
@@ -163,6 +211,7 @@ function ConformDesk() {
     }
   }
   function seek(value: number) {
+    handsOn.current = true;
     const v = video.current;
     setPosition(value);
     if (!v) return;
@@ -176,18 +225,19 @@ function ConformDesk() {
   }
   return (
     <section
+      ref={act}
       className="conform-act"
       id="conform"
       data-sc-act="pin"
       data-sc-span="1.35"
     >
-      <div className="sc-stage conform-stage">
+      <div className="sc-stage conform-stage" data-sc-stage>
         <div className="conform-copy">
           <p className="forge-eyebrow">02 / THE CONFORM DESK</p>
           <h2>
-            A feeling is made
+            A feeling is made{" "}
             <br />
-            one frame
+            one frame{" "}
             <br />
             <em>at a time.</em>
           </h2>
@@ -214,7 +264,7 @@ function ConformDesk() {
               controls={false}
               playsInline
               muted
-              poster={`/films/tsws-${t.id}.webp`}
+              poster={`/films/tsws-${t.id}.jpg`}
               preload="none"
               onTimeUpdate={(e) => setPosition(e.currentTarget.currentTime)}
               onEnded={() => setPlaying(false)}
@@ -227,14 +277,14 @@ function ConformDesk() {
             />
             <div className="picture-margin">
               <span>
-                THE SPACE
+                THE SPACE{" "}
                 <br />
-                BETWEEN
+                BETWEEN{" "}
                 <br />
                 THE WORDS
               </span>
               <span>
-                FRAME STUDY
+                FRAME STUDY{" "}
                 <br />
                 PORTRAIT / 9:16
               </span>
@@ -400,15 +450,15 @@ export function FlagshipHome() {
             UNIVERSE
           </p>
           <h1>
-            Good stories.
+            Good stories.{" "}
             <br />
-            Extraordinary
+            Extraordinary{" "}
             <br />
             <span>execution.</span>
           </h1>
           <div className="hero-intro">
             <p>
-              Your ideas deserve a studio.
+              Your ideas deserve a studio.{" "}
               <br />
               Meet the place where the brief becomes the film.
             </p>
@@ -451,7 +501,7 @@ export function FlagshipHome() {
         <p className="forge-eyebrow">01 / A CLEAR LINE THROUGH PRODUCTION</p>
         <div>
           <h2>
-            One creative thread.
+            One creative thread.{" "}
             <br />
             <em>All the way through.</em>
           </h2>
@@ -466,7 +516,7 @@ export function FlagshipHome() {
             <span>01</span>
             <strong>Direct</strong>
             <p>
-              Bring the brief.
+              Bring the brief.{" "}
               <br />
               Build the graph.
             </p>
@@ -475,7 +525,7 @@ export function FlagshipHome() {
             <span>02</span>
             <strong>Create</strong>
             <p>
-              Render the still.
+              Render the still.{" "}
               <br />
               Give it a voice.
             </p>
@@ -484,7 +534,7 @@ export function FlagshipHome() {
             <span>03</span>
             <strong>Refine</strong>
             <p>
-              Watch the take.
+              Watch the take.{" "}
               <br />
               Find the feeling.
             </p>
@@ -493,7 +543,7 @@ export function FlagshipHome() {
             <span>04</span>
             <strong>Deliver</strong>
             <p>
-              Review with intent.
+              Review with intent.{" "}
               <br />
               Ship with confidence.
             </p>
@@ -506,7 +556,7 @@ export function FlagshipHome() {
         <div className="department-heading">
           <p className="forge-eyebrow">03 / THE HOUSE OF ROOMS</p>
           <h2>
-            Big ambition.
+            Big ambition.{" "}
             <br />
             <em>Room to make it.</em>
           </h2>
@@ -566,12 +616,12 @@ export function FlagshipHome() {
         <div>
           <p className="forge-eyebrow">04 / YOUR NEXT PRODUCTION</p>
           <h2>
-            What are
+            What are{" "}
             <br />
             we <em>making?</em>
           </h2>
           <p>
-            A scene. A series. Something only you could imagine.
+            A scene. A series. Something only you could imagine.{" "}
             <br />
             Start with the idea. We’ll meet you on the floor.
           </p>

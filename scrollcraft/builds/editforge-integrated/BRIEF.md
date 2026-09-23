@@ -66,3 +66,40 @@ Families: parallax, in, pin, reveal. No consecutive primary family repeats. No s
 EditForge Canvas: differs in grammar, navigation, hero, act sequence, close, signature (6/6).
 EditForge House: differs in grammar, navigation, hero, act sequence, close, signature (6/6).
 Both earlier rows remain unchanged. New row is appended after verification.
+
+## Verification, 2026-09-23
+
+Run against a production build of `main` plus this change, signed in through a
+local-only relay, with the skill's harness at 1440x900, 390x844 and reduced
+motion. This Chromium has no H.264 decoder, so the relay answered the two
+studio clips with VP9 copies of the same frames; posters and stills were real.
+
+What the first pass found, and what changed:
+
+- Both motion posters pointed at `/films/tsws-*.webp`, which were never
+  committed; only `.jpg` exists. The hero card and the Conform Desk picture were
+  empty panels on every device. Posters now use the `.jpg` files.
+- The Conform Desk held 1.35 viewports of pinned scroll while nothing on it
+  moved: the promised "scrub its actual ordered sample clips" was only reachable
+  by the play button and slider. Scroll now drives the selected take's frame
+  through the pinned span (0.0s to 5.9s measured) until the visitor presses play
+  or drags the slider, and choosing another take hands it back to scroll.
+  Reduced motion and Save-Data leave it manual.
+- Both clips re-encoded at native 432x768 with a keyframe every 8 frames
+  (was 24) so seeking is immediate.
+- Headings joined words on phones ("one frameat a time", "What arewe making?")
+  because the mobile CSS hides `<br>` and JSX left no space beside them. Every
+  break now carries a real space.
+
+Final pass: no dead scroll at any of the three settings, zero failed requests,
+headings read correctly at 390 and 1440, keyboard order runs skip link, nav,
+hero, desk controls, departments, close, with a visible focus ring on each.
+
+Not verified: a real phone (iOS video decode, Low Power Mode, touch scrolling),
+and H.264 playback itself, which this headless browser cannot decode.
+
+Feel check, written after scrolling cold, then diffed against the curve above:
+cover, curious; method, calm and clear; reel, orientation; desk, in control of
+the footage (the peak, and now it is the largest change under the wheel); rooms,
+confident; close, ready. The reel act is not in the original curve; it reads as
+orientation between method and the desk rather than a second peak, so it stays.

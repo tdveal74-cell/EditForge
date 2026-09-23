@@ -145,7 +145,7 @@ function anthropicFailure(status: number, type: string | null, message: string):
     return `The Anthropic account has reached its spend limit. Raise it in the Anthropic console, then try again. ${NO_RENDER}`;
   if (/anthropic-workspace-id/i.test(message))
     return `The Anthropic key is not tied to one workspace. Create a key scoped to a workspace in the Anthropic console and install it instead. ${NO_RENDER}`;
-  if (status === 400 && /thinking|effort|output_config/i.test(message))
+  if (status === 400 && /thinking|effort/i.test(message))
     return `The Claude model set in ANTHROPIC_AGENT_MODEL does not accept the Floor Agent's request. ${NO_RENDER}`;
   if (status === 403)
     return `The Anthropic key is not permitted to make this request. Check the key's organization and workspace access. ${NO_RENDER}`;

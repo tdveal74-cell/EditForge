@@ -275,12 +275,16 @@ export function CanvasWorkspace({
       active = false;
     };
   }, [project.id]);
-  // The conversation is its own scroll box; keep the newest turn in view, so a
-  // reply or a failure lands where the producer is looking.
+  // The conversation is its own scroll box; bring the newest turn into view,
+  // from its start, whenever the turns change or the Floor Agent tab comes
+  // back, so a reply or a failure lands where the producer is looking.
   useEffect(() => {
     const box = messagesBox.current;
-    if (box) box.scrollTop = box.scrollHeight;
-  }, [turns]);
+    const last = box?.lastElementChild;
+    if (!box || !last) return;
+    box.scrollTop +=
+      last.getBoundingClientRect().top - box.getBoundingClientRect().top;
+  }, [turns, tab]);
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -442,14 +446,17 @@ export function CanvasWorkspace({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: p.id, message: text, requestId }),
       });
-      const data = await res.json();
+      // A gateway page in front of the studio can answer with HTML.
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         // Show the failure in the conversation, beside the composer, and not
         // only at the top of the page. The route stores most failed turns with
         // their reason; a refusal before the turn is claimed (no key, the
         // hourly limit, a reply still pending) stores nothing, so that one is
         // shown as an unsaved turn.
-        const reason = data.error || "Agent request failed.";
+        const reason =
+          data.error ||
+          "The studio did not get an answer back. Check the conversation before sending again. No render was submitted.";
         const history = await fetch(
           `/api/canvas/agent?projectId=${encodeURIComponent(p.id)}`,
         )

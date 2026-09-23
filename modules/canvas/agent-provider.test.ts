@@ -219,6 +219,7 @@ describe("callAgentModel with Claude", () => {
     ["a spend cap at the rate tier", 429, { type: "error", error: { type: "rate_limit_error", message: "You have reached your specified API usage limits. You will regain access on 2026-10-01.", details: { error_code: "enforced_spend_limit_reached" } } }, /spend limit/],
     ["a key with no workspace", 400, { type: "error", error: { type: "invalid_request_error", message: "anthropic-workspace-id is required when authenticating with an identity-linked API key; send the id of the workspace this request acts in." } }, /not tied to one workspace/],
     ["a model that refuses the request settings", 400, { type: "error", error: { type: "invalid_request_error", message: "thinking.type: disabled is not supported for this model" } }, /ANTHROPIC_AGENT_MODEL does not accept/],
+    ["a refused reply schema", 400, { type: "error", error: { type: "invalid_request_error", message: "output_config.format.schema: For 'object' type, 'additionalProperties' must be explicitly set to false" } }, /returned HTTP 400/],
     ["another bad request", 400, { type: "error", error: { type: "invalid_request_error", message: "PROVIDER TEXT 400" } }, /returned HTTP 400/],
     ["a forbidden request", 403, { type: "error", error: { type: "permission_error", message: "PROVIDER TEXT 403" } }, /not permitted to make this request/],
     ["an unknown model", 404, { type: "error", error: { type: "not_found_error", message: "PROVIDER TEXT 404" } }, /ANTHROPIC_AGENT_MODEL was not found/],
@@ -257,6 +258,12 @@ describe("callAgentModel with Claude", () => {
     await failure();
     const log = JSON.parse(String(vi.mocked(console.warn).mock.calls.at(-1)?.[0]));
     expect(log.detail).toHaveLength(200);
+    // The key is stripped before the cap, so a key straddling the cut leaves no prefix behind.
+    answer(400, { type: "error", error: { type: "invalid_request_error", message: "y".repeat(185) + KEY } });
+    await failure();
+    const cut = JSON.parse(String(vi.mocked(console.warn).mock.calls.at(-1)?.[0])).detail as string;
+    expect(cut).toBe("y".repeat(185) + "[key]");
+    expect(logged()).not.toContain("sk-ant");
   });
 
   it("refuses an answer cut off at the token limit or the context window, and logs why", async () => {

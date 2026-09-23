@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { promises as fs } from "fs";
 import path from "path";
 import { GET, POST } from "./route";
@@ -425,5 +425,262 @@ describe("the studio's other gates, over MCP", () => {
       TOKEN
     );
     expect(res.parsed.error).toMatch(/Rubric pass/);
+  });
+});
+
+describe("Canvas tools", () => {
+  const CANVAS_FILE = path.join(DATA_DIR, "canvas.json");
+  beforeEach(async () => {
+    await fs.rm(CANVAS_FILE, { force: true });
+  });
+
+  it("hides every Canvas tool from an unauthenticated caller and offers no render", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const openNames: string[] = open.result.tools.map((t: { name: string }) => t.name);
+    expect(openNames.filter((n) => n.startsWith("canvas_"))).toEqual([]);
+
+    const authed = await (await POST(rpc("tools/list", undefined, TOKEN))).json();
+    const names: string[] = authed.result.tools.map((t: { name: string }) => t.name);
+    expect(names.filter((n) => n.startsWith("canvas_")).sort()).toEqual([
+      "canvas_create_project",
+      "canvas_get_project",
+      "canvas_list_projects",
+      "canvas_render_plan",
+      "canvas_save_project",
+    ]);
+    // Paid generation from Canvas stays with a signed-in person on the page.
+    expect(names.some((n) => n.startsWith("canvas_") && /render(?!_plan)/.test(n))).toBe(false);
+  });
+
+  it("creates a project from a template with the brief written in, then reads it back", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const created = await callTool(
+      "canvas_create_project",
+      { templateId: "micro-drama", name: "TSWS test episode", brief: "Auren and Vespera at the threshold." },
+      TOKEN,
+    );
+    expect(created.isError).toBe(false);
+    const project = created.parsed.project;
+    expect(project.name).toBe("TSWS test episode");
+    expect(project.revision).toBe(1);
+    expect(project.nodes.find((n: { kind: string }) => n.kind === "prompt").prompt).toBe(
+      "Auren and Vespera at the threshold.",
+    );
+
+    const listed = await callTool("canvas_list_projects", {}, TOKEN);
+    expect(listed.parsed.projects.map((p: { id: string }) => p.id)).toContain(project.id);
+    expect(listed.parsed.templates.map((t: { id: string }) => t.id)).toContain("micro-drama");
+
+    const read = await callTool("canvas_get_project", { id: project.id }, TOKEN);
+    expect(read.parsed.project.id).toBe(project.id);
+  });
+
+  it("refuses an unknown template rather than silently using another", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await callTool("canvas_create_project", { templateId: "nope" }, TOKEN);
+    expect(res.parsed.error).toMatch(/templateId must be one of/);
+  });
+
+  it("saves an edit at the read revision and refuses a stale one", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const { parsed } = await callTool("canvas_create_project", { templateId: "micro-drama" }, TOKEN);
+    const read = parsed.project;
+    const edited = { ...read, name: "Renamed by a bot" };
+    const saved = await callTool("canvas_save_project", { project: edited }, TOKEN);
+    expect(saved.parsed.project.name).toBe("Renamed by a bot");
+    expect(saved.parsed.project.revision).toBe(read.revision + 1);
+
+    // The same stale revision again is a concurrent edit, not an overwrite.
+    const stale = await callTool("canvas_save_project", { project: { ...read, name: "Lost update" } }, TOKEN);
+    expect(stale.parsed.error).toMatch(/changed in another tab/);
+    const after = await callTool("canvas_get_project", { id: read.id }, TOKEN);
+    expect(after.parsed.project.name).toBe("Renamed by a bot");
+  });
+
+  it("previews a render plan without starting a job", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const { parsed } = await callTool("canvas_create_project", { templateId: "micro-drama" }, TOKEN);
+    const node = parsed.project.nodes.find((n: { kind: string }) => ["image", "video", "voice"].includes(n.kind));
+    const plan = await callTool("canvas_render_plan", { projectId: parsed.project.id, nodeIds: [node.id] }, TOKEN);
+    expect(plan.isError).toBe(false);
+    expect(plan.parsed.items).toHaveLength(1);
+    expect(plan.parsed.items[0].nodeId).toBe(node.id);
+    // The confirmation hash is what authorizes a paid render; it is not handed out.
+    expect(plan.parsed.confirmation).toBeUndefined();
+    const jobs = await callTool("list_jobs", {}, TOKEN);
+    expect(jobs.parsed.jobs).toEqual([]);
+  });
+});
+
+describe("Edit worker, catalog, stock and planner tools", () => {
+  const EDIT_BASE = {
+    schema: "editforge.edit-command.v1",
+    projectId: "project-tqo-001",
+    property: "tqo",
+    deliverable: "long-form",
+    issuedBy: "DEVON",
+    source: { uri: "https://media.example/source.mp4", sha256: "a".repeat(64) },
+    identity: { cloneId: "tee-clone-v1", voiceId: "tee-voice-v1", version: "tee-identity-v1", consentRecorded: true },
+    canon: { version: "tqo-canon-v1", locked: true },
+    authorization: { approvalId: "approval-001", approvedBy: "Tee", scopes: ["edit:*"] },
+  };
+
+  it("gates the edit worker and the catalog writes, and leaves the planners open", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const openNames: string[] = open.result.tools.map((t: { name: string }) => t.name);
+    for (const gated of ["list_edits", "get_edit", "submit_edit", "drive_edit", "add_asset", "add_stock"]) {
+      expect(openNames).not.toContain(gated);
+    }
+    for (const read of ["list_assets", "list_stock", "plan_gen_video", "plan_voice", "plan_avatar"]) {
+      expect(openNames).toContain(read);
+    }
+  });
+
+  it("refuses an invalid edit command before anything reaches the worker", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await callTool("submit_edit", { command: { schema: "nope" } }, TOKEN);
+    expect(res.parsed.error).toBe("invalid edit command");
+    expect(res.parsed.executed).toBe(false);
+  });
+
+  it("refuses a master render without a recorded rubric pass", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    await upsertCut({ id: "cut-mcp-master", title: "No pass yet", status: "ingest", rubricPass: false } as never);
+    const res = await callTool(
+      "submit_edit",
+      {
+        command: {
+          ...EDIT_BASE,
+          commandId: "cmd-mcp-master-001",
+          cutId: "cut-mcp-master",
+          operations: [{ id: "op-master", type: "render-master", params: {} }],
+          output: { mode: "master", width: 1920, height: 1080, fps: 24, container: "mp4" },
+        },
+      },
+      TOKEN,
+    );
+    expect(res.parsed.error).toMatch(/master render blocked/);
+    expect(res.parsed.executed).toBe(false);
+    const edits = await callTool("list_edits", {}, TOKEN);
+    expect(edits.parsed.executions.some((e: { commandId?: string }) => e.commandId === "cmd-mcp-master-001")).toBe(false);
+  });
+
+  it("answers a planner without submitting a job", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const plan = await callTool("plan_gen_video", { prompt: "Slow push in on a desk lamp", durationSec: 5 }, TOKEN);
+    expect(plan.isError).toBe(false);
+    expect(plan.parsed).toBeTruthy();
+    expect(plan.parsed.error).toBeUndefined();
+    const jobs = await callTool("list_jobs", {}, TOKEN);
+    expect(jobs.parsed.jobs).toEqual([]);
+  });
+
+  it("refuses stock without a licence note", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await callTool("add_stock", { kind: "music", title: "Test bed", licenseNote: " " }, TOKEN);
+    expect(res.parsed.error).toMatch(/licen/i);
+  });
+});
+
+describe("ship_to_n8n", () => {
+  const ARGS = {
+    frameId: "TQO-2026-09-24-first-cut",
+    outputUrl: "https://editforge.online/api/artifacts/master.mp4",
+    brand: "The Quiet Operator",
+    approvedBy: "Tee in thread, 2026-09-24",
+    slots: [{ platform: "TikTok", scheduledFor: "2026-09-25T13:00:00Z" }],
+  };
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.EDITFORGE_N8N_WEBHOOK_BASE;
+  });
+
+  it("is hidden without the token", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    expect(open.result.tools.map((t: { name: string }) => t.name)).not.toContain("ship_to_n8n");
+  });
+
+  it("posts the handoff to n8n signed with the server's own token", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const seen: { url?: string; auth?: string; body?: unknown } = {};
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      seen.url = url;
+      seen.auth = (init.headers as Record<string, string>).Authorization;
+      seen.body = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({ ok: true, slots: ["TQO-2026-09-24-first-cut:TikTok"] }), { status: 200 });
+    });
+    const res = await callTool("ship_to_n8n", ARGS, TOKEN);
+    expect(res.parsed.handedOff).toBe(true);
+    expect(seen.url).toBe("https://n8n.editforge.online/webhook/bot-handoff");
+    expect(seen.auth).toBe(`Bearer ${TOKEN}`);
+    expect(seen.body).toEqual(ARGS);
+  });
+
+  it("reports an n8n refusal as an error, not a handoff", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    vi.stubGlobal("fetch", async () => new Response(JSON.stringify({ ok: false, error: "brand must be one of" }), { status: 400 }));
+    const res = await callTool("ship_to_n8n", ARGS, TOKEN);
+    expect(res.parsed.handedOff).toBeUndefined();
+    expect(res.parsed.error).toBe("n8n answered HTTP 400");
+  });
+});
+
+describe("Drive and QC tools", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.EDITFORGE_N8N_WEBHOOK_BASE;
+  });
+
+  it("hides Drive and QC from an unauthenticated caller", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const names: string[] = open.result.tools.map((t: { name: string }) => t.name);
+    for (const gated of ["drive_search", "drive_read", "record_qc"]) expect(names).not.toContain(gated);
+  });
+
+  it("routes each tool to its webhook, signed with the server's token", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const calls: { url: string; auth: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      calls.push({
+        url,
+        auth: (init.headers as Record<string, string>).Authorization,
+        body: JSON.parse(String(init.body)),
+      });
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    });
+    await callTool("drive_search", { name: "TQO_CANON" }, TOKEN);
+    await callTool("drive_read", { fileId: "abc123XYZ" }, TOKEN);
+    await callTool(
+      "record_qc",
+      { frameId: "TQO-2026-09-24-x", brand: "The Quiet Operator", stage: "qc", recordedBy: "QC Inspector", qcVerdict: "SHIP", qcScore: 85, script: "s" },
+      TOKEN,
+    );
+    expect(calls.map((c) => c.url)).toEqual([
+      "https://n8n.editforge.online/webhook/bot-drive-read",
+      "https://n8n.editforge.online/webhook/bot-drive-read",
+      "https://n8n.editforge.online/webhook/bot-qc",
+    ]);
+    expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
+    expect(calls[0].body).toEqual({ action: "search", name: "TQO_CANON" });
+    expect(calls[1].body).toEqual({ action: "read", fileId: "abc123XYZ" });
+    expect(calls[2].body.stage).toBe("qc");
+  });
+
+  it("passes an n8n QA/QC refusal back as an error, not a handoff", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ ok: false, error: "QA/QC gate refused X: no QC verdict recorded" }), { status: 400 }),
+    );
+    const res = await callTool(
+      "ship_to_n8n",
+      { frameId: "TQO-2026-09-24-x", outputUrl: "https://e/x.mp4", brand: "The Quiet Operator", approvedBy: "Tee", slots: [{ platform: "TikTok", scheduledFor: "2026-09-25T13:00:00Z" }] },
+      TOKEN,
+    );
+    expect(res.parsed.handedOff).toBeUndefined();
+    expect(res.parsed.n8n.error).toMatch(/QA\/QC gate refused/);
   });
 });

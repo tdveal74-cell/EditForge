@@ -22,6 +22,66 @@ import {
 } from "./handoff";
 import { SAMPLE_TIMELINE } from "./timeline";
 import type { JobKind } from "./jobs";
+import { getProject, listProjects, saveProject } from "@/modules/canvas/server-store";
+import { newProject } from "@/modules/canvas/model";
+import { renderPlan } from "@/modules/canvas/render";
+import { TEMPLATES } from "@/modules/canvas/templates";
+import { addAsset, addStock, listAssets, listStock } from "./catalog";
+import { commandNeedsRubric, validateEditCommand, type EditCommand } from "./editing";
+import {
+  acceptEditCommand,
+  cancelEditExecution,
+  getEditExecution,
+  listEditExecutions,
+  markDispatchFailed,
+  markDispatched,
+  recordWorkerReceipt,
+} from "./editstore";
+import { cancelWorker, dispatchToWorker, pollWorker } from "./edit-worker";
+import { POST as planGenVideoRoute } from "@/app/api/gen-video/plan/route";
+import { POST as planVoiceRoute } from "@/app/api/voice/plan/route";
+import { POST as planAvatarRoute } from "@/app/api/avatar/plan/route";
+
+/**
+ * POST to one of the n8n webhooks built for the Rakazo bots, signed with this
+ * server's own EDITFORGE_MCP_TOKEN, which n8n's "EditForge MCP Token"
+ * credential holds under the Authorization header. No other secret is involved.
+ */
+async function postToN8n(path: string, body: unknown, timeoutMs = 20000) {
+  const token = process.env.EDITFORGE_MCP_TOKEN?.trim();
+  if (!token) return { error: "EDITFORGE_MCP_TOKEN is not set on this server, so n8n cannot authenticate the call." };
+  const base = (process.env.EDITFORGE_N8N_WEBHOOK_BASE?.trim() || "https://n8n.editforge.online/webhook").replace(/\/+$/, "");
+  try {
+    const res = await fetch(`${base}/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const text = await res.text();
+    let parsed: unknown = text;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // n8n answers plain text for some refusals; pass it through as is.
+    }
+    return res.ok ? { ok: true, status: res.status, n8n: parsed } : { error: `n8n answered HTTP ${res.status}`, n8n: parsed };
+  } catch (err) {
+    return { error: `could not reach n8n: ${(err as Error).name}` };
+  }
+}
+
+/** The planners are pure and live in their routes; call them rather than copy them. */
+async function viaPlanner(handler: (req: Request) => Promise<Response>, body: Record<string, unknown>) {
+  const res = await handler(
+    new Request("http://editforge.local/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+  );
+  return res.json();
+}
 
 /**
  * EditForge as an MCP server.
@@ -510,6 +570,373 @@ export const TOOLS: Tool[] = [
           return { error: "kind must be one of edl, stems, shots, paths" };
       }
     },
+  },
+  {
+    name: "canvas_list_projects",
+    description:
+      "Canvas department (editforge.online/canvas): the saved shot graph projects, newest first, and the templates a new project can start from. Micro Drama is the series template.",
+    privileged: true,
+    inputSchema: obj({}),
+    run: async () => ({
+      projects: (await listProjects()).map(({ id, name, templateId, updatedAt, revision }) => ({
+        id,
+        name,
+        templateId,
+        updatedAt,
+        revision,
+      })),
+      templates: TEMPLATES.map(({ id, name, category, tagline }) => ({ id, name, category, tagline })),
+    }),
+  },
+  {
+    name: "canvas_get_project",
+    description:
+      "One Canvas project in full: its nodes (brief, still, motion, look, dialogue, output), the edges connecting them, library assets and the cut sequence. Save changes with canvas_save_project, passing back the revision you read.",
+    privileged: true,
+    inputSchema: obj({ id: str("Project id") }, ["id"]),
+    run: async (args) => {
+      const project = await getProject(String(args.id));
+      return project ? { project } : { error: `No Canvas project with id ${String(args.id)}` };
+    },
+  },
+  {
+    name: "canvas_create_project",
+    description:
+      "Start a Canvas project from a template, with the brief written into its brief node. Nothing renders and nothing is spent: generation happens only when a signed-in person renders from the Canvas page.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        templateId: str("Template id from canvas_list_projects, e.g. micro-drama"),
+        name: str("Project name; defaults to the template name"),
+        brief: str("The brief for the brief node, under 6,000 characters"),
+      },
+      ["templateId"]
+    ),
+    run: async (args) => {
+      const templateId = String(args.templateId);
+      if (!TEMPLATES.some((t) => t.id === templateId)) {
+        return { error: `templateId must be one of ${TEMPLATES.map((t) => t.id).join(", ")}` };
+      }
+      const draft = newProject(templateId, args.brief === undefined ? undefined : String(args.brief));
+      const name = args.name === undefined ? "" : String(args.name).trim();
+      if (name) draft.name = name;
+      try {
+        return { project: await saveProject(draft) };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "canvas_save_project",
+    description:
+      "Save a whole Canvas project: edit what canvas_get_project returned and send it back with the same revision. A project changed since you read it is refused rather than overwritten; read it again and reapply. Validation is the same as the Canvas page: at most 60 nodes and 120 edges. Saving never renders or spends.",
+    mutating: true,
+    inputSchema: obj({ project: { type: "object", description: "The full project, including id and revision" } }, ["project"]),
+    run: async (args) => {
+      try {
+        const saved = await saveProject(args.project as never);
+        return { project: saved };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "canvas_render_plan",
+    description:
+      "Preview what rendering some Canvas nodes would do: per node, the provider, the prompt with its connected context, duration, aspect, and whether it is ready or why not. Read-only. There is no render tool here on purpose: paid generation from Canvas is started by a signed-in person on the Canvas page.",
+    privileged: true,
+    inputSchema: obj(
+      {
+        projectId: str("Project id"),
+        nodeIds: { type: "array", items: { type: "string" }, description: "1 to 12 still, motion or dialogue node ids" },
+      },
+      ["projectId", "nodeIds"]
+    ),
+    run: async (args) => {
+      const project = await getProject(String(args.projectId));
+      if (!project) return { error: `No Canvas project with id ${String(args.projectId)}` };
+      const raw: unknown = args.nodeIds;
+      const ids = Array.isArray(raw) ? raw.map(String) : [];
+      try {
+        const { items, projectId, revision } = renderPlan(project, ids);
+        return { projectId, revision, items };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "list_edits",
+    description:
+      "Edit executions on the edit worker: each DEVON edit command, its status (accepted, dispatched, running, validating, completed, failed, cancelled) and its receipt.",
+    privileged: true,
+    inputSchema: obj({}),
+    run: async () => ({ executions: await listEditExecutions() }),
+  },
+  {
+    name: "get_edit",
+    description: "One edit execution by command id. Set poll to ask the edit worker for a fresh receipt first.",
+    privileged: true,
+    inputSchema: obj({ id: str("Command id"), poll: bool("Ask the worker for the latest receipt") }, ["id"]),
+    run: async (args) => {
+      const id = String(args.id);
+      let execution = await getEditExecution(id);
+      if (!execution) return { error: `No edit execution with id ${id}` };
+      if (args.poll === true && execution.workerJobId) {
+        const receipt = await pollWorker(execution.workerJobId);
+        if (receipt) execution = (await recordWorkerReceipt(id, receipt)) ?? execution;
+      }
+      return { execution };
+    },
+  },
+  {
+    name: "submit_edit",
+    description:
+      "Send one edit command (schema editforge.edit-command.v1) to the edit worker: trim, split, reorder, captions, audio mix, grade, titles, voice, assemble an episode, derive a short, render a preview. The command must carry Tee's approval id and, for his likeness or voice, consentRecorded. A master render is refused unless the cut has a recorded rubric pass, which only Tee records. Resubmitting the same commandId returns the original execution rather than running it twice. Synthesis and full-motion operations can spend money.",
+    mutating: true,
+    inputSchema: obj({ command: { type: "object", description: "The full edit command, schema editforge.edit-command.v1" } }, ["command"]),
+    run: async (args) => {
+      const issues = validateEditCommand(args.command);
+      if (issues.some((issue) => issue.severity === "error")) {
+        return { error: "invalid edit command", issues, executed: false };
+      }
+      const command = args.command as unknown as EditCommand;
+      if (commandNeedsRubric(command)) {
+        const cut = await getCut(command.cutId);
+        if (!cut?.rubricPass) {
+          return { error: `master render blocked: cut ${command.cutId} has no recorded rubric pass`, executed: false };
+        }
+      }
+      try {
+        const accepted = await acceptEditCommand(command);
+        if (accepted.deduped) return { execution: accepted.execution, deduped: true, executed: false };
+        const dispatched = await dispatchToWorker(accepted.execution);
+        if (!dispatched.ok) {
+          return { error: dispatched.error, execution: await markDispatchFailed(command.commandId, dispatched.error), executed: false };
+        }
+        return { execution: await markDispatched(command.commandId, dispatched.workerJobId), deduped: false, executed: true };
+      } catch (err) {
+        return { error: (err as Error).message, executed: false };
+      }
+    },
+  },
+  {
+    name: "drive_edit",
+    description: "Cancel an edit execution, or retry one that failed. Other transitions are refused.",
+    mutating: true,
+    inputSchema: obj(
+      { id: str("Command id"), action: { type: "string", enum: ["cancel", "retry"], description: "What to do" } },
+      ["id", "action"]
+    ),
+    run: async (args) => {
+      const id = String(args.id);
+      const existing = await getEditExecution(id);
+      if (!existing) return { error: `No edit execution with id ${id}` };
+      try {
+        if (args.action === "cancel") {
+          if (existing.workerJobId) await cancelWorker(existing.workerJobId);
+          return { execution: await cancelEditExecution(id) };
+        }
+        if (args.action === "retry") {
+          if (existing.status !== "failed") return { error: `cannot retry ${existing.status} execution` };
+          const dispatched = await dispatchToWorker(existing);
+          if (!dispatched.ok) return { error: dispatched.error, execution: await markDispatchFailed(id, dispatched.error) };
+          return { execution: await markDispatched(id, dispatched.workerJobId), executed: true };
+        }
+        return { error: "action must be cancel or retry" };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "list_assets",
+    description: "The studio's asset catalog: every filed asset with its type, tags and location.",
+    inputSchema: obj({}),
+    run: async () => ({ assets: await listAssets() }),
+  },
+  {
+    name: "add_asset",
+    description: "File an asset in the catalog. A name already in the catalog is refused rather than duplicated.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        name: str("Filename"),
+        type: str("Asset type, as the catalog defines it"),
+        tags: { type: "array", items: { type: "string" }, description: "Search tags" },
+        location: str("Where the file lives"),
+      },
+      ["name", "type"]
+    ),
+    run: async (args) => {
+      const tags: unknown = args.tags;
+      const result = await addAsset({
+        name: String(args.name ?? ""),
+        type: String(args.type ?? ""),
+        tags: Array.isArray(tags) ? tags.map(String) : undefined,
+        location: args.location === undefined ? undefined : String(args.location),
+      });
+      return result.ok ? { asset: result.item } : { error: result.reason };
+    },
+  },
+  {
+    name: "list_stock",
+    description: "The stock library: licensed music, SFX and footage, each with its licence note.",
+    inputSchema: obj({}),
+    run: async () => ({ stock: await listStock() }),
+  },
+  {
+    name: "add_stock",
+    description: "File a stock item. A licence note is required; it travels with the item to archive.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        kind: str("Stock kind, as the library defines it"),
+        title: str("Title"),
+        mood: str("Mood"),
+        durationSec: num("Duration in seconds"),
+        licenseNote: str("Licence terms"),
+      },
+      ["kind", "title", "licenseNote"]
+    ),
+    run: async (args) => {
+      const result = await addStock({
+        kind: String(args.kind ?? ""),
+        title: String(args.title ?? ""),
+        mood: args.mood === undefined ? undefined : String(args.mood),
+        durationSec: typeof args.durationSec === "number" ? args.durationSec : undefined,
+        licenseNote: String(args.licenseNote ?? ""),
+      });
+      return result.ok ? { stock: result.item } : { error: result.reason };
+    },
+  },
+  {
+    name: "plan_gen_video",
+    description: "Plan a generated video shot: provider choice, readiness, duration, aspect and quality bar. Read-only; nothing is submitted.",
+    inputSchema: obj({
+      prompt: str("The shot brief"),
+      provider: str("Preferred provider"),
+      durationSec: num("2 to 10 seconds"),
+      aspect: str("Aspect ratio"),
+      quality: { type: "string", enum: ["draft", "social", "broadcast-intent"], description: "Quality bar" },
+      mode: str("text-to-video or image-to-video"),
+    }),
+    run: async (args) => viaPlanner(planGenVideoRoute, args),
+  },
+  {
+    name: "plan_voice",
+    description: "Plan a voice line: which voice, estimated length, and whether the voice lane is ready. Read-only; nothing is synthesized.",
+    inputSchema: obj({ text: str("The line"), voiceId: str("Voice id") }),
+    run: async (args) => viaPlanner(planVoiceRoute, args),
+  },
+  {
+    name: "plan_avatar",
+    description: "Plan an avatar or talking head render: the flow and the settings it needs. Read-only; nothing is rendered.",
+    inputSchema: obj({ prompt: str("The brief"), designSource: str("Design source") }),
+    run: async (args) => viaPlanner(planAvatarRoute, args),
+  },
+  {
+    name: "ship_to_n8n",
+    description:
+      "Hand an approved master to n8n: writes one render row and one Pending publishing slot per platform, which V5's repurpose lane drops into each platform's folder at 9:00 or 21:00 New York once the slot's time has passed. Call this ONLY after Tee has said ship in the thread, and put who approved it and when in approvedBy. This does not post anything itself. Resending the same frameId updates its rows rather than duplicating them.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        frameId: str("Asset id: lane code, date, slug, e.g. TQO-2026-09-24-first-cut"),
+        outputUrl: str("https URL of the approved master that n8n can download"),
+        brand: {
+          type: "string",
+          enum: ["The Quiet Operator", "The Shadow We Share", "NCO Forge", "Ascension Caudex"],
+          description: "The lane's brand",
+        },
+        approvedBy: str("Who said ship, and when"),
+        modelUsed: str("Provider or model that made the master"),
+        qcNotes: str("What was checked"),
+        slots: {
+          type: "array",
+          description: "1 to 12 platforms",
+          items: {
+            type: "object",
+            properties: {
+              platform: str("YouTube, YouTube Shorts, TikTok, Instagram, Facebook, LinkedIn, X, Threads, Pinterest, Newsletter, Community, Blog or Podcast"),
+              scheduledFor: str("ISO 8601 time the slot becomes due"),
+              caption: str("Approved caption"),
+            },
+            required: ["platform", "scheduledFor"],
+            additionalProperties: false,
+          },
+        },
+      },
+      ["frameId", "outputUrl", "brand", "approvedBy", "slots"]
+    ),
+    run: async (args) => {
+      const r = await postToN8n("bot-handoff", args);
+      return "ok" in r ? { handedOff: true, status: r.status, n8n: r.n8n } : r;
+    },
+  },
+  {
+    name: "drive_search",
+    description:
+      "Search Tee's Google Drive, read only: by name, by text inside files, by folder id, or modified after a date. Returns up to 100 files, newest first, with id, name, type, modified time and link. Superseded files are named SUPERSEDED_; check before treating one as canon.",
+    privileged: true,
+    inputSchema: obj({
+      name: str("Part of the file name"),
+      text: str("Text that appears inside the file"),
+      folderId: str("Only direct children of this folder"),
+      modifiedAfter: str("ISO 8601 date"),
+      limit: num("1 to 100, default 50"),
+    }),
+    run: async (args) => postToN8n("bot-drive-read", { action: "search", ...args }, 40000),
+  },
+  {
+    name: "drive_read",
+    description:
+      "Read one Google Drive file as text, read only: Google Docs as markdown, Sheets as CSV, Slides as text, and text files as they are. Up to 200,000 characters; says when it cut. Images, video and PDFs are refused rather than guessed at.",
+    privileged: true,
+    inputSchema: obj({ fileId: str("Drive file id from drive_search") }, ["fileId"]),
+    run: async (args) => postToN8n("bot-drive-read", { action: "read", fileId: args.fileId }, 70000),
+  },
+  {
+    name: "record_qc",
+    description:
+      "Record a QA/QC verdict for a frame; ship_to_n8n refuses until the frame's latest verdicts clear. stage 'script': send the full script with title, description, learningObjective, checklist, broll and the doctor and originality scores, and n8n re-runs V5's Script Gate on the text itself (1,200 to 2,400 words, no dashes, doctor 70, rhythm and similarity 50, and for TQO the objective in the first 70 words, 3 to 5 steps, a comments question, b-roll 6). stage 'qc': send the same script with qcVerdict SHIP or HOLD and qcScore; it clears at SHIP 80. stage 'human': only after Tee has watched it end to end, with reviewedBy and aiDisclosure. Recorded by the QC Inspector, never by the bot that made the piece.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        frameId: str("The asset id the verdict belongs to"),
+        brand: {
+          type: "string",
+          enum: ["The Quiet Operator", "The Shadow We Share", "NCO Forge", "Ascension Caudex"],
+          description: "The lane's brand",
+        },
+        stage: { type: "string", enum: ["script", "qc", "human"], description: "Which verdict" },
+        recordedBy: str("Which bot or person is recording this"),
+        script: str("The full script text, for script and qc"),
+        title: str("script stage"),
+        description: str("script stage"),
+        learningObjective: str("script stage, TQO"),
+        checklist: { type: "array", items: { type: "string" }, description: "script stage, TQO: 3 to 5 steps" },
+        broll: { type: "array", items: { type: "string" }, description: "script stage: b-roll phrases" },
+        doctorVerdict: str("script stage: the script doctor's verdict"),
+        doctorScore: num("script stage: 0 to 100"),
+        rhythmScore: num("script stage: originality rhythm, 0 to 100"),
+        similarityScore: num("script stage: originality similarity, 0 to 100"),
+        qcVerdict: { type: "string", enum: ["SHIP", "HOLD"], description: "qc stage" },
+        qcScore: num("qc stage: 0 to 100"),
+        findings: str("Findings or notes"),
+        humanReview: bool("human stage: Tee watched or listened end to end"),
+        reviewedBy: str("human stage: who, and when"),
+        aiDisclosure: {
+          type: "string",
+          enum: ["Not required", "Disclosed in description", "Disclosed on-screen + description"],
+          description: "human stage",
+        },
+      },
+      ["frameId", "brand", "stage", "recordedBy"]
+    ),
+    run: async (args) => postToN8n("bot-qc", args, 30000),
   },
 ];
 

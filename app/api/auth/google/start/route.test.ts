@@ -34,6 +34,14 @@ describe("Google start sets the ceremony cookies on the host Google will return 
     expect(new URL(res.headers.get("location") || "").host).toBe("accounts.google.com");
   });
 
+  it("a trailing slash on the configured origin does not reach the redirect URI", async () => {
+    process.env.EDITFORGE_GOOGLE_REDIRECT_ORIGIN = "https://studio.example.com//";
+    const res = await start("/api/auth/google/start", { host: "studio.example.com" });
+    const google = new URL(res.headers.get("location") || "");
+    expect(google.host).toBe("accounts.google.com");
+    expect(google.searchParams.get("redirect_uri")).toBe("https://studio.example.com/api/auth/google/callback");
+  });
+
   it("compares hosts without regard to case", async () => {
     const res = await start("/api/auth/google/start", { host: "STUDIO.Example.COM" });
     expect(new URL(res.headers.get("location") || "").host).toBe("accounts.google.com");

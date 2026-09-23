@@ -9,11 +9,13 @@ export const GOOGLE_STATE_COOKIE = "editforge_google_state";
 export const GOOGLE_VERIFIER_COOKIE = "editforge_google_verifier";
 
 export function googleAuthOrigin(): string {
-  return (
+  const origin =
     process.env.EDITFORGE_GOOGLE_REDIRECT_ORIGIN?.trim() ||
     process.env.EDITFORGE_PASSKEY_ORIGIN?.trim() ||
-    (process.env.NODE_ENV === "production" ? "https://editforge.online" : "http://localhost:3000")
-  );
+    (process.env.NODE_ENV === "production" ? "https://editforge.online" : "http://localhost:3000");
+  // A trailing slash would put //api/auth/google/callback into the redirect
+  // URI, which Google refuses. The VPS callback trimmed it before the merge.
+  return origin.replace(/\/+$/, "");
 }
 
 export function googleAuthConfig(): GoogleAuthConfig | null {
@@ -150,29 +152,88 @@ const FAILURE_MESSAGES: Record<GoogleFailure, string> = {
 };
 
 // What a detail may look like for each reason. The login page reads these
-// from its own URL, so anything that does not fit is dropped rather than shown.
-// A thrown error is shown only in the shapes real ones take: a jose code
-// (ERR_...), a Node or undici network code (ECONNRESET, UND_ERR_...), an
-// error class name, with the jose claim that failed. The domain of a
-// disallowed account stays in the redirect and the log, never on the page,
-// because a crafted link could otherwise show any domain-shaped text.
-const CODE =
-  /^(ERR_[A-Z0-9_]{3,40}|E[A-Z]{3,20}|UND_ERR_[A-Z_]{1,30}|[A-Z][A-Za-z]{0,30}Error|Error|unknown)(-(iss|aud|exp|nbf|iat|sub))?$/;
-const DETAIL_PATTERNS: Partial<Record<GoogleFailure, RegExp>> = {
-  "google-error": new RegExp(`^(${[...GOOGLE_ERROR_CODES, "other"].join("|")})$`),
-  "state-cookie": /^(state|verifier|state-verifier)$/,
-  "token-exchange": new RegExp(
-    `^([1-5][0-9]{2}-(${[...TOKEN_ERROR_CODES, "other", "no-error-field", "unparseable"].join("|")})|network-[A-Za-z0-9_]{1,40})$`,
-  ),
-  "id-token": CODE,
-  session: CODE,
-};
+// from its own URL, so only values from these lists are ever shown there;
+// anything else shows the reason alone and stays in the server log. The
+// domain of a disallowed account is never shown on the page.
+
+// Every code jose 6.2.12 defines (node_modules/jose/dist/webapi/util/errors.js).
+const JOSE_CODES = [
+  "ERR_JOSE_ALG_NOT_ALLOWED",
+  "ERR_JOSE_GENERIC",
+  "ERR_JOSE_NOT_SUPPORTED",
+  "ERR_JWE_DECRYPTION_FAILED",
+  "ERR_JWE_INVALID",
+  "ERR_JWKS_INVALID",
+  "ERR_JWKS_MULTIPLE_MATCHING_KEYS",
+  "ERR_JWKS_NO_MATCHING_KEY",
+  "ERR_JWKS_TIMEOUT",
+  "ERR_JWK_INVALID",
+  "ERR_JWS_INVALID",
+  "ERR_JWS_SIGNATURE_VERIFICATION_FAILED",
+  "ERR_JWT_CLAIM_VALIDATION_FAILED",
+  "ERR_JWT_EXPIRED",
+  "ERR_JWT_INVALID",
+];
+// Network, DNS and TLS codes a fetch from the box to Google can fail with.
+const NETWORK_CODES = [
+  "ENOTFOUND",
+  "EAI_AGAIN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "ETIMEDOUT",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "EPIPE",
+  "UND_ERR_CONNECT_TIMEOUT",
+  "UND_ERR_HEADERS_TIMEOUT",
+  "UND_ERR_BODY_TIMEOUT",
+  "UND_ERR_SOCKET",
+  "UND_ERR_CLOSED",
+  "UND_ERR_ABORTED",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "ERR_TLS_CERT_ALTNAME_INVALID",
+];
+const ERROR_NAMES = ["Error", "TypeError", "SyntaxError", "RangeError", "AbortError", "TimeoutError", "unknown"];
+const CLAIMS = ["iss", "aud", "exp", "nbf", "iat", "sub"];
+
+const THROWN = new Set<string>([...JOSE_CODES, ...NETWORK_CODES, ...ERROR_NAMES]);
+const JOSE_WITH_CLAIM = new Set<string>(
+  JOSE_CODES.flatMap((code) => CLAIMS.map((claim) => `${code}-${claim}`)),
+);
+const TOKEN_DETAILS = new Set<string>([
+  ...NETWORK_CODES.map((code) => `network-${code}`),
+  ...ERROR_NAMES.map((name) => `network-${name}`),
+]);
+
+function detailFits(reason: GoogleFailure, detail: string): boolean {
+  switch (reason) {
+    case "google-error":
+      return detail === "other" || GOOGLE_ERROR_CODES.has(detail);
+    case "state-cookie":
+      return detail === "state" || detail === "verifier" || detail === "state-verifier";
+    case "token-exchange": {
+      if (TOKEN_DETAILS.has(detail)) return true;
+      const m = /^([1-5][0-9]{2})-(.+)$/.exec(detail);
+      return Boolean(m && (TOKEN_ERROR_CODES.has(m[2]) || ["other", "no-error-field", "unparseable"].includes(m[2])));
+    }
+    case "id-token":
+    case "session":
+      return THROWN.has(detail) || JOSE_WITH_CLAIM.has(detail);
+    default:
+      return false;
+  }
+}
 
 /** The line the login page shows for ?auth=google-failed, with the reason code appended. */
 export function googleFailureMessage(reason: string | null, detail: string | null): string {
   const known = reason && Object.hasOwn(FAILURE_MESSAGES, reason) ? (reason as GoogleFailure) : null;
   if (!known) return "Google sign-in could not be verified for this studio.";
-  const pattern = DETAIL_PATTERNS[known];
-  const fits = Boolean(detail && pattern && pattern.test(detail));
+  const fits = Boolean(detail && detailFits(known, detail));
   return `${FAILURE_MESSAGES[known]} (${fits ? `${known} / ${detail}` : known})`;
 }

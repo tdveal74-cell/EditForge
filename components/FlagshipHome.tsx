@@ -348,7 +348,7 @@ const reelFrames = [
     caption: "Hold the frame until it says something.",
   },
   {
-    src: "/canvas/stills/talent.webp",
+    src: "/canvas/stills/presenter-listening.webp",
     label: "Performance",
     caption: "Presence before polish.",
   },
@@ -358,7 +358,7 @@ const reelFrames = [
     caption: "Make the object feel inevitable.",
   },
   {
-    src: "/canvas/stills/social.webp",
+    src: "/canvas/stills/presenter-standing.webp",
     label: "Vertical",
     caption: "Designed for the first thumb-stop.",
   },

@@ -213,14 +213,17 @@ describe("Google callback success", () => {
     );
   });
 
-  it("a passkey store that answers with something other than a list still signs the owner in", async () => {
-    tokenOk();
-    jwtVerify.mockResolvedValue({ payload: { email: "owner@example.com", email_verified: true } });
-    listPasskeys.mockResolvedValue(null);
-    const res = await GET(callback("code=c&state=s1"));
-    expect(landing(res).path).toBe("/");
-    expect(res.headers.getSetCookie().some((c) => c.startsWith("editforge_session="))).toBe(true);
-  });
+  it.each([null, {}, "text", 42, "", { length: 0 }])(
+    "a passkey store that answers %j instead of a list still signs the owner in, landing home",
+    async (value) => {
+      tokenOk();
+      jwtVerify.mockResolvedValue({ payload: { email: "owner@example.com", email_verified: true } });
+      listPasskeys.mockResolvedValue(value);
+      const res = await GET(callback("code=c&state=s1"));
+      expect(landing(res).path).toBe("/");
+      expect(res.headers.getSetCookie().some((c) => c.startsWith("editforge_session="))).toBe(true);
+    },
+  );
 
   it("a passkey store that throws synchronously still signs the owner in", async () => {
     tokenOk();
@@ -273,12 +276,39 @@ describe("login page message", () => {
     expect(shown("id-token", "UND_ERR_CONNECT_TIMEOUT")).toBe(true);
     expect(shown("id-token", "TypeError")).toBe(true);
     expect(shown("id-token", "CALL_18005550100_TO_RESTORE_ACCESS")).toBe(false);
+    // Round three: shaped like real codes, carrying words of the attacker's choosing.
+    expect(shown("id-token", "ERR_CALL_18005550100_TO_RESTORE_ACCESS")).toBe(false);
+    expect(shown("session", "ERR_CALL_18005550100_TO_RESTORE_ACCESS")).toBe(false);
+    expect(shown("id-token", "CallSupportAtOnceToRestoreError")).toBe(false);
+    expect(shown("id-token", "ECALLSUPPORTNOW")).toBe(false);
+    expect(shown("token-exchange", "network-Call_18005550100_to_restore_access")).toBe(false);
+    // Letters only, and a claim suffix on something that is not a jose code.
+    expect(shown("id-token", "ERR_CALL_SUPPORT_TO_RESTORE_ACCESS")).toBe(false);
+    expect(shown("session", "ERR_CALL_SUPPORT_TO_RESTORE_ACCESS")).toBe(false);
+    expect(shown("id-token", "CALL_SUPPORT_NOW-exp")).toBe(false);
+    expect(shown("session", "CALL_SUPPORT_NOW-exp")).toBe(false);
+    expect(shown("token-exchange", "network-EAI_FAIL")).toBe(true);
+    expect(shown("token-exchange", "network-ERR_SSL_PACKET_LENGTH_TOO_LONG")).toBe(true);
+    // Real codes the shape patterns used to drop.
+    expect(shown("id-token", "EAI_AGAIN")).toBe(true);
+    expect(shown("id-token", "SELF_SIGNED_CERT_IN_CHAIN")).toBe(true);
+    expect(shown("token-exchange", "network-EAI_AGAIN")).toBe(true);
+    expect(shown("token-exchange", "network-UNABLE_TO_GET_ISSUER_CERT_LOCALLY")).toBe(true);
     expect(shown("session", "Error")).toBe(true);
     expect(shown("session", "SyntaxError")).toBe(true);
     expect(shown("session", "Reverify_at_editforge_help-com")).toBe(false);
     expect(shown("state-cookie", "state-verifier")).toBe(true);
     expect(shown("state-mismatch", "anything")).toBe(false);
     expect(googleFailureMessage("google-error", "Session-expired")).toBe("Google did not complete the sign-in. (google-error)");
+  });
+
+  it("the jose codes listed for the page are exactly the ones jose defines", async () => {
+    const { JOSE_CODES } = await import("@/lib/google-auth");
+    const errors = await import("jose/errors");
+    const runtime = Object.values(errors)
+      .map((E) => (E as { code?: string }).code)
+      .filter((code): code is string => typeof code === "string");
+    expect([...JOSE_CODES].sort()).toEqual([...new Set(runtime)].sort());
   });
 
   it("names a session that did not come back after a good callback", async () => {

@@ -33,7 +33,19 @@ const where = (res: Response) => {
 };
 
 describe("proxy after a Google sign-in", () => {
-  const cleared = (res: Response) => res.headers.getSetCookie().some((c) => /^editforge_signin_marker=;.*Max-Age=0/.test(c));
+  // A SameSite=None cookie is only replaced by a Set-Cookie that is also Secure
+  // and SameSite=None; anything else is rejected by the browser and clears nothing.
+  const cleared = (res: Response) =>
+    res.headers
+      .getSetCookie()
+      .some(
+        (c) =>
+          /^editforge_signin_marker=;/.test(c) &&
+          /Max-Age=0/.test(c) &&
+          /;\s*Secure/i.test(c) &&
+          /SameSite=none/i.test(c) &&
+          /;\s*Path=\/(;|$)/i.test(c),
+      );
   const logged = () => vi.mocked(console.warn).mock.calls.map((c) => JSON.parse(String(c[0])));
 
   it("names a session the browser did not send back, on the page and in the log", async () => {
@@ -49,13 +61,24 @@ describe("proxy after a Google sign-in", () => {
     expect(logged()).toEqual([{ event: "google_signin_failed", reason: "session-invalid", detail: "" }]);
   });
 
-  it("an image or frame another site pulls in does not spend the marker", async () => {
-    const req = page("/jobs", { editforge_signin_marker: "1" });
-    req.headers.set("sec-fetch-dest", "image");
+  it.each(["image", "iframe", "empty", "script", "style", "font", "video", "worker", "frame", "embed"])(
+    "a %s request does not spend the marker",
+    async (dest) => {
+      const req = page("/jobs", { editforge_signin_marker: "1" });
+      req.headers.set("sec-fetch-dest", dest);
+      const res = await proxy(req);
+      expect(where(res)).toBe("/login");
+      expect(cleared(res)).toBe(false);
+      expect(logged()).toEqual([]);
+    },
+  );
+
+  it("an explicit document navigation spends the marker and names the bounce", async () => {
+    const req = page("/security", { editforge_signin_marker: "1" });
+    req.headers.set("sec-fetch-dest", "document");
     const res = await proxy(req);
-    expect(where(res)).toBe("/login");
-    expect(cleared(res)).toBe(false);
-    expect(logged()).toEqual([]);
+    expect(where(res)).toBe("/login?auth=google-failed&reason=session-not-sent");
+    expect(cleared(res)).toBe(true);
   });
 
   it("without the marker, an unauthenticated page still gets a plain login", async () => {

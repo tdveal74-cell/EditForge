@@ -436,7 +436,15 @@ export function CanvasWorkspace({
         body: JSON.stringify({ projectId: p.id, message: text, requestId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Agent request failed.");
+      if (!res.ok) {
+        // The route stores a failed turn with its reason; show it in the
+        // conversation, beside the composer, and not only at the top.
+        await fetch(`/api/canvas/agent?projectId=${encodeURIComponent(p.id)}`)
+          .then((r) => r.json())
+          .then((history) => setTurns(history.turns || []))
+          .catch(() => {});
+        throw new Error(data.error || "Agent request failed.");
+      }
       if (!data.turn) throw new Error("No conversation receipt returned.");
       setTurns((all) => [
         ...all.filter((t) => t.id !== data.turn.id),

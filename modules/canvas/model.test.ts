@@ -87,4 +87,48 @@ describe("Canvas input boundaries", () => {
     expect(response.nodes?.every((node) => node.status === "idle")).toBe(true);
     expect(response.nodes?.every((node) => node.assetUrl === undefined)).toBe(true);
   });
+
+  it("reads the action and node kinds regardless of capitalization", () => {
+    const project = newProject("micro-drama");
+    const response = parseAgentReply(
+      {
+        reply: "One still.",
+        action: "Plan",
+        nodes: [{ id: "still", kind: "Image", title: "Still", prompt: "A courier at the door.", aspectRatio: "9:16" }],
+        edges: [],
+      },
+      project,
+    );
+    expect(response.action).toBe("plan");
+    expect(response.nodes?.[0].kind).toBe("image");
+  });
+
+  it("accepts a one-node plan that leaves out edges", () => {
+    const project = newProject("micro-drama");
+    const response = parseAgentReply(
+      {
+        reply: "Just the brief.",
+        action: "plan",
+        nodes: [{ id: "brief", kind: "prompt", title: "Brief", prompt: "A held exchange." }],
+      },
+      project,
+    );
+    expect(response.edges).toEqual([]);
+    expect(response.nodes).toHaveLength(1);
+  });
+
+  it("still refuses a plan whose edges are not a list", () => {
+    const project = newProject("micro-drama");
+    expect(() =>
+      parseAgentReply(
+        {
+          reply: "Broken.",
+          action: "plan",
+          nodes: [{ id: "brief", kind: "prompt", title: "Brief", prompt: "x" }],
+          edges: "brief->output",
+        },
+        project,
+      ),
+    ).toThrow(/graph limit/);
+  });
 });

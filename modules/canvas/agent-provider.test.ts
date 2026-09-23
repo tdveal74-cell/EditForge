@@ -20,6 +20,7 @@ const turns = [
 ];
 
 let fetchMock: ReturnType<typeof vi.fn>;
+let controller: AbortController;
 function answer(status: number, body: unknown) {
   fetchMock.mockResolvedValueOnce(
     new Response(typeof body === "string" ? body : JSON.stringify(body), {
@@ -28,11 +29,20 @@ function answer(status: number, body: unknown) {
     }),
   );
 }
-function claudeText(text: string, stop_reason = "end_turn") {
-  answer(200, { type: "message", role: "assistant", content: [{ type: "text", text }], stop_reason });
+function claudeText(text: string, stop_reason = "end_turn", extra: Record<string, unknown> = {}) {
+  answer(200, { type: "message", role: "assistant", content: [{ type: "text", text }], stop_reason, ...extra });
+}
+// Headers arrive, then reading the body fails the way an aborted read does.
+function bodyTimesOut() {
+  const stream = new ReadableStream({
+    start(c) {
+      c.error(new DOMException("The operation timed out.", "TimeoutError"));
+    },
+  });
+  fetchMock.mockResolvedValueOnce(new Response(stream, { status: 200, headers: { "content-type": "application/json" } }));
 }
 const call = (p: AgentProvider = claude) =>
-  callAgentModel(p, "SYSTEM RULES", "PROJECT CONTEXT", turns, new AbortController().signal);
+  callAgentModel(p, "SYSTEM RULES", "PROJECT CONTEXT", turns, controller.signal);
 async function failure(p: AgentProvider = claude): Promise<Error> {
   try {
     await call(p);
@@ -41,11 +51,15 @@ async function failure(p: AgentProvider = claude): Promise<Error> {
   }
   throw new Error("expected the provider call to fail");
 }
+const logged = () =>
+  [...vi.mocked(console.warn).mock.calls, ...vi.mocked(console.info).mock.calls].map((c) => String(c[0])).join("\n");
 
 beforeEach(() => {
   fetchMock = vi.fn();
+  controller = new AbortController();
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -95,31 +109,46 @@ describe("FLOOR_REPLY_SCHEMA", () => {
 });
 
 describe("callAgentModel with Claude", () => {
-  it("sends the Messages API request the docs describe, with the schema as structured output", async () => {
+  it("sends the Messages API request the docs describe", async () => {
     claudeText('{"reply":"Two scenes.","action":"reply"}');
     await expect(call()).resolves.toEqual({ reply: "Two scenes.", action: "reply" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.anthropic.com/v1/messages");
     expect(init.method).toBe("POST");
     expect(init.headers).toEqual({
-      "x-api-key": KEY,
+      Authorization: `Bearer ${KEY}`,
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     });
     expect(ANTHROPIC_VERSION).toBe("2023-06-01");
+    expect(init.signal).toBe(controller.signal);
+    expect(init.cache).toBe("no-store");
     const body = JSON.parse(init.body);
+    expect(Object.keys(body).sort()).toEqual(["max_tokens", "messages", "model", "output_config", "system", "thinking"]);
     expect(body.model).toBe("claude-sonnet-5");
-    expect(body.max_tokens).toBe(AGENT_MAX_TOKENS);
-    expect(body.system).toBe("SYSTEM RULES\n\nPROJECT CONTEXT");
-    expect(body.messages).toEqual(turns);
+    expect(body.max_tokens).toBe(8000);
+    expect(AGENT_MAX_TOKENS).toBe(8000);
+    expect(body.thinking).toEqual({ type: "disabled" });
     expect(body.output_config).toEqual({ format: { type: "json_schema", schema: FLOOR_REPLY_SCHEMA } });
-    expect(body).not.toHaveProperty("tools");
-    expect(body).not.toHaveProperty("tool_choice");
   });
 
-  it("joins the text blocks before parsing", async () => {
+  it("keeps the project data out of the system prompt and marks it as data in the newest turn", async () => {
+    claudeText('{"reply":"ok","action":"reply"}');
+    await call();
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.system).toBe("SYSTEM RULES");
+    expect(body.messages.slice(0, 2)).toEqual(turns.slice(0, 2));
+    expect(body.messages).toHaveLength(3);
+    expect(body.messages[2]).toEqual({
+      role: "user",
+      content: "<project_data>\nPROJECT CONTEXT\n</project_data>\n\nNow a held ending.",
+    });
+  });
+
+  it("reads the answer past a thinking block, and joins split text blocks", async () => {
     answer(200, {
       content: [
+        { type: "thinking", thinking: "", signature: "sig" },
         { type: "text", text: '{"reply":"a' },
         { type: "text", text: 'b","action":"reply"}' },
       ],
@@ -128,13 +157,31 @@ describe("callAgentModel with Claude", () => {
     await expect(call()).resolves.toEqual({ reply: "ab", action: "reply" });
   });
 
+  it("logs the stop reason and token counts of a turn, and never the key", async () => {
+    claudeText('{"reply":"ok","action":"reply"}', "end_turn", { usage: { input_tokens: 5210, output_tokens: 412 } });
+    await call();
+    const line = JSON.parse(String(vi.mocked(console.info).mock.calls[0][0]));
+    expect(line).toEqual({
+      event: "floor_agent_turn",
+      provider: "anthropic",
+      model: "claude-sonnet-5",
+      stop_reason: "end_turn",
+      input_tokens: 5210,
+      output_tokens: 412,
+    });
+    expect(logged()).not.toContain(KEY);
+  });
+
   const failures: [string, number, unknown, RegExp][] = [
-    ["a rejected key", 401, { type: "error", error: { type: "authentication_error", message: "API key is invalid." } }, /rejected the studio's API key/],
+    ["a rejected key", 401, { type: "error", error: { type: "authentication_error", message: "PROVIDER TEXT 401" } }, /rejected the studio's API key/],
     ["a billing error", 402, { type: "error", error: { type: "billing_error", message: "PROVIDER TEXT 402" } }, /out of credit/],
     ["the old credit message", 400, { type: "error", error: { type: "invalid_request_error", message: "Your credit balance is too low to access the Anthropic API." } }, /out of credit/],
     ["a spend limit", 400, { type: "error", error: { type: "invalid_request_error", message: "You have reached your specified API usage limits." } }, /spend limit/],
-    ["a forbidden model", 403, { type: "error", error: { type: "permission_error", message: "PROVIDER TEXT 403" } }, /not allowed to use/],
-    ["an unknown model", 404, { type: "error", error: { type: "not_found_error", message: "PROVIDER TEXT 404" } }, /model was not found/],
+    ["a spend cap at the rate tier", 429, { type: "error", error: { type: "rate_limit_error", message: "You have reached your specified API usage limits. You will regain access on 2026-10-01.", details: { error_code: "enforced_spend_limit_reached" } } }, /spend limit/],
+    ["a key with no workspace", 400, { type: "error", error: { type: "invalid_request_error", message: "anthropic-workspace-id is required when authenticating with an identity-linked API key; send the id of the workspace this request acts in." } }, /not tied to one workspace/],
+    ["another bad request", 400, { type: "error", error: { type: "invalid_request_error", message: "PROVIDER TEXT 400" } }, /returned HTTP 400/],
+    ["a forbidden request", 403, { type: "error", error: { type: "permission_error", message: "PROVIDER TEXT 403" } }, /not permitted to make this request/],
+    ["an unknown model", 404, { type: "error", error: { type: "not_found_error", message: "PROVIDER TEXT 404" } }, /ANTHROPIC_AGENT_MODEL was not found/],
     ["a request too large", 413, { type: "error", error: { type: "request_too_large", message: "PROVIDER TEXT 413" } }, /too large/],
     ["a rate limit", 429, { type: "error", error: { type: "rate_limit_error", message: "PROVIDER TEXT 429" } }, /rate limiting/],
     ["an overload", 529, { type: "error", error: { type: "overloaded_error", message: "PROVIDER TEXT 529" } }, /overloaded/],
@@ -152,56 +199,79 @@ describe("callAgentModel with Claude", () => {
       const provided = (body as { error?: { message?: string } })?.error?.message;
       if (provided) expect(err.message).not.toContain(provided);
       if (typeof body === "string") expect(err.message).not.toContain(body);
-      const logged = vi.mocked(console.warn).mock.calls.map((c) => String(c[0])).join("\n");
-      expect(logged).toContain('"event":"floor_agent_provider_error"');
-      expect(logged).toContain(`"status":${status}`);
-      expect(logged).not.toContain(KEY);
-      if (provided) expect(logged).not.toContain(provided);
+      const log = JSON.parse(String(vi.mocked(console.warn).mock.calls.at(-1)?.[0]));
+      expect(log).toMatchObject({ event: "floor_agent_provider_error", provider: "anthropic", status });
+      expect(logged()).not.toContain(KEY);
+      // Only a 400 carries the provider's words into the operator log.
+      if (status === 400) expect(log.detail).toBe(provided);
+      else expect(log).not.toHaveProperty("detail");
     });
   }
 
-  it("refuses an answer cut off at the token limit rather than parsing half of it", async () => {
-    claudeText('{"reply":"half', "max_tokens");
-    await expect(call()).rejects.toThrow(/cut off/);
+  it("strips the key out of a 400's provider text before logging it", async () => {
+    answer(400, { type: "error", error: { type: "invalid_request_error", message: `header value ${KEY} is invalid` } });
+    await failure();
+    expect(logged()).not.toContain(KEY);
+    expect(logged()).toContain("header value [key] is invalid");
   });
-  it("says so when Claude declines", async () => {
+
+  it("refuses an answer cut off at the token limit or the context window, and logs why", async () => {
+    claudeText('{"reply":"half', "max_tokens");
+    expect((await failure()).message).toMatch(/cut off/);
+    claudeText('{"reply":"half', "model_context_window_exceeded");
+    expect((await failure()).message).toMatch(/cut off/);
+    expect(logged()).toContain('"stop_reason":"max_tokens"');
+    expect(logged()).toContain('"stop_reason":"model_context_window_exceeded"');
+  });
+  it("says so when Claude declines, and logs it", async () => {
     claudeText("", "refusal");
-    await expect(call()).rejects.toThrow(/declined/);
+    expect((await failure()).message).toMatch(/declined/);
+    expect(logged()).toContain('"stop_reason":"refusal"');
   });
   it("reports an empty answer and an unparseable one", async () => {
     answer(200, { content: [], stop_reason: "end_turn" });
-    await expect(call()).rejects.toThrow(/returned no message/);
+    expect((await failure()).message).toMatch(/returned no message/);
     claudeText("not json at all");
-    await expect(call()).rejects.toThrow(/did not return a valid response/);
+    expect((await failure()).message).toMatch(/did not return a valid response/);
   });
-  it("says the provider could not be reached when the network fails", async () => {
-    fetchMock.mockRejectedValueOnce(Object.assign(new TypeError("fetch failed"), { cause: { code: "ENOTFOUND" } }));
+  it("says the provider could not be reached, and logs neither the key nor the error's text", async () => {
+    fetchMock.mockRejectedValueOnce(
+      Object.assign(new TypeError(`Headers.append: "Bearer ${KEY}" is an invalid header value.`), { cause: { code: "ERR_INVALID_CHAR" } }),
+    );
     const err = await failure();
     expect(err).toBeInstanceOf(AgentProviderError);
     expect(err.message).toMatch(/Could not reach the agent provider/);
+    expect(logged()).toContain('"type":"TypeError"');
+    expect(logged()).not.toContain(KEY);
+    expect(logged()).not.toContain("invalid header value");
   });
-  it("lets a timeout through untouched, so the route can say the answer timed out", async () => {
+  it("lets a timeout through untouched, before the reply starts or while it is read", async () => {
     fetchMock.mockRejectedValueOnce(new DOMException("The operation timed out.", "TimeoutError"));
-    const err = await failure();
-    expect(err.name).toBe("TimeoutError");
+    expect((await failure()).name).toBe("TimeoutError");
+    bodyTimesOut();
+    expect((await failure()).name).toBe("TimeoutError");
   });
 });
 
 describe("callAgentModel with Grok", () => {
-  it("keeps the xAI request exactly as it was", async () => {
+  it("keeps the xAI request as it was", async () => {
     answer(200, { choices: [{ message: { content: '{"reply":"hi","action":"reply"}' } }] });
     await expect(call(grok)).resolves.toEqual({ reply: "hi", action: "reply" });
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe("https://api.x.ai/v1/chat/completions");
-    expect(init.headers.Authorization).toBe(`Bearer ${grok.key}`);
+    expect(init.headers).toEqual({ Authorization: `Bearer ${grok.key}`, "Content-Type": "application/json" });
+    expect(init.signal).toBe(controller.signal);
+    expect(init.cache).toBe("no-store");
     const body = JSON.parse(init.body);
+    expect(Object.keys(body).sort()).toEqual(["max_tokens", "messages", "model", "response_format"]);
     expect(body.model).toBe("grok-4.6");
+    expect(body.max_tokens).toBe(6000);
     expect(body.response_format).toEqual({ type: "json_object" });
-    expect(body.messages.slice(0, 2)).toEqual([
+    expect(body.messages).toEqual([
       { role: "system", content: "SYSTEM RULES" },
       { role: "system", content: "PROJECT CONTEXT" },
+      ...turns,
     ]);
-    expect(body.messages.slice(2)).toEqual(turns);
   });
   it("names the HTTP status on failure and never the key", async () => {
     answer(403, { error: "nope" });
@@ -209,8 +279,14 @@ describe("callAgentModel with Grok", () => {
     expect(err.message).toMatch(/returned HTTP 403/);
     expect(err.message).not.toContain(grok.key);
   });
-  it("refuses content that is not JSON", async () => {
+  it("refuses content that is not JSON, and treats a body it cannot read as no message", async () => {
     answer(200, { choices: [{ message: { content: "plain words" } }] });
-    await expect(call(grok)).rejects.toThrow(/did not return a valid response/);
+    expect((await failure(grok)).message).toMatch(/did not return a valid response/);
+    answer(200, "not json");
+    expect((await failure(grok)).message).toMatch(/returned no message/);
+  });
+  it("lets a timeout while reading the reply through untouched", async () => {
+    bodyTimesOut();
+    expect((await failure(grok)).name).toBe("TimeoutError");
   });
 });

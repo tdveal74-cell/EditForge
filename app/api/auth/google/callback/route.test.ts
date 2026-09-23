@@ -44,6 +44,7 @@ beforeEach(() => {
   jwtVerify.mockReset();
   listPasskeys.mockReset();
   vi.spyOn(console, "warn").mockImplementation(() => {});
+  vi.spyOn(console, "info").mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -68,6 +69,13 @@ describe("Google callback names the exit it took", () => {
     expect(r).toMatchObject({ path: "/login", reason: "google-error", detail: "access_denied" });
   });
 
+  it("a crafted ?error= cannot put its own words in the redirect or the log", async () => {
+    const r = landing(await GET(callback("error=Session%20expired.%20Call%20555-0100&state=s1")));
+    expect(r).toMatchObject({ reason: "google-error", detail: "other" });
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('"detail":"other"'));
+    expect(r.url.toString()).not.toContain("555");
+  });
+
   it("no code", async () => {
     expect(landing(await GET(callback("state=s1"))).reason).toBe("no-code");
   });
@@ -88,6 +96,28 @@ describe("Google callback names the exit it took", () => {
     const r = landing(await GET(callback("code=c&state=s1")));
     expect(r).toMatchObject({ reason: "token-exchange", detail: "400-redirect_uri_mismatch" });
     expect(r.url.toString()).not.toContain("secret");
+  });
+
+  it("a token error that is not a known code, or not a string, becomes other", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: "invalid_grant\r\nX: 4/0AeanS0CODE" }), { status: 400 }));
+    expect(landing(await GET(callback("code=c&state=s1"))).detail).toBe("400-other");
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: { code: 400, message: "m" } }), { status: 400 }));
+    expect(landing(await GET(callback("code=c&state=s1"))).detail).toBe("400-other");
+    fetchMock.mockResolvedValue(new Response("<html>proxy</html>", { status: 502 }));
+    expect(landing(await GET(callback("code=c&state=s1"))).detail).toBe("502-no-error-field");
+  });
+
+  it("a 200 from the token endpoint that is not JSON is a token-exchange failure, not a session one", async () => {
+    fetchMock.mockResolvedValue(new Response("<html>captive portal</html>", { status: 200 }));
+    expect(landing(await GET(callback("code=c&state=s1")))).toMatchObject({
+      reason: "token-exchange",
+      detail: "200-unparseable",
+    });
+  });
+
+  it("a 200 whose JSON is null carries no identity", async () => {
+    fetchMock.mockResolvedValue(new Response("null", { status: 200 }));
+    expect(landing(await GET(callback("code=c&state=s1"))).reason).toBe("no-id-token");
   });
 
   it("the box could not reach Google's token endpoint", async () => {
@@ -115,6 +145,28 @@ describe("Google callback names the exit it took", () => {
     expect(landing(await GET(callback("code=c&state=s1")))).toMatchObject({ reason: "id-token", detail: "ECONNRESET" });
   });
 
+  it("a claim failure names the claim, so a clock running behind reads as nbf", async () => {
+    tokenOk();
+    jwtVerify.mockRejectedValue(Object.assign(new Error("x"), { code: "ERR_JWT_CLAIM_VALIDATION_FAILED", claim: "nbf" }));
+    expect(landing(await GET(callback("code=c&state=s1"))).detail).toBe("ERR_JWT_CLAIM_VALIDATION_FAILED-nbf");
+  });
+
+  it("the log carries the sanitized detail, never the raw one", async () => {
+    tokenOk();
+    jwtVerify.mockRejectedValue(Object.assign(new Error("x"), { code: "bad code@owner example" }));
+    await GET(callback("code=c&state=s1"));
+    const line = JSON.parse(vi.mocked(console.warn).mock.calls.at(-1)?.[0] as string);
+    expect(line).toEqual({ event: "google_signin_failed", reason: "id-token", detail: "bad-code-owner-example" });
+  });
+
+  it("the session exit: Google verified the owner but the studio could not sign a session", async () => {
+    tokenOk();
+    jwtVerify.mockResolvedValue({ payload: { email: "owner@example.com", email_verified: true } });
+    listPasskeys.mockResolvedValue([]);
+    delete process.env.EDITFORGE_SESSION_SECRET;
+    expect(landing(await GET(callback("code=c&state=s1")))).toMatchObject({ reason: "session", detail: "Error" });
+  });
+
   it("an unverified email", async () => {
     tokenOk();
     jwtVerify.mockResolvedValue({ payload: { email: "owner@example.com", email_verified: false } });
@@ -127,6 +179,12 @@ describe("Google callback names the exit it took", () => {
     const r = landing(await GET(callback("code=c&state=s1")));
     expect(r).toMatchObject({ reason: "email-not-allowed", detail: "work.example" });
     expect(r.url.toString()).not.toContain("someone.else");
+  });
+
+  it("takes the domain after the last @", async () => {
+    tokenOk();
+    jwtVerify.mockResolvedValue({ payload: { email: '"someone.private@inner"@work.example', email_verified: true } });
+    expect(landing(await GET(callback("code=c&state=s1"))).detail).toBe("work.example");
   });
 
   it("logs the reason on the server", async () => {
@@ -146,6 +204,24 @@ describe("Google callback success", () => {
     expect(session).toBeDefined();
     // Strict is not sent on the redirect that follows a Google-started navigation.
     expect(session).toMatch(/;\s*SameSite=lax/i);
+    const marker = res.headers.getSetCookie().find((c) => c.startsWith("editforge_signin_marker="));
+    expect(marker).toMatch(/editforge_signin_marker=1;.*Max-Age=300/);
+    expect(marker).toMatch(/Secure/);
+    expect(marker).toMatch(/SameSite=none/i);
+    expect(console.info).toHaveBeenCalledWith(
+      JSON.stringify({ event: "google_signin_succeeded", landing: "/security" }),
+    );
+  });
+
+  it("a passkey store that throws synchronously still signs the owner in", async () => {
+    tokenOk();
+    jwtVerify.mockResolvedValue({ payload: { email: "owner@example.com", email_verified: true } });
+    listPasskeys.mockImplementation(() => {
+      throw new Error("store unreadable");
+    });
+    const res = await GET(callback("code=c&state=s1"));
+    expect(landing(res).path).toBe("/");
+    expect(res.headers.getSetCookie().some((c) => c.startsWith("editforge_session="))).toBe(true);
   });
 
   it("goes home once a passkey exists", async () => {
@@ -167,5 +243,28 @@ describe("login page message", () => {
   it("does not treat an inherited property name as a reason", async () => {
     const { googleFailureMessage } = await import("@/lib/google-auth");
     expect(googleFailureMessage("constructor", null)).toBe("Google sign-in could not be verified for this studio.");
+    expect(googleFailureMessage("__proto__", "img-src-x-onerror")).toBe("Google sign-in could not be verified for this studio.");
+  });
+
+  it("shows a detail only when it fits its reason, so a crafted link cannot write on the page", async () => {
+    const { googleFailureMessage } = await import("@/lib/google-auth");
+    const shown = (reason: string, detail: string) => googleFailureMessage(reason, detail).includes(detail);
+    expect(shown("google-error", "access_denied")).toBe(true);
+    expect(shown("google-error", "Session-expired-call-555-0100")).toBe(false);
+    expect(shown("email-not-allowed", "gmail.com")).toBe(true);
+    expect(shown("email-not-allowed", "Call-555-0100-to-restore-owner-access")).toBe(false);
+    expect(shown("token-exchange", "401-invalid_client")).toBe(true);
+    expect(shown("token-exchange", "400-redirect_uri_mismatch")).toBe(true);
+    expect(shown("token-exchange", "network-ENOTFOUND")).toBe(true);
+    expect(shown("token-exchange", "Re-verify-at-evil-example.com")).toBe(false);
+    expect(shown("id-token", "ERR_JWT_CLAIM_VALIDATION_FAILED-nbf")).toBe(true);
+    expect(shown("state-cookie", "state-verifier")).toBe(true);
+    expect(shown("state-mismatch", "anything")).toBe(false);
+    expect(googleFailureMessage("google-error", "Session-expired")).toBe("Google did not complete the sign-in. (google-error)");
+  });
+
+  it("names a session that did not come back after a good callback", async () => {
+    const { googleFailureMessage } = await import("@/lib/google-auth");
+    expect(googleFailureMessage("session-not-sent", null)).toMatch(/did not send the studio's session back.*\(session-not-sent\)$/);
   });
 });

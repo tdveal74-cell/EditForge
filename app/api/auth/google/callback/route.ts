@@ -4,11 +4,15 @@ import { SESSION_COOKIE, secretsMatch, sessionToken } from "@/lib/auth";
 import {
   GOOGLE_STATE_COOKIE,
   GOOGLE_VERIFIER_COOKIE,
+  SIGNIN_MARKER_COOKIE,
+  emailDomain,
   googleAuthConfig,
   googleAuthOrigin,
+  googleErrorCode,
   googleFailurePath,
   postSignInPath,
   sanitizeFailureDetail,
+  tokenErrorCode,
   type GoogleFailure,
 } from "@/lib/google-auth";
 import { listPasskeys } from "@/lib/passkeys";
@@ -18,10 +22,14 @@ export const runtime = "nodejs";
 
 const googleKeys = createRemoteJWKSet(new URL("https://www.googleapis.com/oauth2/v3/certs"));
 
-/** A short machine code for a thrown error: jose's code, then Node's network cause. */
+/**
+ * A short machine code for a thrown error: jose's code (with the claim that
+ * failed, so a clock running behind reads as -nbf), then Node's network cause.
+ */
 function failureCode(err: unknown): string {
-  const e = err as { code?: string; name?: string; cause?: { code?: string } };
-  return e?.code || e?.cause?.code || e?.name || "unknown";
+  const e = err as { code?: string; name?: string; claim?: string; cause?: { code?: string } };
+  const code = e?.code || e?.cause?.code || e?.name || "unknown";
+  return typeof e?.claim === "string" ? `${code}-${e.claim}` : code;
 }
 
 function clearCeremonyCookies(response: NextResponse) {
@@ -45,7 +53,7 @@ export async function GET(req: NextRequest) {
   if (!config) return fail("not-configured");
 
   const googleError = req.nextUrl.searchParams.get("error");
-  if (googleError) return fail("google-error", googleError);
+  if (googleError) return fail("google-error", googleErrorCode(googleError));
   const code = req.nextUrl.searchParams.get("code") || "";
   const state = req.nextUrl.searchParams.get("state") || "";
   const expectedState = req.cookies.get(GOOGLE_STATE_COOKIE)?.value || "";
@@ -77,17 +85,24 @@ export async function GET(req: NextRequest) {
       return fail("token-exchange", `network-${failureCode(err)}`);
     }
     if (!tokenResponse.ok) {
-      // Google's error field is a fixed vocabulary (invalid_grant,
-      // redirect_uri_mismatch, invalid_client); the description is not kept.
-      const body = (await tokenResponse.json().catch(() => ({}))) as { error?: string };
-      return fail("token-exchange", `${tokenResponse.status}-${body.error ?? "no-error-field"}`);
+      // Only a known error code is kept; anything else is "other", and the
+      // description is never read.
+      const body = (await tokenResponse.json().catch(() => null)) as { error?: unknown } | null;
+      return fail("token-exchange", `${tokenResponse.status}-${tokenErrorCode(body?.error)}`);
     }
-    const tokens = (await tokenResponse.json()) as { id_token?: string };
-    if (!tokens.id_token) return fail("no-id-token");
+    let tokens: unknown;
+    try {
+      tokens = await tokenResponse.json();
+    } catch {
+      // A 200 that is not JSON came from something between the box and Google.
+      return fail("token-exchange", `${tokenResponse.status}-unparseable`);
+    }
+    const idToken = (tokens as { id_token?: unknown } | null)?.id_token;
+    if (typeof idToken !== "string" || !idToken) return fail("no-id-token");
 
     let payload: Awaited<ReturnType<typeof jwtVerify>>["payload"];
     try {
-      ({ payload } = await jwtVerify(tokens.id_token, googleKeys, {
+      ({ payload } = await jwtVerify(idToken, googleKeys, {
         issuer: ["https://accounts.google.com", "accounts.google.com"],
         audience: config.clientId,
       }));
@@ -98,11 +113,14 @@ export async function GET(req: NextRequest) {
     if (payload.email_verified !== true) return fail("email-unverified");
     // The domain alone says whether a different account was picked, without
     // putting anyone's address in a URL or a log.
-    if (!config.allowedEmails.includes(email)) return fail("email-not-allowed", email.split("@")[1] || "no-email");
+    if (!config.allowedEmails.includes(email)) return fail("email-not-allowed", emailDomain(email) || "no-email");
 
     // A store read failure must not strand a verified owner; fall back home.
-    const passkeyCount = await listPasskeys().then((keys) => keys.length, () => 1);
-    const response = NextResponse.redirect(new URL(postSignInPath(passkeyCount), config.origin));
+    const passkeyCount = await Promise.resolve()
+      .then(listPasskeys)
+      .then((keys) => keys.length, () => 1);
+    const landing = postSignInPath(passkeyCount);
+    const response = NextResponse.redirect(new URL(landing, config.origin));
     clearCeremonyCookies(response);
     response.cookies.set(SESSION_COOKIE, await sessionToken(), {
       httpOnly: true,
@@ -115,6 +133,10 @@ export async function GET(req: NextRequest) {
       path: "/",
       maxAge: 60 * 60 * 12,
     });
+    // No secret in it. It lets the proxy name a session that did not come back
+    // on the next request instead of showing a blank login page.
+    response.cookies.set(SIGNIN_MARKER_COOKIE, "1", { sameSite: "none", secure: true, path: "/", maxAge: 5 * 60 });
+    console.info(JSON.stringify({ event: "google_signin_succeeded", landing: landing.split("?")[0] }));
     return response;
   } catch (err) {
     return fail("session", failureCode(err));

@@ -7,6 +7,7 @@ import {
   isAuthenticated,
   secretsMatch,
 } from "@/lib/auth";
+import { SIGNIN_MARKER_COOKIE } from "@/lib/google-auth";
 
 /**
  * Makes the whole studio private when any application credential is set.
@@ -74,6 +75,16 @@ export async function proxy(req: NextRequest) {
   const url = req.nextUrl.clone();
   url.pathname = "/login";
   url.search = "";
+  // A Google sign-in finished minutes ago, yet no valid session came with this
+  // request. Name it rather than show a login page that looks untouched.
+  if (req.cookies.get(SIGNIN_MARKER_COOKIE)?.value) {
+    const reason = req.cookies.get(SESSION_COOKIE)?.value ? "session-invalid" : "session-not-sent";
+    url.search = new URLSearchParams({ auth: "google-failed", reason }).toString();
+    console.warn(JSON.stringify({ event: "google_signin_failed", reason, detail: "" }));
+    const response = NextResponse.redirect(url);
+    response.cookies.set(SIGNIN_MARKER_COOKIE, "", { sameSite: "none", secure: true, path: "/", maxAge: 0 });
+    return response;
+  }
   return NextResponse.redirect(url);
 }
 

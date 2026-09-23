@@ -23,7 +23,9 @@ export function parseAgentReply(value: unknown, project: Project): AgentReply {
     throw new Error(
       "The agent response was incomplete. No render was submitted.",
     );
-  const action = raw.action;
+  // Structured outputs do not guarantee the capitalization of enum values.
+  const action =
+    typeof raw.action === "string" ? raw.action.toLowerCase() : raw.action;
   if (!["reply", "plan", "render", "outputs"].includes(String(action)))
     throw new Error("The agent proposed an unsupported action.");
   const reply: AgentReply = {
@@ -49,18 +51,20 @@ export function parseAgentReply(value: unknown, project: Project): AgentReply {
     reply.nodeIds = [...new Set(raw.nodeIds as string[])];
   }
   if (action === "plan") {
+    // A one-node plan has no edges, and a model may leave the key out.
+    const rawEdges = raw.edges === undefined ? [] : raw.edges;
     if (
       !Array.isArray(raw.nodes) ||
       raw.nodes.length < 1 ||
       raw.nodes.length > 30 ||
-      !Array.isArray(raw.edges)
+      !Array.isArray(rawEdges)
     )
       throw new Error("The agent plan exceeds the graph limit.");
     // Allow only creative input. The model cannot mint receipts, media URLs,
     // consent, approval, completed statuses, or saved project identifiers.
     const nodes: GraphNode[] = raw.nodes.map((n, i) => ({
       id: String(n.id ?? `scene-${i}`),
-      kind: n.kind,
+      kind: typeof n.kind === "string" ? n.kind.toLowerCase() : n.kind,
       title: n.title,
       prompt: n.prompt,
       aspectRatio: ASPECT_OPTIONS.includes(n.aspectRatio)
@@ -72,7 +76,7 @@ export function parseAgentReply(value: unknown, project: Project): AgentReply {
       y: 60 + Math.floor(i / 4) * 310,
       status: "idle",
     }));
-    const edges: GraphEdge[] = raw.edges.map((e, i) => ({
+    const edges: GraphEdge[] = rawEdges.map((e, i) => ({
       id: `agent-edge-${i}`,
       from: String(e.from),
       to: String(e.to),

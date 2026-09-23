@@ -154,6 +154,7 @@ export function CanvasWorkspace({
   const [message, setMessage] = useState("");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [configured, setConfigured] = useState(false);
+  const [agentLabel, setAgentLabel] = useState<string | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [voiceConsent, setVoiceConsent] = useState(false);
   const [proposal, setProposal] = useState<AgentReply | null>(null);
@@ -167,6 +168,8 @@ export function CanvasWorkspace({
   const importer = useRef<HTMLInputElement>(null);
   const graph = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
+  const messagesBox = useRef<HTMLDivElement>(null);
+  const revealTurn = useRef(false);
   const drag = useRef<{
     id: string;
     px: number;
@@ -245,6 +248,7 @@ export function CanvasWorkspace({
         if (data.error) throw new Error(data.error);
         setSaved(data.projects);
         setConfigured(data.agentConfigured);
+        setAgentLabel(data.agentProvider ?? null);
         if (p?.project) {
           setProject(p.project);
           current.current = p.project;
@@ -272,6 +276,30 @@ export function CanvasWorkspace({
       active = false;
     };
   }, [project.id]);
+  // The conversation is its own scroll box; bring the newest turn into view,
+  // from its start, whenever the turns change or the Floor Agent tab comes
+  // back, so a reply or a failure lands where the producer is looking.
+  useEffect(() => {
+    const reveal = revealTurn.current;
+    revealTurn.current = false;
+    const box = messagesBox.current;
+    const last = box?.lastElementChild;
+    if (!box || !last) return;
+    box.scrollTop +=
+      last.getBoundingClientRect().top - box.getBoundingClientRect().top;
+    // A phone scrolled down to the composer can have the box's top above the
+    // screen, under the sticky nav, so a long reply would open on its middle.
+    // Right after a send, and only when the reply's start is hidden, move the
+    // page to show the box's top.
+    if (!reveal) return;
+    const nav = Math.max(
+      0,
+      document.querySelector(".forge-nav")?.getBoundingClientRect().bottom ?? 0,
+    );
+    const reply = last.querySelector(".agent-message") ?? last;
+    if (reply.getBoundingClientRect().top >= nav) return;
+    window.scrollBy({ top: box.getBoundingClientRect().top - nav - 8 });
+  }, [turns, tab]);
   useEffect(() => {
     if (!dirty) return;
     const handler = (e: BeforeUnloadEvent) => {
@@ -433,9 +461,40 @@ export function CanvasWorkspace({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: p.id, message: text, requestId }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Agent request failed.");
-      if (!data.turn) throw new Error("No conversation receipt returned.");
+      // Anything in front of the studio (a gateway, a captive portal) can
+      // answer with HTML, even with a 200, so a missing turn is treated as a
+      // failure too.
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.turn) {
+        // Show the failure in the conversation, beside the composer, and not
+        // only at the top of the page. The route stores most failed turns with
+        // their reason; a refusal before the turn is claimed (no key, the
+        // hourly limit, a reply still pending) stores nothing, so that one is
+        // shown as an unsaved turn.
+        const reason =
+          data.error ||
+          "The studio did not get an answer back. Check the conversation before sending again. No render was submitted.";
+        const history = await fetch(
+          `/api/canvas/agent?projectId=${encodeURIComponent(p.id)}`,
+        )
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null);
+        const saved: Turn[] | null = Array.isArray(history?.turns)
+          ? history.turns
+          : null;
+        revealTurn.current = true;
+        setTurns((all) => {
+          const list = saved ?? all.filter((t) => t.id !== requestId);
+          return list.some((t) => t.id === requestId)
+            ? list
+            : [
+                ...list,
+                { id: requestId, message: text, status: "error", error: reason },
+              ];
+        });
+        throw new Error(reason);
+      }
+      revealTurn.current = true;
       setTurns((all) => [
         ...all.filter((t) => t.id !== data.turn.id),
         data.turn,
@@ -1194,7 +1253,9 @@ export function CanvasWorkspace({
                   className={`agent-connection ${configured ? "ready" : ""}`}
                 >
                   {configured
-                    ? "Live agent configured"
+                    ? agentLabel
+                      ? `Live agent configured · ${agentLabel}`
+                      : "Live agent configured"
                     : "Agent connection needed"}
                 </span>
                 <p className="small">
@@ -1203,7 +1264,11 @@ export function CanvasWorkspace({
                 </p>
               </div>
               <div className="agent-conversation">
-                <div className="agent-messages" aria-live="polite">
+                <div
+                  className="agent-messages"
+                  aria-live="polite"
+                  ref={messagesBox}
+                >
                   {!turns.length && (
                     <div className="agent-empty">
                       <p>What are we making?</p>

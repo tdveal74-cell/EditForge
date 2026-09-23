@@ -512,3 +512,74 @@ describe("Canvas tools", () => {
     expect(jobs.parsed.jobs).toEqual([]);
   });
 });
+
+describe("Edit worker, catalog, stock and planner tools", () => {
+  const EDIT_BASE = {
+    schema: "editforge.edit-command.v1",
+    projectId: "project-tqo-001",
+    property: "tqo",
+    deliverable: "long-form",
+    issuedBy: "DEVON",
+    source: { uri: "https://media.example/source.mp4", sha256: "a".repeat(64) },
+    identity: { cloneId: "tee-clone-v1", voiceId: "tee-voice-v1", version: "tee-identity-v1", consentRecorded: true },
+    canon: { version: "tqo-canon-v1", locked: true },
+    authorization: { approvalId: "approval-001", approvedBy: "Tee", scopes: ["edit:*"] },
+  };
+
+  it("gates the edit worker and the catalog writes, and leaves the planners open", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const open = await (await POST(rpc("tools/list"))).json();
+    const openNames: string[] = open.result.tools.map((t: { name: string }) => t.name);
+    for (const gated of ["list_edits", "get_edit", "submit_edit", "drive_edit", "add_asset", "add_stock"]) {
+      expect(openNames).not.toContain(gated);
+    }
+    for (const read of ["list_assets", "list_stock", "plan_gen_video", "plan_voice", "plan_avatar"]) {
+      expect(openNames).toContain(read);
+    }
+  });
+
+  it("refuses an invalid edit command before anything reaches the worker", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await callTool("submit_edit", { command: { schema: "nope" } }, TOKEN);
+    expect(res.parsed.error).toBe("invalid edit command");
+    expect(res.parsed.executed).toBe(false);
+  });
+
+  it("refuses a master render without a recorded rubric pass", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    await upsertCut({ id: "cut-mcp-master", title: "No pass yet", status: "ingest", rubricPass: false } as never);
+    const res = await callTool(
+      "submit_edit",
+      {
+        command: {
+          ...EDIT_BASE,
+          commandId: "cmd-mcp-master-001",
+          cutId: "cut-mcp-master",
+          operations: [{ id: "op-master", type: "render-master", params: {} }],
+          output: { mode: "master", width: 1920, height: 1080, fps: 24, container: "mp4" },
+        },
+      },
+      TOKEN,
+    );
+    expect(res.parsed.error).toMatch(/master render blocked/);
+    expect(res.parsed.executed).toBe(false);
+    const edits = await callTool("list_edits", {}, TOKEN);
+    expect(edits.parsed.executions.some((e: { commandId?: string }) => e.commandId === "cmd-mcp-master-001")).toBe(false);
+  });
+
+  it("answers a planner without submitting a job", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const plan = await callTool("plan_gen_video", { prompt: "Slow push in on a desk lamp", durationSec: 5 }, TOKEN);
+    expect(plan.isError).toBe(false);
+    expect(plan.parsed).toBeTruthy();
+    expect(plan.parsed.error).toBeUndefined();
+    const jobs = await callTool("list_jobs", {}, TOKEN);
+    expect(jobs.parsed.jobs).toEqual([]);
+  });
+
+  it("refuses stock without a licence note", async () => {
+    process.env.EDITFORGE_MCP_TOKEN = TOKEN;
+    const res = await callTool("add_stock", { kind: "music", title: "Test bed", licenseNote: " " }, TOKEN);
+    expect(res.parsed.error).toMatch(/licen/i);
+  });
+});

@@ -26,6 +26,33 @@ import { getProject, listProjects, saveProject } from "@/modules/canvas/server-s
 import { newProject } from "@/modules/canvas/model";
 import { renderPlan } from "@/modules/canvas/render";
 import { TEMPLATES } from "@/modules/canvas/templates";
+import { addAsset, addStock, listAssets, listStock } from "./catalog";
+import { commandNeedsRubric, validateEditCommand, type EditCommand } from "./editing";
+import {
+  acceptEditCommand,
+  cancelEditExecution,
+  getEditExecution,
+  listEditExecutions,
+  markDispatchFailed,
+  markDispatched,
+  recordWorkerReceipt,
+} from "./editstore";
+import { cancelWorker, dispatchToWorker, pollWorker } from "./edit-worker";
+import { POST as planGenVideoRoute } from "@/app/api/gen-video/plan/route";
+import { POST as planVoiceRoute } from "@/app/api/voice/plan/route";
+import { POST as planAvatarRoute } from "@/app/api/avatar/plan/route";
+
+/** The planners are pure and live in their routes; call them rather than copy them. */
+async function viaPlanner(handler: (req: Request) => Promise<Response>, body: Record<string, unknown>) {
+  const res = await handler(
+    new Request("http://editforge.local/plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+  );
+  return res.json();
+}
 
 /**
  * EditForge as an MCP server.
@@ -610,6 +637,176 @@ export const TOOLS: Tool[] = [
         return { error: (err as Error).message };
       }
     },
+  },
+  {
+    name: "list_edits",
+    description:
+      "Edit executions on the edit worker: each DEVON edit command, its status (accepted, dispatched, running, validating, completed, failed, cancelled) and its receipt.",
+    privileged: true,
+    inputSchema: obj({}),
+    run: async () => ({ executions: await listEditExecutions() }),
+  },
+  {
+    name: "get_edit",
+    description: "One edit execution by command id. Set poll to ask the edit worker for a fresh receipt first.",
+    privileged: true,
+    inputSchema: obj({ id: str("Command id"), poll: bool("Ask the worker for the latest receipt") }, ["id"]),
+    run: async (args) => {
+      const id = String(args.id);
+      let execution = await getEditExecution(id);
+      if (!execution) return { error: `No edit execution with id ${id}` };
+      if (args.poll === true && execution.workerJobId) {
+        const receipt = await pollWorker(execution.workerJobId);
+        if (receipt) execution = (await recordWorkerReceipt(id, receipt)) ?? execution;
+      }
+      return { execution };
+    },
+  },
+  {
+    name: "submit_edit",
+    description:
+      "Send one edit command (schema editforge.edit-command.v1) to the edit worker: trim, split, reorder, captions, audio mix, grade, titles, voice, assemble an episode, derive a short, render a preview. The command must carry Tee's approval id and, for his likeness or voice, consentRecorded. A master render is refused unless the cut has a recorded rubric pass, which only Tee records. Resubmitting the same commandId returns the original execution rather than running it twice. Synthesis and full-motion operations can spend money.",
+    mutating: true,
+    inputSchema: obj({ command: { type: "object", description: "The full edit command, schema editforge.edit-command.v1" } }, ["command"]),
+    run: async (args) => {
+      const issues = validateEditCommand(args.command);
+      if (issues.some((issue) => issue.severity === "error")) {
+        return { error: "invalid edit command", issues, executed: false };
+      }
+      const command = args.command as unknown as EditCommand;
+      if (commandNeedsRubric(command)) {
+        const cut = await getCut(command.cutId);
+        if (!cut?.rubricPass) {
+          return { error: `master render blocked: cut ${command.cutId} has no recorded rubric pass`, executed: false };
+        }
+      }
+      try {
+        const accepted = await acceptEditCommand(command);
+        if (accepted.deduped) return { execution: accepted.execution, deduped: true, executed: false };
+        const dispatched = await dispatchToWorker(accepted.execution);
+        if (!dispatched.ok) {
+          return { error: dispatched.error, execution: await markDispatchFailed(command.commandId, dispatched.error), executed: false };
+        }
+        return { execution: await markDispatched(command.commandId, dispatched.workerJobId), deduped: false, executed: true };
+      } catch (err) {
+        return { error: (err as Error).message, executed: false };
+      }
+    },
+  },
+  {
+    name: "drive_edit",
+    description: "Cancel an edit execution, or retry one that failed. Other transitions are refused.",
+    mutating: true,
+    inputSchema: obj(
+      { id: str("Command id"), action: { type: "string", enum: ["cancel", "retry"], description: "What to do" } },
+      ["id", "action"]
+    ),
+    run: async (args) => {
+      const id = String(args.id);
+      const existing = await getEditExecution(id);
+      if (!existing) return { error: `No edit execution with id ${id}` };
+      try {
+        if (args.action === "cancel") {
+          if (existing.workerJobId) await cancelWorker(existing.workerJobId);
+          return { execution: await cancelEditExecution(id) };
+        }
+        if (args.action === "retry") {
+          if (existing.status !== "failed") return { error: `cannot retry ${existing.status} execution` };
+          const dispatched = await dispatchToWorker(existing);
+          if (!dispatched.ok) return { error: dispatched.error, execution: await markDispatchFailed(id, dispatched.error) };
+          return { execution: await markDispatched(id, dispatched.workerJobId), executed: true };
+        }
+        return { error: "action must be cancel or retry" };
+      } catch (err) {
+        return { error: (err as Error).message };
+      }
+    },
+  },
+  {
+    name: "list_assets",
+    description: "The studio's asset catalog: every filed asset with its type, tags and location.",
+    inputSchema: obj({}),
+    run: async () => ({ assets: await listAssets() }),
+  },
+  {
+    name: "add_asset",
+    description: "File an asset in the catalog. A name already in the catalog is refused rather than duplicated.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        name: str("Filename"),
+        type: str("Asset type, as the catalog defines it"),
+        tags: { type: "array", items: { type: "string" }, description: "Search tags" },
+        location: str("Where the file lives"),
+      },
+      ["name", "type"]
+    ),
+    run: async (args) => {
+      const tags: unknown = args.tags;
+      const result = await addAsset({
+        name: String(args.name ?? ""),
+        type: String(args.type ?? ""),
+        tags: Array.isArray(tags) ? tags.map(String) : undefined,
+        location: args.location === undefined ? undefined : String(args.location),
+      });
+      return result.ok ? { asset: result.item } : { error: result.reason };
+    },
+  },
+  {
+    name: "list_stock",
+    description: "The stock library: licensed music, SFX and footage, each with its licence note.",
+    inputSchema: obj({}),
+    run: async () => ({ stock: await listStock() }),
+  },
+  {
+    name: "add_stock",
+    description: "File a stock item. A licence note is required; it travels with the item to archive.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        kind: str("Stock kind, as the library defines it"),
+        title: str("Title"),
+        mood: str("Mood"),
+        durationSec: num("Duration in seconds"),
+        licenseNote: str("Licence terms"),
+      },
+      ["kind", "title", "licenseNote"]
+    ),
+    run: async (args) => {
+      const result = await addStock({
+        kind: String(args.kind ?? ""),
+        title: String(args.title ?? ""),
+        mood: args.mood === undefined ? undefined : String(args.mood),
+        durationSec: typeof args.durationSec === "number" ? args.durationSec : undefined,
+        licenseNote: String(args.licenseNote ?? ""),
+      });
+      return result.ok ? { stock: result.item } : { error: result.reason };
+    },
+  },
+  {
+    name: "plan_gen_video",
+    description: "Plan a generated video shot: provider choice, readiness, duration, aspect and quality bar. Read-only; nothing is submitted.",
+    inputSchema: obj({
+      prompt: str("The shot brief"),
+      provider: str("Preferred provider"),
+      durationSec: num("2 to 10 seconds"),
+      aspect: str("Aspect ratio"),
+      quality: { type: "string", enum: ["draft", "social", "broadcast-intent"], description: "Quality bar" },
+      mode: str("text-to-video or image-to-video"),
+    }),
+    run: async (args) => viaPlanner(planGenVideoRoute, args),
+  },
+  {
+    name: "plan_voice",
+    description: "Plan a voice line: which voice, estimated length, and whether the voice lane is ready. Read-only; nothing is synthesized.",
+    inputSchema: obj({ text: str("The line"), voiceId: str("Voice id") }),
+    run: async (args) => viaPlanner(planVoiceRoute, args),
+  },
+  {
+    name: "plan_avatar",
+    description: "Plan an avatar or talking head render: the flow and the settings it needs. Read-only; nothing is rendered.",
+    inputSchema: obj({ prompt: str("The brief"), designSource: str("Design source") }),
+    run: async (args) => viaPlanner(planAvatarRoute, args),
   },
 ];
 

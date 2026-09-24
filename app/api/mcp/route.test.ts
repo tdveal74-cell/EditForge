@@ -638,7 +638,7 @@ describe("Drive and QC tools", () => {
     process.env.EDITFORGE_MCP_TOKEN = TOKEN;
     const open = await (await POST(rpc("tools/list"))).json();
     const names: string[] = open.result.tools.map((t: { name: string }) => t.name);
-    for (const gated of ["drive_search", "drive_read", "record_qc"]) expect(names).not.toContain(gated);
+    for (const gated of ["drive_search", "drive_read", "record_qc", "research_file"]) expect(names).not.toContain(gated);
   });
 
   it("routes each tool to its webhook, signed with the server's token", async () => {
@@ -667,6 +667,16 @@ describe("Drive and QC tools", () => {
     expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
     expect(calls[0].body).toEqual({ action: "search", name: "TQO_CANON" });
     expect(calls[1].body).toEqual({ action: "read", fileId: "abc123XYZ" });
+    const piece = { action: "file", area: "SYS", slug: "x-y", version: 1, settledDate: "2026-09-24", markdown: "# m", filedBy: "Thoth" };
+    await callTool("research_file", { action: "index", query: "pricing" }, TOKEN);
+    await callTool("research_file", piece, TOKEN);
+    expect(calls.slice(3).map((c) => c.url)).toEqual([
+      "https://n8n.editforge.online/webhook/bot-research-file",
+      "https://n8n.editforge.online/webhook/bot-research-file",
+    ]);
+    expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
+    expect(calls[3].body).toEqual({ action: "index", query: "pricing" });
+    expect(calls[4].body).toEqual(piece);
     expect(calls[2].body.stage).toBe("qc");
   });
 

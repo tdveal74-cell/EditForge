@@ -966,7 +966,7 @@ export const TOOLS: Tool[] = [
   {
     name: "script_draft",
     description:
-      "Save a script draft for Tee's review as a Google Doc in the show's scripts folder, or list the drafts already there. action 'index': the AREA_SCRIPT_ files, filtered by an optional area and query. action 'draft': creates AREA_SCRIPT_slug_vN_YYYY-MM-DD as a Google Doc and reads it back; the version is the next one for that slug, counting V5's files and SUPERSEDED_ ones, and every earlier version is left where it is. Creates only: it never publishes, renames, moves, deletes or shares anything. Refuses em or en dashes in the title or text.",
+      "Save a script draft for Tee's review as a Google Doc in the show's scripts folder, or list the drafts already there. action 'index': the AREA_SCRIPT_ files, filtered by an optional area and query. action 'draft': creates AREA_SCRIPT_slug_vN_YYYY-MM-DD as a Google Doc and reads its name, folder and text back; a draft that did not save cleanly comes back as an error, and a Doc may exist anyway, so do not retry it. The version is the next one for that slug, counting V5's files and SUPERSEDED_ ones, and every earlier version is left where it is. Creates only: it never publishes, renames, moves, deletes or shares anything. Refuses em or en dashes in the title or text.",
     mutating: true,
     inputSchema: obj(
       {

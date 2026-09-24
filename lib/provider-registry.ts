@@ -96,6 +96,11 @@ export type ProviderWire = {
     extension: string;
     readBase64: (data: unknown) => string | undefined;
   };
+  /**
+   * The finished task names a provider URL that expires. Copy the file into the
+   * artifact store when the poll first reads success, so the studio keeps it.
+   */
+  storeResult?: { maxBytes: number };
 };
 
 export type ProviderSpec = {
@@ -417,6 +422,7 @@ export const PROVIDERS: ProviderSpec[] = [
         ratio: s.ratio,
       }),
       pollPath: (id) => `/tasks/${encodeURIComponent(id)}`,
+      storeResult: { maxBytes: 20_000_000 },
     },
   },
   { id: "kling", kind: "gen-video", label: "Kling", envKey: "KLING_API_KEY" },

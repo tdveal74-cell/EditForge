@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { promises as fs } from "node:fs";
+import { promises as fs, statSync } from "node:fs";
 import path from "node:path";
 import {
   artifactDir,
@@ -12,6 +12,7 @@ import { findProvider, providerReadiness } from "@/lib/providers";
 import {
   RUNWAY_IMAGE_RATIOS,
   RUNWAY_PROMPT_MAX,
+  RUNWAY_REFERENCE_MAX_BYTES,
   RUNWAY_VIDEO_ASPECTS,
 } from "@/lib/provider-registry";
 import { connectedContext, generationNodes, safeAssetUrl } from "./model";
@@ -99,6 +100,11 @@ export function renderPlan(p: Project, ids: string[]) {
         ids.includes(reference.id))
     )
       reason = "Render and accept the connected reference still first.";
+    else if (reference?.assetUrl) {
+      const bytes = localReferenceBytes(reference.assetUrl);
+      if (bytes !== undefined && bytes > RUNWAY_REFERENCE_MAX_BYTES)
+        reason = `The connected still is ${(bytes / 1_000_000).toFixed(1)} MB. Runway takes a reference up to 3.3 MB.`;
+    }
     return {
       nodeId: n.id,
       title: n.title,
@@ -117,6 +123,33 @@ export function renderPlan(p: Project, ids: string[]) {
     .update(JSON.stringify({ project: p.id, revision: p.revision, items }))
     .digest("hex");
   return { items, confirmation, projectId: p.id, revision: p.revision };
+}
+
+/** Where a studio still lives on disk; HTTPS references are fetched by Runway. */
+function localReferencePath(url: string): string | undefined {
+  if (!safeAssetUrl(url)) return undefined;
+  const publicBase = process.env.EDITFORGE_PUBLIC_URL?.replace(/\/$/, "");
+  if (url.startsWith("https://")) {
+    if (!publicBase || !url.startsWith(`${publicBase}/api/artifacts/`)) return undefined;
+    url = url.slice(publicBase.length);
+  }
+  const name = path.basename(url);
+  const root =
+    url.startsWith("/api/artifacts/") && isArtifactName(name)
+      ? artifactDir()
+      : path.join(process.cwd(), "public", path.dirname(url));
+  return root ? path.join(root, name) : undefined;
+}
+
+/** Size of a local reference still, so the plan can refuse before anyone pays. */
+function localReferenceBytes(url: string): number | undefined {
+  const file = localReferencePath(url);
+  if (!file) return undefined;
+  try {
+    return statSync(file).size;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Only read our own public stills/artifacts. Arbitrary paths never reach fs. */

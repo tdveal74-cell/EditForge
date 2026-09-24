@@ -119,3 +119,58 @@ describe("runway reference-to-video, Canvas motion from a Canvas still", () => {
     expect(f).not.toHaveBeenCalled();
   });
 });
+
+describe("runway-image keeps the finished still", () => {
+  const RUNWAY_URL = "https://dnznrvs05pmza.cloudfront.net/out/still.png?sig=abc";
+  function sequence(download: { ok?: boolean; status?: number; bytes?: Uint8Array; contentType?: string }) {
+    const f = vi.fn(async (url: string | URL | Request) => {
+      if (String(url).includes("/v1/tasks/"))
+        return { ok: true, json: async () => ({ status: "SUCCEEDED", output: [RUNWAY_URL] }) } as unknown as Response;
+      return {
+        ok: download.ok ?? true,
+        status: download.status ?? 200,
+        headers: new Headers(download.contentType ? { "content-type": download.contentType } : {}),
+        arrayBuffer: async () => (download.bytes ?? new Uint8Array([137, 80, 78, 71, 1, 2])).buffer,
+      } as unknown as Response;
+    });
+    vi.stubGlobal("fetch", f);
+    return f;
+  }
+
+  it("stores the still in the artifact store and returns the studio URL", async () => {
+    process.env.EDITFORGE_ARTIFACT_DIR = dir;
+    const f = sequence({ contentType: "image/png" });
+    const r = await pollProvider("runway-image", "task-9");
+    expect(r).toMatchObject({ ok: true, state: "succeeded" });
+    if (!r.ok) return;
+    expect(r.result).toMatch(/^\/api\/artifacts\/runway-image-gen-image-[0-9a-f]{16}\.png$/);
+    expect(String(f.mock.calls[1][0])).toBe(RUNWAY_URL);
+    const { readdir } = await import("node:fs/promises");
+    expect((await readdir(dir)).some((n) => n.startsWith("runway-image-gen-image-"))).toBe(true);
+  });
+
+  it("keeps the Runway link and says so when the download fails, never failing the paid job", async () => {
+    process.env.EDITFORGE_ARTIFACT_DIR = dir;
+    sequence({ ok: false, status: 403, contentType: "text/html" });
+    const r = await pollProvider("runway-image", "task-10");
+    expect(r).toMatchObject({ ok: true, state: "succeeded", result: RUNWAY_URL });
+    if (r.ok) expect(r.note).toMatch(/not stored.*HTTP 403/);
+  });
+
+  it("refuses to store something that is not an image", async () => {
+    process.env.EDITFORGE_ARTIFACT_DIR = dir;
+    sequence({ contentType: "text/html" });
+    const r = await pollProvider("runway-image", "task-11");
+    expect(r).toMatchObject({ ok: true, result: RUNWAY_URL });
+    if (r.ok) expect(r.note).toMatch(/unexpected content type text\/html/);
+  });
+
+  it("says the still was not stored when there is no artifact store", async () => {
+    delete process.env.EDITFORGE_ARTIFACT_DIR;
+    const f = sequence({ contentType: "image/png" });
+    const r = await pollProvider("runway-image", "task-12");
+    expect(r).toMatchObject({ ok: true, result: RUNWAY_URL });
+    if (r.ok) expect(r.note).toMatch(/no artifact store/);
+    expect(f).toHaveBeenCalledTimes(1);
+  });
+});

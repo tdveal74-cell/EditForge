@@ -72,3 +72,22 @@ describe("renderNode sends Canvas motion to Runway", () => {
     expect(body).not.toHaveProperty("promptImage");
   });
 });
+
+describe("renderPlan checks the reference still's size", () => {
+  it("refuses a local still over Runway's 3.3 MB before confirmation", async () => {
+    const store = path.join(DATA_DIR, "artifacts");
+    await fs.mkdir(store, { recursive: true });
+    process.env.EDITFORGE_ARTIFACT_DIR = store;
+    const big = "runway-image-gen-image-0123456789abcdef.png";
+    await fs.writeFile(path.join(store, big), new Uint8Array(3_400_000));
+    const p = await setup(true);
+    p.nodes[0].assetUrl = `/api/artifacts/${big}`;
+    const plan = renderPlan(p, ["shot"]);
+    expect(plan.items[0].ready).toBe(false);
+    expect(plan.items[0].reason).toMatch(/3\.4 MB.*3\.3 MB/);
+    const small = "runway-image-gen-image-fedcba9876543210.png";
+    await fs.writeFile(path.join(store, small), new Uint8Array(1000));
+    p.nodes[0].assetUrl = `/api/artifacts/${small}`;
+    expect(renderPlan(p, ["shot"]).items[0].ready).toBe(true);
+  });
+});

@@ -963,6 +963,30 @@ export const TOOLS: Tool[] = [
     ),
     run: async (args) => postToN8n("bot-research-file", args, 90000),
   },
+  {
+    name: "script_draft",
+    description:
+      "Save a script draft for Tee's review as a Google Doc in the show's scripts folder, or list the drafts already there. action 'index': the AREA_SCRIPT_ files, filtered by an optional area and query. action 'draft': creates AREA_SCRIPT_slug_vN_YYYY-MM-DD as a Google Doc and reads it back; the version is the next one for that slug, counting V5's files and SUPERSEDED_ ones, and every earlier version is left where it is. Creates only: it never publishes, renames, moves, deletes or shares anything. Refuses em or en dashes in the title or text.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        action: { type: "string", enum: ["draft", "index"], description: "save a draft, or list the drafts on file" },
+        area: {
+          type: "string",
+          enum: ["TQO", "TSWS", "NCO", "ACX"],
+          description: "The show: TQO, TSWS, NCO (NCO Forge) or ACX. index: optional filter",
+        },
+        query: str("index: words to match in file names"),
+        slug: str("draft: the episode, lowercase words joined by hyphens; keep it across versions"),
+        title: str("draft: the working title"),
+        text: str("draft: the full script, plain text, ready to read aloud"),
+        version: num("draft, optional: the version you expect; refused if it is not the next one"),
+        draftedBy: str("draft: the bot's name"),
+      },
+      ["action"]
+    ),
+    run: async (args) => postToN8n("bot-script-draft", args, 90000),
+  },
 ];
 
 /** Tools a caller may see, given whether it authenticated. */

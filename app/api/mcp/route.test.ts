@@ -638,7 +638,7 @@ describe("Drive and QC tools", () => {
     process.env.EDITFORGE_MCP_TOKEN = TOKEN;
     const open = await (await POST(rpc("tools/list"))).json();
     const names: string[] = open.result.tools.map((t: { name: string }) => t.name);
-    for (const gated of ["drive_search", "drive_read", "record_qc", "research_file"]) expect(names).not.toContain(gated);
+    for (const gated of ["drive_search", "drive_read", "record_qc", "research_file", "script_draft"]) expect(names).not.toContain(gated);
   });
 
   it("routes each tool to its webhook, signed with the server's token", async () => {
@@ -677,6 +677,16 @@ describe("Drive and QC tools", () => {
     expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
     expect(calls[3].body).toEqual({ action: "index", query: "pricing" });
     expect(calls[4].body).toEqual(piece);
+    const draft = { action: "draft", area: "TQO", slug: "x-y", title: "X", text: "Hook.", draftedBy: "TQO Script Writer" };
+    await callTool("script_draft", { action: "index", area: "NCO" }, TOKEN);
+    await callTool("script_draft", draft, TOKEN);
+    expect(calls.slice(5).map((c) => c.url)).toEqual([
+      "https://n8n.editforge.online/webhook/bot-script-draft",
+      "https://n8n.editforge.online/webhook/bot-script-draft",
+    ]);
+    expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
+    expect(calls[5].body).toEqual({ action: "index", area: "NCO" });
+    expect(calls[6].body).toEqual(draft);
     expect(calls[2].body.stage).toBe("qc");
   });
 

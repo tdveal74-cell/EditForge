@@ -449,6 +449,17 @@ export async function pollProvider(
     const data = await res.json();
     const reading: PollReading =
       spec.wire.readPoll?.(data) ?? defaultPoll(data);
+    if (reading.state === "succeeded" && reading.result && spec.wire.storeResult) {
+      const kept = await keepResult(spec, reading.result, spec.wire.storeResult.maxBytes);
+      return {
+        ok: true,
+        provider: spec.id,
+        mode: "live",
+        state: reading.state,
+        result: kept.url,
+        note: kept.note,
+      };
+    }
     return {
       ok: true,
       provider: spec.id,
@@ -464,6 +475,48 @@ export async function pollProvider(
       mode: "live",
       error: `${spec.label} unreachable: ${(err as Error).message}`,
     };
+  }
+}
+
+const KEPT_IMAGE_TYPES: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+};
+
+/**
+ * Copy a finished provider file into the artifact store. The provider has
+ * already been paid by now, so a failure here never fails the job: it keeps
+ * the provider URL and says plainly that the file was not stored.
+ */
+async function keepResult(
+  spec: ProviderSpec,
+  url: string,
+  maxBytes: number,
+): Promise<{ url: string; note: string }> {
+  const unkept = (why: string) => ({
+    url,
+    note: `${spec.label} finished, but the file was not stored (${why}). The provider link may expire; download it or render again.`,
+  });
+  if (!artifactStoreConfigured()) return unkept("no artifact store configured");
+  if (!/^https:\/\//.test(url)) return unkept("the result is not an HTTPS URL");
+  try {
+    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(PROVIDER_POLL_TIMEOUT_MS) });
+    if (!res.ok) return unkept(`download answered HTTP ${res.status}`);
+    const type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const extension = KEPT_IMAGE_TYPES[type];
+    if (!extension) return unkept(`unexpected content type ${type || "none"}`);
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > maxBytes) return unkept("the file is larger than the store allows");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > maxBytes) return unkept("the file is larger than the store allows");
+    const stored = await storeArtifact({ bytes, extension, prefix: `${spec.id}-${spec.kind}` });
+    return {
+      url: stored.url,
+      note: `${spec.label} stored as ${stored.name} (sha256 ${stored.sha256.slice(0, 12)}). Awaiting human review.`,
+    };
+  } catch (err) {
+    return unkept((err as Error).message);
   }
 }
 

@@ -821,7 +821,7 @@ export const TOOLS: Tool[] = [
       durationSec: num("2 to 10 seconds"),
       aspect: str("Aspect ratio"),
       quality: { type: "string", enum: ["draft", "social", "broadcast-intent"], description: "Quality bar" },
-      mode: str("text-to-video or image-to-video"),
+      mode: str("text-to-video, image-to-video (the private presenter reference) or reference-to-video (animates imageUrl)"),
     }),
     run: async (args) => viaPlanner(planGenVideoRoute, args),
   },

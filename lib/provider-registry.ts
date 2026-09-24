@@ -145,6 +145,41 @@ const RUNWAY_ASPECT_RATIOS: Record<string, string> = {
   "9:16": "720:1280",
 };
 
+/** Runway caps promptText at 1000 characters on every generation route. */
+export const RUNWAY_PROMPT_MAX = 1000;
+
+/**
+ * Runway `text_to_image` output resolutions for the studio's aspect names,
+ * from the accepted `ratio` list in Runway's API reference. 3:2 has no
+ * matching Runway resolution, so it is refused rather than cropped silently.
+ */
+export const RUNWAY_IMAGE_RATIOS: Record<string, string> = {
+  "16:9": "1920:1080",
+  "9:16": "1080:1920",
+  "1:1": "1080:1080",
+  "4:3": "1440:1080",
+};
+
+/** Motion aspects Runway renders here, exported so a planner can refuse first. */
+export const RUNWAY_VIDEO_ASPECTS = Object.keys(RUNWAY_ASPECT_RATIOS);
+
+/**
+ * Largest reference image, in decoded bytes, sent to Runway as a data URI.
+ * The same bound the private presenter reference already keeps.
+ */
+export const RUNWAY_REFERENCE_MAX_BYTES = 3_300_000;
+
+function referenceImageError(image: string): string | undefined {
+  if (!image) return "Reference motion needs a reference image";
+  if (/^https:\/\//.test(image)) return undefined;
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(image);
+  if (!m) return "Motion reference must be an HTTPS image or embedded image";
+  const bytes = Math.floor((m[2].length * 3) / 4);
+  if (bytes > RUNWAY_REFERENCE_MAX_BYTES)
+    return "Motion reference is too large for Runway; keep the still at or below 3.3 MB";
+  return undefined;
+}
+
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -286,9 +321,23 @@ export const PROVIDERS: ProviderSpec[] = [
       // through: Runway rejects a body carrying fields it does not define, so
       // spreading the studio's own brief into it made every live submit fail.
       settings: (_env, req) => {
+        // image-to-video animates the approved private presenter reference,
+        // which the server swaps in. reference-to-video animates the caller's
+        // own still (a Canvas reference), and never reaches the presenter file.
         const mode = text(req.options?.mode) || "text-to-video";
-        if (!['text-to-video', 'image-to-video'].includes(mode)) {
-          return { ok: false, error: "Runway mode must be text-to-video or image-to-video" };
+        if (!["text-to-video", "image-to-video", "reference-to-video"].includes(mode)) {
+          return {
+            ok: false,
+            error: "Runway mode must be text-to-video, image-to-video or reference-to-video",
+          };
+        }
+        if (req.prompt.length > RUNWAY_PROMPT_MAX) {
+          return { ok: false, error: `Runway prompts are limited to ${RUNWAY_PROMPT_MAX} characters` };
+        }
+        const reference = mode === "reference-to-video" ? text(req.options?.imageUrl) : "";
+        if (mode === "reference-to-video") {
+          const problem = referenceImageError(reference);
+          if (problem) return { ok: false, error: problem };
         }
         const asked = text(req.options?.ratio);
         const aspect = text(req.options?.aspect);
@@ -320,19 +369,52 @@ export const PROVIDERS: ProviderSpec[] = [
             mode,
             ratio: asked || RUNWAY_ASPECT_RATIOS[aspect] || RUNWAY_RATIOS[0],
             duration: String(duration),
-            promptImage: text(req.options?.promptImage),
+            promptImage:
+              mode === "reference-to-video" ? reference : text(req.options?.promptImage),
           },
         };
       },
       // Creation is per-modality; there is no generic task-creation route.
       submitPath: (_req, settings) =>
-        settings.mode === "image-to-video" ? "/image_to_video" : "/text_to_video",
+        settings.mode === "text-to-video" ? "/text_to_video" : "/image_to_video",
       buildBody: (req, settings) => ({
         model: text(req.options?.model) || "gen4.5",
         promptText: req.prompt,
-        ...(settings.mode === "image-to-video" ? { promptImage: settings.promptImage } : {}),
+        ...(settings.mode !== "text-to-video" ? { promptImage: settings.promptImage } : {}),
         ratio: settings.ratio,
         duration: Number(settings.duration),
+      }),
+      pollPath: (id) => `/tasks/${encodeURIComponent(id)}`,
+    },
+  },
+  {
+    // Canvas stills. Runway returns a task; the finished image is a URL on the
+    // task, read by the same poller as Runway video.
+    id: "runway-image",
+    kind: "gen-image",
+    label: "Runway still",
+    envKey: "RUNWAY_API_KEY",
+    envAliases: ["RUNWAYML_API_SECRET"],
+    endpoint: "https://api.dev.runwayml.com/v1",
+    wire: {
+      headers: { "X-Runway-Version": RUNWAY_API_VERSION },
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        const ratio = RUNWAY_IMAGE_RATIOS[aspect];
+        if (!ratio)
+          return {
+            ok: false,
+            error: `Runway stills render ${Object.keys(RUNWAY_IMAGE_RATIOS).join(", ")}, not ${aspect}`,
+          };
+        if (req.prompt.length > RUNWAY_PROMPT_MAX)
+          return { ok: false, error: `Runway prompts are limited to ${RUNWAY_PROMPT_MAX} characters` };
+        return { ok: true, value: { ratio } };
+      },
+      submitPath: () => "/text_to_image",
+      buildBody: (req, s) => ({
+        model: "gen4_image",
+        promptText: req.prompt,
+        ratio: s.ratio,
       }),
       pollPath: (id) => `/tasks/${encodeURIComponent(id)}`,
     },

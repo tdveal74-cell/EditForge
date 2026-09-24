@@ -9,6 +9,11 @@ import {
 } from "@/lib/artifacts";
 import { createAndQueue, getJob, pollJob, submitJob } from "@/lib/jobstore";
 import { findProvider, providerReadiness } from "@/lib/providers";
+import {
+  RUNWAY_IMAGE_RATIOS,
+  RUNWAY_PROMPT_MAX,
+  RUNWAY_VIDEO_ASPECTS,
+} from "@/lib/provider-registry";
 import { connectedContext, generationNodes, safeAssetUrl } from "./model";
 import { getProject, saveProject } from "./server-store";
 import type { GraphNode, Project } from "./types";
@@ -26,12 +31,29 @@ export type RenderItem = {
   voiceId?: string;
   reference?: string;
 };
+// Stills and motion render on Runway; dialogue stays on ElevenLabs.
 const providerFor = (n: GraphNode) =>
   n.kind === "image"
-    ? "xai-image"
+    ? "runway-image"
     : n.kind === "voice"
       ? "elevenlabs"
-      : "xai-video";
+      : "runway";
+
+/** What Runway will refuse, caught before the confirmation rather than after it. */
+function runwayReason(n: GraphNode, prompt: string): string | undefined {
+  if (n.kind === "voice") return undefined;
+  if (prompt.length > RUNWAY_PROMPT_MAX)
+    return `Runway takes prompts up to ${RUNWAY_PROMPT_MAX} characters, including connected context. Shorten this one.`;
+  if (n.kind === "image" && !RUNWAY_IMAGE_RATIOS[n.aspectRatio])
+    return `Runway stills render ${Object.keys(RUNWAY_IMAGE_RATIOS).join(", ")}. Change the aspect from ${n.aspectRatio}.`;
+  if (n.kind === "video") {
+    if (!RUNWAY_VIDEO_ASPECTS.includes(n.aspectRatio))
+      return `Runway motion renders ${RUNWAY_VIDEO_ASPECTS.join(" or ")}. Change the aspect from ${n.aspectRatio}.`;
+    const d = Math.round(n.duration ?? 6);
+    if (d < 2 || d > 10) return "Runway motion runs 2 to 10 seconds. Change the shot duration.";
+  }
+  return undefined;
+}
 export function renderPlan(p: Project, ids: string[]) {
   if (!ids.length || ids.length > 12 || new Set(ids).size !== ids.length)
     throw new Error("Choose between 1 and 12 unique render nodes.");
@@ -64,6 +86,8 @@ export function renderPlan(p: Project, ids: string[]) {
     )
       reason =
         "Set an authorized ElevenLabs voice ID in the inspector or server settings.";
+    const prompt = connectedContext(p, n);
+    reason ??= runwayReason(n, prompt);
     if (!n.prompt.trim()) reason = "Add a prompt first.";
     if (n.jobId)
       reason =
@@ -80,7 +104,7 @@ export function renderPlan(p: Project, ids: string[]) {
       title: n.title,
       kind: n.kind,
       provider,
-      prompt: connectedContext(p, n),
+      prompt,
       duration: Math.round(n.duration ?? 6),
       aspect: n.aspectRatio,
       voiceId: n.voiceId,
@@ -144,6 +168,11 @@ export async function renderNode(
         aspect: item.aspect,
         duration: item.duration,
         voiceId: item.voiceId,
+        // reference-to-video sends the connected Canvas still. Never
+        // image-to-video, which the server fills with the private presenter file.
+        ...(item.kind === "video"
+          ? { mode: item.reference ? "reference-to-video" : "text-to-video" }
+          : {}),
         ...(item.reference
           ? { imageUrl: await imageReference(item.reference) }
           : {}),

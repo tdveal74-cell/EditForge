@@ -938,6 +938,31 @@ export const TOOLS: Tool[] = [
     ),
     run: async (args) => postToN8n("bot-qc", args, 30000),
   },
+  {
+    name: "research_file",
+    description:
+      "File finished research in DEVON's Drive vault (3. Resources/Research), or list what is on file. action 'index': the current pieces, filtered by an optional query. action 'file': creates AREA_SOURCE_slug_vN_YYYY-MM-DD.md from the markdown and reads it back. One question, one current piece: a slug already on file is refused unless you file the next version with supersedesFileId set to the current piece's id, which then moves the old piece to 4. Archive as SUPERSEDED_. Never deletes or shares. Refuses em or en dashes in the text.",
+    mutating: true,
+    inputSchema: obj(
+      {
+        action: { type: "string", enum: ["file", "index"], description: "file a piece, or list what is on file" },
+        query: str("index: words to match in file names"),
+        area: {
+          type: "string",
+          enum: ["TQO", "TSWS", "NCO", "ACX", "SYS", "HEALTH", "MONEY", "FAMILY", "LEARNING"],
+          description: "file: the DEVON area",
+        },
+        slug: str("file: the question, lowercase words joined by hyphens; never changes across versions"),
+        version: num("file: 1 for a new piece, or the current version plus 1"),
+        settledDate: str("file: YYYY-MM-DD, when the content settled"),
+        markdown: str("file: the full piece"),
+        supersedesFileId: str("file: the current piece's Drive id, when filing its next version"),
+        filedBy: str("file: the bot's name"),
+      },
+      ["action"]
+    ),
+    run: async (args) => postToN8n("bot-research-file", args, 90000),
+  },
 ];
 
 /** Tools a caller may see, given whether it authenticated. */

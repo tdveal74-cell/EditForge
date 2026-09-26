@@ -63,6 +63,15 @@ class TSWSPipelineTest(unittest.TestCase):
         with self.assertRaisesRegex(pipeline.GateError, "SHA-256 pin"):
             pipeline.validate(self.plan)
 
+    def test_voice_selection_and_verification_gate(self):
+        self.plan["voicePolicy"]["auren"] = self.plan["voicePolicy"]["vespera"]
+        with self.assertRaisesRegex(pipeline.GateError, "voice ID differs"):
+            pipeline.validate(self.plan)
+        self.plan["voicePolicy"]["auren"] = "USxJ7iK6fkV5HUUevtiC"
+        self.plan["voicePolicy"]["status"] = "verified"
+        with self.assertRaisesRegex(pipeline.GateError, "verification gate"):
+            pipeline.validate(self.plan)
+
     def test_receipt_gates_and_actual_two_second_assembly(self):
         shots = pipeline.validate(self.plan)
         first = self.make_plate(shots[0], "black")

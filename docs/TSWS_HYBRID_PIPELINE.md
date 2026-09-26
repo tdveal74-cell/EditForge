@@ -7,6 +7,11 @@ definitive timed script, or any rendered shot exists. The reference storyboard h
 superseded no-close-up rule; close-ups are allowed and intentionally used in the
 later episode work. Its pictured actors are not automatically approved identities.
 
+Tee supplied the Auren and Vespera voice IDs on 26 September 2026. The episode
+manifest pins those selections in `voicePolicy`. The IDs have not been checked
+against the provider, matched to consent evidence, or audited as spoken takes.
+The voice gate remains open until those checks and a human QC pass are recorded.
+
 ## Ownership
 
 | Stage | Owner | Gate |
@@ -70,7 +75,8 @@ not commit likenesses or credentials to the repository.
 ## Episode gate before extending the manifest
 
 1. Open the current authoritative Episode 1 script and timed table read.
-2. Select and pin the consented Auren and Vespera voices.
+2. Verify the selected Auren and Vespera voice IDs at the provider, match each
+   to the applicable consent scope, and review a named take before audio use.
 3. Resolve the manifest's three `timelineQuestions`: ending hold, 61.8 percent
    silence versus 07:02 anchor, and the gold thread after its disappearance.
 4. Break each story beat into renderable shots, map dialogue takes, and get

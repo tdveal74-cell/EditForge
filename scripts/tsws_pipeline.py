@@ -71,6 +71,15 @@ def validate(plan, manifest_dir=None):
                 raise GateError(f"{character} identity asset is missing")
             if sha256(identity_path) != identity["sha256"]:
                 raise GateError(f"{character} identity asset does not match its SHA-256 pin")
+    voices = plan.get("voicePolicy", {})
+    if voices.get("status") != "selected-pending-provider-and-consent-verification":
+        raise GateError("voice selections must retain the verification gate")
+    if voices.get("provider") != "ElevenLabs":
+        raise GateError("voice provider pin changed")
+    if (voices.get("auren"), voices.get("vespera")) != (
+        "USxJ7iK6fkV5HUUevtiC", "RtKXZUQ5zUk0evjF3XMZ"
+    ):
+        raise GateError("Auren or Vespera voice ID differs from Tee's selection")
     canon = plan.get("canon", {})
     if canon.get("closeUpFacesAllowed") is not True:
         raise GateError("the later close-up ruling must be represented")
@@ -185,6 +194,7 @@ def main():
     elif args.action == "plan":
         print(json.dumps({"schema": "tsws.work-orders.v1", "episode": plan["episode"],
                           "status": plan["status"], "referencePolicy": plan["referencePolicy"],
+                          "voicePolicy": plan["voicePolicy"],
                           "shots": shots, "timelineQuestions": plan["timelineQuestions"]}, indent=2))
     elif args.action == "receipt-template":
         if len(args.extra) != 1 or args.extra[0] not in {s["id"] for s in shots}:

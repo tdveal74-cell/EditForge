@@ -1,0 +1,21 @@
+{
+  "schema": "tsws.shot-qc.v1",
+  "shotId": "TSWS-S01E01-SH001",
+  "file": "media/TSWS-S01E01-SH001.mp4",
+  "sha256": "replace-with-ffprobe-independent-file-sha256",
+  "reviewer": "",
+  "reviewedAt": "",
+  "decision": "pending",
+  "checks": {
+    "identity": false,
+    "wardrobe": false,
+    "performance": false,
+    "environment": false,
+    "continuity": false,
+    "threadCount": false,
+    "anahataPlacement": false,
+    "framing": false,
+    "rightsAndConsent": false
+  },
+  "notes": "A human reviewer must inspect the shot and record a pass. This example cannot authorize an assembly."
+}

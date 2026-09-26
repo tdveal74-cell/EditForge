@@ -1,0 +1,66 @@
+{
+  "schema": "tsws.shot-plan.v1",
+  "episode": "TSWS-S01E01",
+  "title": "THE MASK",
+  "status": "opening-proof-draft",
+  "canonRevision": "TSWS close-up ruling 2026-09-26; script and identity pack unverified",
+  "frameRate": 24,
+  "width": 1920,
+  "height": 1080,
+  "targetFrames": 16248,
+  "proofFrames": 288,
+  "referencePolicy": {
+    "auren": "pending approved identity pack",
+    "vespera": "pending approved identity pack",
+    "storyboardImage": "visual reference only; its no-close-up rule is superseded"
+  },
+  "canon": {
+    "closeUpFacesAllowed": true,
+    "goldThreadMaxConcurrent": 1,
+    "goldThreadColor": "#FFC878",
+    "anahataColor": "#3ED58A",
+    "anahataOccurrences": 1,
+    "anahataAnchorFrame": 10128,
+    "protectedSilenceFrames": 96,
+    "note": "These are production targets. Visual and audio evidence remains a human QC decision."
+  },
+  "timelineQuestions": [
+    "The 11:17 closing beat is also the target endpoint. Place its final hold and fade before the endpoint in the timed edit.",
+    "The script's 61.8 percent protected-silence position and the storyboard's 07:02 Anahata anchor differ by about four seconds; settle against the authoritative timed script.",
+    "The gold thread disappears at 08:05 but later beats mention it at 09:25 and 10:40. Treat later appearances as unresolved until the director locks continuity."
+  ],
+  "beatAnchors": [
+    ["00:00", "London blue hour"], ["00:12", "crowded interior"],
+    ["00:26", "Auren and Vespera in high-windowed room"],
+    ["00:45", "mask described as load-bearing"], ["01:05", "Vespera's question"],
+    ["01:28", "hands and objects"], ["01:45", "Auren at window"],
+    ["02:10", "the representative's story"], ["02:30", "Vespera listens"],
+    ["03:00", "question becomes personal"], ["03:25", "protection and cost"],
+    ["03:38", "Auren's admission"], ["03:45", "dim bedroom"],
+    ["04:12", "first mask creak"], ["04:55", "crossing reflections"],
+    ["05:35", "hiding with me"], ["06:10", "third mask creak"],
+    ["06:58", "shared admission"], ["07:02", "Anahata and four seconds protected silence"],
+    ["07:45", "city masks loosen"], ["08:05", "thread beneath mask and honest response"],
+    ["08:30", "not lying"], ["09:25", "stop asking"],
+    ["09:50", "city at night"], ["10:40", "same window"],
+    ["11:17", "target endpoint, hold and fade included"]
+  ],
+  "shots": [
+    {
+      "id": "TSWS-S01E01-SH001", "inFrame": 0, "outFrame": 120,
+      "beat": "00:00 opening London", "framing": "wide", "characters": [],
+      "brief": "Blue-hour London. Recognizable, ancient, slightly wrong. Ordinary distant masked pedestrians. Restrained 1970s film texture. Patient camera.",
+      "providerLane": "external-video-manual-import", "canonVfx": [],
+      "audio": "London ambience to be designed in the finishing mix",
+      "costApproval": "required before any paid provider submit"
+    },
+    {
+      "id": "TSWS-S01E01-SH002", "inFrame": 120, "outFrame": 288,
+      "beat": "00:00 opening London continuation", "framing": "wide", "characters": [],
+      "brief": "Continue the same geography and light. Pedestrians move naturally. Hold the unsettling social distance without horror cues. End with a visual path into the 00:12 crowded interior.",
+      "providerLane": "external-video-manual-import", "canonVfx": [],
+      "audio": "Continue London ambience without a music sting",
+      "costApproval": "required before any paid provider submit"
+    }
+  ]
+}

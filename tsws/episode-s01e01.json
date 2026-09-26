@@ -24,6 +24,14 @@
     },
     "storyboardImage": "visual reference only; its no-close-up rule is superseded"
   },
+  "voicePolicy": {
+    "status": "selected-pending-provider-and-consent-verification",
+    "source": "Tee supplied character-to-voice IDs on 2026-09-26",
+    "provider": "ElevenLabs",
+    "auren": "USxJ7iK6fkV5HUUevtiC",
+    "vespera": "RtKXZUQ5zUk0evjF3XMZ",
+    "note": "IDs are pinned as selections. No provider lookup, sample audit, consent-to-ID match, or generated take has passed QC."
+  },
   "canon": {
     "closeUpFacesAllowed": true,
     "goldThreadMaxConcurrent": 1,
@@ -40,7 +48,7 @@
     "The gold thread disappears at 08:05 but later beats mention it at 09:25 and 10:40. Treat later appearances as unresolved until the director locks continuity."
   ],
   "beatAnchors": [
-    ["00:00", "London blue hour"], ["00:12", "crowded interior"],
+    ["00:00", "city at blue hour"], ["00:12", "opening window hold begins within Beat 1"],
     ["00:26", "Auren and Vespera in high-windowed room"],
     ["00:45", "mask described as load-bearing"], ["01:05", "Vespera's question"],
     ["01:28", "hands and objects"], ["01:45", "Auren at window"],
@@ -58,18 +66,18 @@
   "shots": [
     {
       "id": "TSWS-S01E01-SH001", "inFrame": 0, "outFrame": 120,
-      "beat": "00:00 opening London", "framing": "wide", "characters": [],
-      "brief": "Blue-hour London. Recognizable, ancient, slightly wrong. Ordinary distant masked pedestrians. Restrained 1970s film texture. Patient camera.",
+      "beat": "00:00 Beat 1 city arrival", "framing": "wide", "characters": [],
+      "brief": "A city at blue hour, neither night nor evening. Rooftops and a street of moving people, each wearing a calm plausible face mask. Restrained 1970s British contemporary texture, light from no visible source, fine grain, patient camera. No close face or revealed identity in this opening plate.",
       "providerLane": "external-video-manual-import", "canonVfx": [],
-      "audio": "London ambience to be designed in the finishing mix",
+      "audio": "City footsteps through glass to be designed in the finishing mix",
       "costApproval": "required before any paid provider submit"
     },
     {
       "id": "TSWS-S01E01-SH002", "inFrame": 120, "outFrame": 288,
-      "beat": "00:00 opening London continuation", "framing": "wide", "characters": [],
-      "brief": "Continue the same geography and light. Pedestrians move naturally. Hold the unsettling social distance without horror cues. End with a visual path into the 00:12 crowded interior.",
+      "beat": "00:05 Beat 1 rooftops to window", "framing": "wide", "characters": [],
+      "brief": "Continue the same blue-hour city and street. Settle across the gap toward a third-floor window with warm light and two small masked figures seated facing one another. Leave room for the later uncut window hold. Preserve geographic and lighting continuity; no interior cut before Beat 2 at 00:30.",
       "providerLane": "external-video-manual-import", "canonVfx": [],
-      "audio": "Continue London ambience without a music sting",
+      "audio": "Continue the same footsteps through glass without a music sting",
       "costApproval": "required before any paid provider submit"
     }
   ]

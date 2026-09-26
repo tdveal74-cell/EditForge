@@ -3,15 +3,25 @@
   "episode": "TSWS-S01E01",
   "title": "THE MASK",
   "status": "opening-proof-draft",
-  "canonRevision": "TSWS close-up ruling 2026-09-26; script and identity pack unverified",
+  "canonRevision": "TSWS close-up ruling and character identity lock 2026-09-26; timed script unverified",
   "frameRate": 24,
   "width": 1920,
   "height": 1080,
   "targetFrames": 16248,
   "proofFrames": 288,
   "referencePolicy": {
-    "auren": "pending approved identity pack",
-    "vespera": "pending approved identity pack",
+    "status": "locked",
+    "registry": "references/identities.json",
+    "auren": {
+      "version": "TSWS-AUREN-IDENTITY-V1",
+      "file": "references/TSWS_AUREN_IDENTITY_SHEET_V1.png",
+      "sha256": "6130295289410367c1485b81ea6e2341d37038c0b9ee07fa304896e7ac6fe1cb"
+    },
+    "vespera": {
+      "version": "TSWS-VESPERA-IDENTITY-V1",
+      "file": "references/TSWS_VESPERA_IDENTITY_SHEET_V1.png",
+      "sha256": "8d31e2702ba2ec8e484fbc824de280ee118adcaa57d3d5690842d16f3e93645b"
+    },
     "storyboardImage": "visual reference only; its no-close-up rule is superseded"
   },
   "canon": {

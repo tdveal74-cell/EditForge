@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -28,6 +29,7 @@ class TSWSPipelineTest(unittest.TestCase):
         self.plan["shots"][0]["outFrame"] = 24
         self.plan["shots"][1]["inFrame"] = 24
         self.plan["shots"][1]["outFrame"] = 48
+        shutil.copytree(ROOT / "tsws" / "references", self.root / "references")
         self.manifest = self.root / "plan.json"
         self.manifest.write_text(json.dumps(self.plan))
 
@@ -50,6 +52,15 @@ class TSWSPipelineTest(unittest.TestCase):
         self.plan["shots"][1]["inFrame"] = 24
         self.plan["canon"]["protectedSilenceFrames"] = 95
         with self.assertRaisesRegex(pipeline.GateError, "four-second silence"):
+            pipeline.validate(self.plan)
+
+    def test_rejects_unlocked_or_unpinned_identity(self):
+        self.plan["referencePolicy"]["status"] = "pending"
+        with self.assertRaisesRegex(pipeline.GateError, "identities must be locked"):
+            pipeline.validate(self.plan)
+        self.plan["referencePolicy"]["status"] = "locked"
+        self.plan["referencePolicy"]["auren"]["sha256"] = "not-a-hash"
+        with self.assertRaisesRegex(pipeline.GateError, "SHA-256 pin"):
             pipeline.validate(self.plan)
 
     def test_receipt_gates_and_actual_two_second_assembly(self):

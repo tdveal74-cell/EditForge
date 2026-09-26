@@ -43,7 +43,7 @@ def frames_at(timecode, fps):
     return (minute * 60 + second) * fps
 
 
-def validate(plan):
+def validate(plan, manifest_dir=None):
     if plan.get("schema") != "tsws.shot-plan.v1":
         raise GateError("shot plan schema must be tsws.shot-plan.v1")
     fps = plan.get("frameRate")
@@ -56,6 +56,21 @@ def validate(plan):
         raise GateError("Episode 1 target must equal 11:17 at the selected fps")
     if plan["proofFrames"] > plan["targetFrames"]:
         raise GateError("proof exceeds episode target")
+    references = plan.get("referencePolicy", {})
+    if references.get("status") != "locked":
+        raise GateError("Auren and Vespera identities must be locked")
+    for character in ("auren", "vespera"):
+        identity = references.get(character, {})
+        if not identity.get("version") or not identity.get("file"):
+            raise GateError(f"{character} identity version and file are required")
+        if not re.fullmatch(r"[a-f0-9]{64}", identity.get("sha256", "")):
+            raise GateError(f"{character} identity needs a SHA-256 pin")
+        if manifest_dir is not None:
+            identity_path = within(Path(manifest_dir), identity["file"])
+            if not identity_path.is_file():
+                raise GateError(f"{character} identity asset is missing")
+            if sha256(identity_path) != identity["sha256"]:
+                raise GateError(f"{character} identity asset does not match its SHA-256 pin")
     canon = plan.get("canon", {})
     if canon.get("closeUpFacesAllowed") is not True:
         raise GateError("the later close-up ruling must be represented")
@@ -164,7 +179,7 @@ def main():
     parser.add_argument("extra", nargs="*")
     args = parser.parse_args()
     plan = read_json(args.manifest)
-    shots = validate(plan)
+    shots = validate(plan, args.manifest.resolve().parent)
     if args.action == "validate":
         print(f"Valid draft proof: {len(shots)} shots, {plan['proofFrames'] / plan['frameRate']:.2f}s; full episode pending timeline lock")
     elif args.action == "plan":

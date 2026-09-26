@@ -1,8 +1,9 @@
 # TSWS hybrid production pipeline
 
-The repository now carries a **12-second Episode 1 picture proof plan**. It does
-not claim that the 11:17 episode, the definitive script, the approved character
-reference packs, or any rendered shot exists. The reference storyboard has a
+The repository now carries a **12-second Episode 1 picture proof plan** and the
+Tee-approved Auren and Vespera V1 identity sheets, pinned by SHA-256 in
+`tsws/references/identities.json`. It does not claim that the 11:17 episode, the
+definitive timed script, or any rendered shot exists. The reference storyboard has a
 superseded no-close-up rule; close-ups are allowed and intentionally used in the
 later episode work. Its pictured actors are not automatically approved identities.
 
@@ -69,7 +70,7 @@ not commit likenesses or credentials to the repository.
 ## Episode gate before extending the manifest
 
 1. Open the current authoritative Episode 1 script and timed table read.
-2. Select the actual Auren and Vespera identity packs and consented voices.
+2. Select and pin the consented Auren and Vespera voices.
 3. Resolve the manifest's three `timelineQuestions`: ending hold, 61.8 percent
    silence versus 07:02 anchor, and the gold thread after its disappearance.
 4. Break each story beat into renderable shots, map dialogue takes, and get

@@ -168,6 +168,27 @@ export const RUNWAY_IMAGE_RATIOS: Record<string, string> = {
 /** Motion aspects Runway renders here, exported so a planner can refuse first. */
 export const RUNWAY_VIDEO_ASPECTS = Object.keys(RUNWAY_ASPECT_RATIOS);
 
+/** Kling 2.6 accepts three frame shapes, 5 or 10 seconds, and two resolutions. */
+export const KLING_ASPECTS = ["16:9", "9:16", "1:1"];
+export const KLING_DURATIONS = [5, 10];
+export const KLING_RESOLUTIONS = ["720p", "1080p"];
+/** Kling 2.6 caps promptText at 2500 characters on every generation route. */
+export const KLING_PROMPT_MAX = 2500;
+
+/** Veo on the Gemini API renders landscape or portrait only. */
+export const VEO_ASPECTS = ["16:9", "9:16"];
+export const VEO_DEFAULT_MODEL = "veo-3.1-generate-preview";
+
+export const SEEDREAM_MODEL = "seedream-4-0-250828";
+/** Seedream output sizes for the studio's aspect names. */
+export const SEEDREAM_SIZES: Record<string, string> = {
+  "16:9": "2048x1152",
+  "9:16": "1152x2048",
+  "1:1": "2048x2048",
+  "4:3": "2048x1536",
+  "3:2": "2304x1536",
+};
+
 /**
  * Largest reference image, in decoded bytes, sent to Runway as a data URI.
  * The same bound the private presenter reference already keeps.
@@ -425,13 +446,189 @@ export const PROVIDERS: ProviderSpec[] = [
       storeResult: { maxBytes: 20_000_000 },
     },
   },
-  { id: "kling", kind: "gen-video", label: "Kling", envKey: "KLING_API_KEY" },
-  { id: "veo", kind: "gen-video", label: "Veo", envKey: "VEO_API_KEY" },
   {
-    id: "seedream",
+    // Kling's 2.6 API: one submit route per modality, tasks polled in batch
+    // under a query param rather than a path segment.
+    id: "kling",
     kind: "gen-video",
-    label: "Seedream",
+    label: "Kling",
+    envKey: "KLING_API_KEY",
+    endpoint: "https://api-singapore.klingai.com",
+    wire: {
+      settings: (_env, req) => {
+        const mode = text(req.options?.mode) || "text-to-video";
+        if (mode === "image-to-video" &&
+          !/^https:\/\//.test(text(req.options?.imageUrl)))
+          return { ok: false, error: "Kling image-to-video needs an HTTPS first-frame image URL" };
+        if (!["text-to-video", "image-to-video"].includes(mode))
+          return { ok: false, error: "Kling mode must be text-to-video or image-to-video" };
+        if (req.prompt.length > KLING_PROMPT_MAX)
+          return { ok: false, error: `Kling prompts are limited to ${KLING_PROMPT_MAX} characters` };
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!KLING_ASPECTS.includes(aspect))
+          return { ok: false, error: `Kling renders ${KLING_ASPECTS.join(", ")}, not ${aspect}` };
+        const duration = Number(req.options?.duration ?? 5);
+        if (!KLING_DURATIONS.includes(duration))
+          return { ok: false, error: `Kling duration must be ${KLING_DURATIONS.join(" or ")} seconds` };
+        const resolution = text(req.options?.resolution) || "720p";
+        if (!KLING_RESOLUTIONS.includes(resolution))
+          return { ok: false, error: `Kling resolution must be ${KLING_RESOLUTIONS.join(" or ")}` };
+        return {
+          ok: true,
+          value: {
+            mode,
+            aspect,
+            duration: String(duration),
+            resolution,
+            image: text(req.options?.imageUrl),
+          },
+        };
+      },
+      submitPath: (_req, s) =>
+        s.mode === "text-to-video" ? "/text-to-video/kling-2.6" : "/image-to-video/kling-2.6",
+      buildBody: (req, s) => ({
+        ...(s.mode === "text-to-video"
+          ? { prompt: req.prompt }
+          : {
+              contents: [
+                { type: "prompt", text: req.prompt },
+                { type: "first_frame", url: s.image },
+              ],
+            }),
+        settings: {
+          resolution: s.resolution,
+          aspect_ratio: s.aspect,
+          duration: Number(s.duration),
+        },
+      }),
+      readSubmitId: (data) => text(record(record(data).data).id) || undefined,
+      pollPath: (id) => `/tasks?task_ids=${encodeURIComponent(id)}`,
+      readPoll: (data) => {
+        const envelope = record(data);
+        const rows = Array.isArray(envelope.data) ? envelope.data : [envelope.data];
+        const task = record(rows[0]);
+        const state = normalizeState(text(task.status));
+        const outputs = Array.isArray(task.outputs) ? task.outputs : [];
+        const video = record(outputs.find((o) => record(o).type === "video"));
+        return {
+          state,
+          result: state === "succeeded" ? text(video.url) || undefined : undefined,
+          note: state === "failed" ? text(task.message) || undefined : undefined,
+        };
+      },
+      storeResult: { maxBytes: 100_000_000 },
+    },
+  },
+  {
+    // Veo on the Gemini API: submits are long-running operations. The submit
+    // answers with an operation name that is itself the poll URL relative to
+    // the base endpoint, and the finished sample names a file URI that only
+    // downloads with the same API key — `keepResult` recognises the endpoint
+    // origin and attaches it.
+    id: "veo",
+    kind: "gen-video",
+    label: "Veo",
+    envKey: "VEO_API_KEY",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta",
+    wire: {
+      auth: { header: "x-goog-api-key" },
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!VEO_ASPECTS.includes(aspect))
+          return { ok: false, error: `Veo renders ${VEO_ASPECTS.join(" or ")}, not ${aspect}` };
+        const image = text(req.options?.imageUrl);
+        let imageMime = "";
+        let imageData = "";
+        if (image) {
+          const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);
+          if (!m)
+            return {
+              ok: false,
+              error: "Veo image-to-video needs an embedded image (a data URI) — it does not fetch image URLs",
+            };
+          imageMime = `image/${m[1]}`;
+          imageData = m[2].replace(/[\r\n]/g, "");
+        }
+        return {
+          ok: true,
+          value: {
+            aspect,
+            model: text(req.options?.model) || VEO_DEFAULT_MODEL,
+            imageMime,
+            imageData,
+          },
+        };
+      },
+      submitPath: (_req, s) => `/models/${s.model}:predictLongRunning`,
+      buildBody: (req, s) => ({
+        instances: [
+          {
+            prompt: req.prompt,
+            ...(s.imageData
+              ? { image: { inlineData: { mimeType: s.imageMime, data: s.imageData } } }
+              : {}),
+          },
+        ],
+        parameters: { aspectRatio: s.aspect },
+      }),
+      readSubmitId: (data) => text(record(data).name) || undefined,
+      pollPath: (id) => `/${id}`,
+      readPoll: (data) => {
+        const op = record(data);
+        if (!op.done) return { state: "running" };
+        const message = text(record(op.error).message);
+        if (message) return { state: "failed", note: message };
+        const gvr = record(record(op.response).generateVideoResponse);
+        const samples = Array.isArray(gvr.generatedSamples) ? gvr.generatedSamples : [];
+        const uri = text(record(record(samples[0]).video).uri);
+        return {
+          state: "succeeded",
+          result: uri || undefined,
+          note: uri ? undefined : "Veo finished without a video URI",
+        };
+      },
+      storeResult: { maxBytes: 60_000_000 },
+    },
+  },
+  {
+    // Seedream is a stills model, not a motion model — the registry used to
+    // file it under gen-video, a picker could offer it for work it cannot do.
+    // It answers the submit with the image itself, synchronously, like Grok
+    // Imagine stills.
+    id: "seedream",
+    kind: "gen-image",
+    label: "Seedream still",
     envKey: "SEEDREAM_API_KEY",
+    endpoint: "https://ark.ap-southeast.bytepluses.com/api/v3",
+    wire: {
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        const size = SEEDREAM_SIZES[aspect];
+        if (!size)
+          return {
+            ok: false,
+            error: `Seedream stills render ${Object.keys(SEEDREAM_SIZES).join(", ")}, not ${aspect}`,
+          };
+        return { ok: true, value: { size, model: text(req.options?.model) || SEEDREAM_MODEL } };
+      },
+      submitPath: () => "/images/generations",
+      buildBody: (req, s) => ({
+        model: s.model,
+        prompt: req.prompt,
+        size: s.size,
+        response_format: "b64_json",
+        watermark: false,
+      }),
+      jsonMedia: {
+        extension: ".jpg",
+        readBase64: (data) => {
+          const rows = record(data).data;
+          return Array.isArray(rows)
+            ? text(record(rows[0]).b64_json) || undefined
+            : undefined;
+        },
+      },
+    },
   },
 
   // Voice. Text-to-speech answers with the audio bytes themselves, so there is

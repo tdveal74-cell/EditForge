@@ -22,7 +22,7 @@ export const STUDIO_MODULES: StudioModule[] = [
   { id: "mix", dept: "Sound", label: "Mix bridge", href: "/mix", status: "bridge", studioRole: "Fairlight · Pro Tools stems" },
   { id: "voice", dept: "AI Media", label: "Voice clone / TTS", href: "/voice", status: "ai-media", studioRole: "ElevenLabs-class VO" },
   { id: "avatar", dept: "AI Media", label: "Avatar / talking head", href: "/avatar", status: "ai-media", studioRole: "HeyGen talking head" },
-  { id: "gen-video", dept: "AI Media", label: "Gen video", href: "/gen-video", status: "ai-media", studioRole: "Kling · Veo · Runway · Seedream" },
+  { id: "gen-video", dept: "AI Media", label: "Gen video", href: "/gen-video", status: "ai-media", studioRole: "Kling · Veo · Runway" },
   { id: "longform", dept: "Deliverables", label: "Long-form render", href: "/longform", status: "operational", studioRole: "Chapters · stitch · episode master" },
   { id: "stock", dept: "Library", label: "Stock library", href: "/stock", status: "bridge", studioRole: "Artlist-class music · SFX · footage" },
   { id: "captions", dept: "Finishing", label: "Captions", href: "/captions", status: "operational", studioRole: "SRT lane" },

@@ -41,7 +41,18 @@ type Props = {
 
 const SETTLED: JobStatus[] = ["completed", "failed", "cancelled", "validating"];
 const POLL_MS = 3000;
-const MAX_POLLS = 40;
+const MAX_POLLS = 60;
+/**
+ * Poll cadence. Providers answer in wildly different times — mock is instant,
+ * Veo can take minutes — so a fixed 3s beat both hammered the API early and
+ * gave up far too soon on long renders (40 × 3s = 120s, while a Veo clip
+ * routinely runs 1–6 minutes and then read as “stalled”). Poll fast for the
+ * first half, then stretch; the window is now ~10 minutes with fewer total
+ * requests than the old fixed cadence used.
+ */
+function pollDelay(pollsDone: number): number {
+  return pollsDone < MAX_POLLS / 2 ? POLL_MS : POLL_MS * 4;
+}
 
 export function JobRunner({
   kind,
@@ -167,7 +178,7 @@ export function JobRunner({
     const t = setTimeout(() => {
       setPolls((n) => n + 1);
       void act(job.id, "poll");
-    }, POLL_MS);
+    }, pollDelay(polls));
     return () => clearTimeout(t);
   }, [job, polls, act]);
 
@@ -375,7 +386,9 @@ export function JobRunner({
 
             {stalled && (
               <p className="mt-2 text-xs text-navy/60">
-                Still running after {Math.round((MAX_POLLS * POLL_MS) / 1000)}s. Automatic polling
+                Still running after {Math.round(
+                  (MAX_POLLS / 2) * POLL_MS + (MAX_POLLS / 2) * POLL_MS * 4,
+                ) / 1000}s. Automatic polling
                 stopped so this page is not left spinning; check again when you expect it to be done.
               </p>
             )}

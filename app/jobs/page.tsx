@@ -9,14 +9,20 @@ import { Label, Select, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { StatusLabel, toneFor, toneForJob } from "@/components/ui/status-dot";
 import { PageHeader } from "@/components/PageHeader";
+import { useLiveJobs } from "@/components/useLiveJobs";
 
 export default function JobsPage() {
   const [kind, setKind] = useState<"proxy" | "export">("proxy");
   const [cuts, setCuts] = useState<Cut[] | null>(null);
   const [cutId, setCutId] = useState("");
   const [result, setResult] = useState<string | null>(null);
-  const [live, setLive] = useState<StudioJob[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Job state arrives over SSE and the manual refresh is still there for a
+  // deliberate re-read. The hook degrades to polling when the stream cannot
+  // be held, so this page behaves exactly as before on any environment that
+  // cannot carry events.
+  const { jobs: live, error: loadError, setJobs: setLive, setError: setLoadError } =
+    useLiveJobs(null);
 
   const load = useCallback(async () => {
     try {
@@ -30,24 +36,7 @@ export default function JobsPage() {
       setLoadError((err as Error).message);
       setLive([]);
     }
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/jobs", { cache: "no-store" })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`);
-        return data;
-      })
-      .then((data) => {
-        setLive(data.jobs ?? []);
-        setLoadError(null);
-      })
-      .catch((err: Error) => {
-        setLoadError(err.message);
-        setLive([]);
-      });
-  }, []);
+  }, [setLive, setLoadError]);
 
   // The cut carries the rubric decision. This page used to ask the operator
   // whether they had passed and send the answer as the gate's input.

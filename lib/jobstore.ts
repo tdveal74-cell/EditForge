@@ -1,4 +1,5 @@
 import { durableRecordCollection } from "./durable";
+import { emitJobEvent } from "./job-events";
 import {
   advanceJob,
   authorizeJob,
@@ -88,6 +89,8 @@ export async function createAndQueue(input: CreateInput): Promise<StudioJob> {
     if (dupe) return dupe;
     throw new Error("Job insert lost a race it cannot explain — retry the submit");
   }
+  // A new job is a state change like any other: say so.
+  emitJobEvent({ jobId: queued.id, status: queued.status, at: Date.now() });
   // Terminal records are cheap to keep but not free: every one rides in every
   // listing. Trim the oldest beyond the cap so the store stays bounded.
   await jobs.trim(
@@ -102,10 +105,18 @@ async function update(
   id: string,
   fn: (job: StudioJob) => void,
 ): Promise<StudioJob | null> {
-  return jobs.mutate(id, (job) => {
+  const before = await jobs.get(id);
+  const out = await jobs.mutate(id, (job) => {
     fn(job);
     job.updatedAt = new Date().toISOString();
   });
+  // The store knows exactly when a job moved; say so. Subscribers that failed
+  // are dropped inside the bus, never here — a dead event listener must not
+  // fail the write it was notifying about.
+  if (out && out.status !== before?.status) {
+    emitJobEvent({ jobId: out.id, status: out.status, at: Date.now() });
+  }
+  return out;
 }
 
 /**

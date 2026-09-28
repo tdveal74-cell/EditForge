@@ -235,3 +235,265 @@ export function durableCollection<T extends { id: string }>(opts: {
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Per-record collections
+//
+// The whole-blob collection above is correct but charges O(collection) per
+// read and per write. For the job store — polled continuously by every open
+// studio surface — that meant every poll transferred and re-serialized every
+// job, and a canvas sync of N running jobs was N full-blob CAS transactions.
+//
+// `durableRecordCollection` keeps one key per record plus an index set. A
+// single-record poll is a single-key GET/CAS. Reads fan out in parallel. The
+// API mirrors the blob collection's semantics (CAS read-modify-write per
+// record, race-safe insert), so callers keep the same concurrency story.
+// ---------------------------------------------------------------------------
+
+export type DurableRecordCollection<T extends { id: string; updatedAt?: string }> = {
+  get(id: string): Promise<T | null>;
+  getMany(ids: string[]): Promise<(T | null)[]>;
+  list(): Promise<T[]>;
+  /**
+   * Read → mutate in place → persist one record, atomically against
+   * concurrent writers of that record.
+   */
+  mutate(id: string, fn: (record: T) => void): Promise<T | null>;
+  /**
+   * Insert a record that must not already exist — CAS on the empty key, so of
+   * two concurrent inserts exactly one wins. Returns the stored record.
+   */
+  insert(record: T): Promise<boolean>;
+  remove(id: string): Promise<void>;
+  /** Point lookup by the collection's idempotency field, when configured. */
+  findByIdem(key: string): Promise<T | null>;
+  /**
+   * Drop the oldest removable records beyond a cap. Removable is caller-decided
+   * (e.g. terminal jobs); ordering is by `updatedAt` ascending, newest kept.
+   */
+  trim(removable: (record: T) => boolean, keep: number): Promise<number>;
+};
+
+export function durableRecordCollection<T extends { id: string; updatedAt?: string }>(opts: {
+  /** Redis key prefix, e.g. "editforge:jobs". */
+  key: string;
+  /** File basename under the data dir, e.g. "jobs.json". */
+  file: string;
+  idemOf?: (record: T) => string;
+  /**
+   * Legacy whole-blob key from the pre-record layout. When the record index is
+   * empty, its contents are imported once and the blob deleted, so an existing
+   * deployment upgrades in place instead of losing its jobs.
+   */
+  legacyKey?: string;
+}): DurableRecordCollection<T> {
+  const recordKey = (id: string) => `${opts.key}:rec:${encodeURIComponent(id)}`;
+  const indexKey = () => `${opts.key}:index`;
+  const idemKey = (idem: string) => `${opts.key}:idem:${encodeURIComponent(idem)}`;
+
+  // Same isolation discipline as the blob collection's file backend.
+  let fileMutation: Promise<unknown> = Promise.resolve();
+  const filePath = () => path.join(dataDir(), opts.file);
+
+  async function fileWrite(items: T[]): Promise<void> {
+    await fs.mkdir(dataDir(), { recursive: true });
+    const target = filePath();
+    const tmp = `${target}.tmp`;
+    await fs.writeFile(tmp, JSON.stringify(items, null, 2));
+    await fs.rename(tmp, target);
+  }
+
+  async function fileRead(): Promise<T[]> {
+    await fs.mkdir(dataDir(), { recursive: true });
+    try {
+      return JSON.parse(await fs.readFile(filePath(), "utf8")) as T[];
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      await fileWrite([]);
+      return [];
+    }
+  }
+
+  /** Run one whole-file transaction, serialized against the others. */
+  function fileTx<R>(fn: (items: T[]) => R | Promise<R>): Promise<R> {
+    const run = fileMutation.then(async () => {
+      const items = await fileRead();
+      const out = await fn(items);
+      await fileWrite(items);
+      return out;
+    });
+    fileMutation = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  async function kvIndex(): Promise<string[]> {
+    const members = (await kvCommand(["SMEMBERS", indexKey()])) as string[];
+    return members ?? [];
+  }
+
+  async function kvImportLegacyIfNeeded(): Promise<void> {
+    if (!opts.legacyKey) return;
+    const members = await kvIndex();
+    if (members.length > 0) return;
+    const raw = (await kvCommand(["GET", opts.legacyKey])) as string | null;
+    if (raw == null) return;
+    const items = JSON.parse(raw) as T[];
+    for (const item of items) {
+      await kvCommand(["SET", recordKey(item.id), JSON.stringify(item)]);
+      await kvCommand(["SADD", indexKey(), item.id]);
+      if (opts.idemOf)
+        await kvCommand(["SET", idemKey(opts.idemOf(item)), item.id]);
+    }
+    await kvCommand(["DEL", opts.legacyKey]);
+  }
+
+  const kv = {
+    async get(id: string): Promise<T | null> {
+      const raw = (await kvCommand(["GET", recordKey(id)])) as string | null;
+      return raw == null ? null : (JSON.parse(raw) as T);
+    },
+
+    async list(): Promise<T[]> {
+      await kvImportLegacyIfNeeded();
+      const members = await kvIndex();
+      const raws = await Promise.all(
+        members.map((id) => kvCommand(["GET", recordKey(id)]) as Promise<string | null>),
+      );
+      return raws
+        .filter((r): r is string => r != null)
+        .map((r) => JSON.parse(r) as T);
+    },
+
+    async insert(record: T): Promise<boolean> {
+      const ok = await kvCommand([
+        "EVAL",
+        CAS_SCRIPT,
+        "1",
+        recordKey(record.id),
+        "", // must be absent to win
+        JSON.stringify(record),
+      ]);
+      if (ok !== 1) return false;
+      await kvCommand(["SADD", indexKey(), record.id]);
+      if (opts.idemOf)
+        await kvCommand(["SET", idemKey(opts.idemOf(record)), record.id]);
+      return true;
+    },
+
+    async mutate(id: string, fn: (record: T) => void): Promise<T | null> {
+      for (let attempt = 0; attempt < MAX_CAS_RETRIES; attempt++) {
+        const raw = (await kvCommand(["GET", recordKey(id)])) as string | null;
+        if (raw == null) return null;
+        const record = JSON.parse(raw) as T;
+        fn(record);
+        const ok = await kvCommand([
+          "EVAL",
+          CAS_SCRIPT,
+          "1",
+          recordKey(id),
+          raw,
+          JSON.stringify(record),
+        ]);
+        if (ok === 1) return record;
+      }
+      throw new Error("Record update failed: concurrent-write retries exhausted");
+    },
+
+    async remove(id: string): Promise<void> {
+      // Read before deleting: the idem pointer needs the record's own key.
+      const raw = (await kvCommand(["GET", recordKey(id)])) as string | null;
+      await kvCommand(["DEL", recordKey(id)]);
+      if (raw && opts.idemOf)
+        await kvCommand(["DEL", idemKey(opts.idemOf(JSON.parse(raw) as T))]);
+      await kvCommand(["SREM", indexKey(), id]);
+    },
+
+    async findByIdem(idem: string): Promise<T | null> {
+      if (!opts.idemOf) return null;
+      const id = (await kvCommand(["GET", idemKey(idem)])) as string | null;
+      return id ? kv.get(id) : null;
+    },
+
+    async trim(removable: (record: T) => boolean, keep: number): Promise<number> {
+      const all = await kv.list();
+      const excess = all
+        .filter(removable)
+        .sort((a, b) => String(a.updatedAt).localeCompare(String(b.updatedAt)))
+        .slice(0, Math.max(0, all.filter(removable).length - keep));
+      for (const record of excess) await kv.remove(record.id);
+      return excess.length;
+    },
+  };
+
+  const file = {
+    async get(id: string): Promise<T | null> {
+      return fileTx((items) => items.find((i) => i.id === id) ?? null);
+    },
+    async list(): Promise<T[]> {
+      return fileTx((items) => [...items]);
+    },
+    async insert(record: T): Promise<boolean> {
+      return fileTx((items) => {
+        if (items.some((i) => i.id === record.id)) return false;
+        items.unshift(record);
+        return true;
+      });
+    },
+    async mutate(id: string, fn: (record: T) => void): Promise<T | null> {
+      return fileTx((items) => {
+        const i = items.findIndex((r) => r.id === id);
+        if (i < 0) return null;
+        const next = { ...items[i] };
+        fn(next);
+        items[i] = next;
+        return next;
+      });
+    },
+    async remove(id: string): Promise<void> {
+      await fileTx((items) => {
+        const i = items.findIndex((r) => r.id === id);
+        if (i >= 0) items.splice(i, 1);
+      });
+    },
+    async findByIdem(idem: string): Promise<T | null> {
+      if (!opts.idemOf) return null;
+      return fileTx((items) => items.find((r) => opts.idemOf!(r) === idem) ?? null);
+    },
+    async trim(removable: (record: T) => boolean, keep: number): Promise<number> {
+      return fileTx((items) => {
+        const removableRecords = items
+          .filter(removable)
+          .sort((a, b) => String(a.updatedAt).localeCompare(String(b.updatedAt)));
+        const excess = removableRecords.slice(0, Math.max(0, removableRecords.length - keep));
+        for (const record of excess) {
+          const i = items.findIndex((r) => r.id === record.id);
+          if (i >= 0) items.splice(i, 1);
+        }
+        return excess.length;
+      });
+    },
+  };
+
+  const backing = () => (kvCreds() ? kv : file);
+
+  return {
+    get: (id) => backing().get(id),
+    async getMany(ids) {
+      if (!kvCreds()) {
+        const all = await file.list();
+        const map = new Map(all.map((r) => [r.id, r]));
+        return ids.map((id) => map.get(id) ?? null);
+      }
+      return Promise.all(ids.map((id) => kv.get(id)));
+    },
+    list: () => backing().list(),
+    insert: (r) => backing().insert(r),
+    mutate: (id, fn) => backing().mutate(id, fn),
+    remove: (id) => backing().remove(id),
+    findByIdem: (k) => backing().findByIdem(k),
+    trim: (removable, keep) => backing().trim(removable, keep),
+  };
+}

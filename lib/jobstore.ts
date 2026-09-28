@@ -1,4 +1,4 @@
-import { durableCollection } from "./durable";
+import { durableRecordCollection } from "./durable";
 import {
   advanceJob,
   authorizeJob,
@@ -13,16 +13,26 @@ import { pollProvider, submitToProvider } from "./providers";
 /**
  * Durable jobs plus the worker drive loop.
  *
- * Jobs live in the same Redis-or-file collection as cuts, so a job submitted by
- * one serverless instance is pollable from another. Every state change goes
+ * Jobs live in their own durable collection so a job submitted by one
+ * serverless instance is pollable from another. Every state change goes
  * through `lib/jobs.ts`, so an illegal transition throws rather than silently
  * corrupting the record.
+ *
+ * Jobs are the studio's hottest store traffic — every open surface polls them
+ * every few seconds — so they use the per-record collection: a single poll is
+ * a single-key read and a single-key compare-and-set, not a read and rewrite
+ * of every job in the system. The legacy whole-blob key is imported once on
+ * first read, so an existing deployment upgrades in place.
  */
 
-const jobs = durableCollection<StudioJob>({
+/** Terminal jobs beyond this count are trimmed, oldest first, on create. */
+const TERMINAL_JOB_KEEP = 500;
+
+const jobs = durableRecordCollection<StudioJob>({
   key: "editforge:jobs",
   file: "jobs.json",
-  seed: () => [],
+  idemOf: (j) => j.idempotencyKey,
+  legacyKey: "editforge:jobs",
 });
 
 export async function listJobs(): Promise<StudioJob[]> {
@@ -37,8 +47,7 @@ export async function getJob(id: string): Promise<StudioJob | null> {
 export async function findByIdempotencyKey(
   key: string,
 ): Promise<StudioJob | null> {
-  const all = await jobs.list();
-  return all.find((j) => j.idempotencyKey === key) ?? null;
+  return jobs.findByIdem(key);
 }
 
 function newId(kind: JobKind, key: string): string {
@@ -71,17 +80,21 @@ export async function createAndQueue(input: CreateInput): Promise<StudioJob> {
   );
   const queued = advanceJob(authorized, "queued");
 
-  let stored = queued;
-  await jobs.mutate((all) => {
-    // Re-check inside the transaction: another instance may have won the race.
-    const dupe = all.find((j) => j.idempotencyKey === input.idempotencyKey);
-    if (dupe) {
-      stored = dupe;
-      return;
-    }
-    all.unshift(queued);
-  });
-  return stored;
+  // CAS on the empty record key: of two concurrent submits, exactly one wins.
+  // The loser re-reads the idempotency pointer and returns the winner's job.
+  const won = await jobs.insert(queued);
+  if (!won) {
+    const dupe = await findByIdempotencyKey(input.idempotencyKey);
+    if (dupe) return dupe;
+    throw new Error("Job insert lost a race it cannot explain — retry the submit");
+  }
+  // Terminal records are cheap to keep but not free: every one rides in every
+  // listing. Trim the oldest beyond the cap so the store stays bounded.
+  await jobs.trim(
+    (j) => isTerminal(j.status) && j.id !== queued.id,
+    TERMINAL_JOB_KEEP,
+  );
+  return queued;
 }
 
 /** Apply a change to a stored job through the state machine, and persist it. */
@@ -89,17 +102,10 @@ async function update(
   id: string,
   fn: (job: StudioJob) => void,
 ): Promise<StudioJob | null> {
-  let out: StudioJob | null = null;
-  await jobs.mutate((all) => {
-    const i = all.findIndex((j) => j.id === id);
-    if (i < 0) return;
-    const next = { ...all[i] };
-    fn(next);
-    next.updatedAt = new Date().toISOString();
-    all[i] = next;
-    out = next;
+  return jobs.mutate(id, (job) => {
+    fn(job);
+    job.updatedAt = new Date().toISOString();
   });
-  return out;
 }
 
 /**
@@ -205,6 +211,55 @@ export async function pollJob(id: string): Promise<StudioJob | null> {
     }
     // queued / running: nothing to change but the timestamp.
   });
+}
+
+/**
+ * Poll a set of jobs in one pass.
+ *
+ * A canvas sync used to call `pollJob` per node — one store transaction each.
+ * This reads them all at once, polls only the ones a provider can answer for,
+ * and persists each result with a single-key write. One round of network work
+ * for the whole batch, whatever its size.
+ */
+export async function pollJobs(ids: string[]): Promise<StudioJob[]> {
+  const found = await jobs.getMany(ids);
+  const pollable = found.filter(
+    (j): j is StudioJob =>
+      !!j && !isTerminal(j.status) && j.status === "running" && !!j.provider && !!j.externalId,
+  );
+  const results = await Promise.all(
+    pollable.map((job) => pollProvider(job.provider!, job.externalId!)),
+  );
+  const byId = new Map(pollable.map((j, i) => [j.id, results[i]]));
+  const updated = await Promise.all(
+    found.filter((j): j is StudioJob => !!j).map((job) => {
+      const res = byId.get(job.id);
+      if (!res) return Promise.resolve(job);
+      return update(job.id, (j) => {
+        if (j.status !== "running") return;
+        if (!res.ok) {
+          advanceJob(j, "failed");
+          j.status = "failed";
+          j.error = res.error;
+          return;
+        }
+        if (res.state === "failed") {
+          advanceJob(j, "failed");
+          j.status = "failed";
+          j.error = res.note ?? "Provider reported failure";
+          return;
+        }
+        if (res.state === "succeeded") {
+          advanceJob(j, "validating");
+          j.status = "validating";
+          if (res.result) j.result = res.result;
+          if (res.note) j.note = res.note;
+        }
+        // queued / running: nothing to change but the timestamp.
+      });
+    }),
+  );
+  return updated.filter((j): j is StudioJob => !!j);
 }
 
 /** Close out a validated job. Kept separate so QC stays an explicit step. */

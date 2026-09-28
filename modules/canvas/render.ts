@@ -7,7 +7,7 @@ import {
   contentTypeForArtifact,
   isArtifactName,
 } from "@/lib/artifacts";
-import { createAndQueue, getJob, pollJob, submitJob } from "@/lib/jobstore";
+import { createAndQueue, getJob, pollJob, pollJobs, submitJob } from "@/lib/jobstore";
 import { findProvider, providerReadiness } from "@/lib/providers";
 import {
   RUNWAY_IMAGE_RATIOS,
@@ -244,28 +244,37 @@ export async function renderNode(
         : n;
     }),
   });
-  // Sequential submission bounds server load and provider concurrency. Each
-  // provider call has its own durable claim inside submitJob.
-  for (const run of prepared)
-    await submitJob(run.job.id, {
-      provider: run.item.provider,
-      prompt: run.item.prompt,
-      options: run.options,
-    });
+  // Submissions are bounded so a big canvas cannot open twenty provider
+  // sessions at once — but the bound is a knob, not a law: a batch of cheap
+  // stills can be raised with EDITFORGE_SUBMIT_CONCURRENCY.
+  const concurrency = Math.max(
+    1,
+    Number(process.env.EDITFORGE_SUBMIT_CONCURRENCY ?? 1) || 1,
+  );
+  for (let i = 0; i < prepared.length; i += concurrency) {
+    await Promise.all(
+      prepared.slice(i, i + concurrency).map((run) =>
+        submitJob(run.job.id, {
+          provider: run.item.provider,
+          prompt: run.item.prompt,
+          options: run.options,
+        }),
+      ),
+    );
+  }
   return syncJobs(p.id, false);
 }
 
 export async function syncJobs(id: string, poll: boolean): Promise<Project> {
   const p = await getProject(id);
   if (!p) throw new Error("Saved project not found.");
-  const jobs = await Promise.all(
-    p.nodes
-      .filter((n) => n.jobId)
-      .map((n) => (poll ? pollJob(n.jobId!) : getJob(n.jobId!))),
-  );
+  const jobIds = p.nodes.filter((n) => n.jobId).map((n) => n.jobId!);
+  // Polling goes through the batched path: one read of every referenced job
+  // and one round of provider calls, instead of a store transaction per node.
+  const jobs = poll ? await pollJobs(jobIds) : await Promise.all(jobIds.map(getJob));
   const assets = [...p.assets];
   const nodes = p.nodes.map((n): GraphNode => {
-    const j = jobs.find((x) => x?.id === n.jobId);
+    const j = jobs.find((x) => x && x.id === n.jobId);
     if (!j) return n;
     const status =
       j.status === "completed"

@@ -7,8 +7,9 @@ import { artifactStoreConfigured } from "@/lib/artifacts";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const store = await probeStore();
-  const worker = await probeWorker();
+  // The store and the worker answer to different services; probing them in
+  // parallel halves the latency of the endpoint dashboards poll most often.
+  const [store, worker] = await Promise.all([probeStore(), probeWorker()]);
   const fallbackReason = storeFallbackReason();
   const accessGate = accessGateEnabled();
   const sessionSecret = sessionSecretConfigured();

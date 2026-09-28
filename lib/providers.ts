@@ -478,10 +478,17 @@ export async function pollProvider(
   }
 }
 
-const KEPT_IMAGE_TYPES: Record<string, string> = {
+/** Media types `keepResult` will store, and the artifact file name they map to. */
+const KEPT_MEDIA_TYPES: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpg",
   "image/webp": ".webp",
+  // Videos come back from Runway, Kling and Veo the same way stills do — a
+  // finished render that only the provider's own (expiring) URL points at.
+  // Without these entries the studio kept every paid video as a link that dies.
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "video/quicktime": ".mov",
 };
 
 /**
@@ -501,10 +508,19 @@ async function keepResult(
   if (!artifactStoreConfigured()) return unkept("no artifact store configured");
   if (!/^https:\/\//.test(url)) return unkept("the result is not an HTTPS URL");
   try {
-    const res = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(PROVIDER_POLL_TIMEOUT_MS) });
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(PROVIDER_POLL_TIMEOUT_MS),
+      // A provider may name a download URL on its own endpoint that still
+      // expects the credential (Veo's file URIs do). Attaching the same auth
+      // when the URL shares the endpoint origin is free and correct.
+      headers: spec.endpoint && url.startsWith(spec.endpoint)
+        ? authHeaders(spec, process.env)
+        : {},
+    });
     if (!res.ok) return unkept(`download answered HTTP ${res.status}`);
     const type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
-    const extension = KEPT_IMAGE_TYPES[type];
+    const extension = KEPT_MEDIA_TYPES[type];
     if (!extension) return unkept(`unexpected content type ${type || "none"}`);
     const declared = Number(res.headers.get("content-length") ?? 0);
     if (declared > maxBytes) return unkept("the file is larger than the store allows");

@@ -20,7 +20,6 @@ describe("genvideo catalogue", () => {
       "runway",
       "kling",
       "veo",
-      "seedream",
       "hyperframes-local",
       "mock",
     ]);
@@ -29,7 +28,7 @@ describe("genvideo catalogue", () => {
       "RUNWAYML_API_SECRET",
     ]);
     expect(GEN_PROVIDERS.find((p) => p.id === "runway")?.liveWired).toBe(true);
-    expect(GEN_PROVIDERS.find((p) => p.id === "kling")?.liveWired).toBe(false);
+    expect(GEN_PROVIDERS.find((p) => p.id === "kling")?.liveWired).toBe(true);
   });
 
   it("calls a provider ready only when its shape and its key both exist", () => {
@@ -37,8 +36,8 @@ describe("genvideo catalogue", () => {
     expect(providerReady("runway")).toBe(false);
     process.env.RUNWAY_API_KEY = "tok";
     expect(providerReady("runway")).toBe(true);
-    // Kling has a key here and still no implemented shape.
+    // Kling is wired now; a key alone has always been the readiness story.
     process.env.KLING_API_KEY = "tok";
-    expect(providerReady("kling")).toBe(false);
+    expect(providerReady("kling")).toBe(true);
   });
 });

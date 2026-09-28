@@ -8,6 +8,7 @@ import {
   getJob,
   listJobs,
   pollJob,
+  pollJobs,
   retryJob,
   submitJob,
 } from "./jobstore";
@@ -378,5 +379,101 @@ describe("durable job lifecycle", () => {
     expect(
       await submitJob("nope", { provider: "mock", prompt: "x" }),
     ).toBeNull();
+  });
+});
+
+describe("batched polling and bounded store", () => {
+  it("polls a whole batch in one pass and advances only running jobs", async () => {
+    process.env.RUNWAY_API_KEY = "tok";
+    const a = await createAndQueue({
+      kind: "gen-video",
+      label: "A",
+      note: "",
+      idempotencyKey: "batch-a",
+    });
+    const b = await createAndQueue({
+      kind: "gen-video",
+      label: "B",
+      note: "",
+      idempotencyKey: "batch-b",
+    });
+    // A validating job (must be reached through the machine) is terminal for
+    // poll purposes once completed; include a completed job in the batch to
+    // prove terminal ones are skipped, not re-polled.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ id: "ext-a" }),
+          }) as unknown as Response,
+      ),
+    );
+    await submitJob(a.id, { provider: "runway", prompt: "x" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({
+              status: "SUCCEEDED",
+              output: ["https://v.example/a.mp4"],
+            }),
+          }) as unknown as Response,
+      ),
+    );
+    await pollJob(a.id);
+    await completeJob(a.id);
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ id: "ext-1" }),
+          }) as unknown as Response,
+      ),
+    );
+    await submitJob(b.id, { provider: "runway", prompt: "x" });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ status: "SUCCEEDED", output: ["https://v.example/v.mp4"] }),
+          }) as unknown as Response,
+      ),
+    );
+
+    const polled = await pollJobs([a.id, b.id]);
+    expect(polled.find((j) => j.id === a.id)?.status).toBe("completed");
+    expect(polled.find((j) => j.id === b.id)?.status).toBe("validating");
+  });
+
+  it("trims the oldest terminal jobs beyond the keep count", async () => {
+    // Make the cap tiny for this check by filling past it is impractical at
+    // 500 — so assert the mechanism through the collection directly instead.
+    const { durableRecordCollection } = await import("./durable");
+    const col = durableRecordCollection<{ id: string; updatedAt: string }>({
+      key: "editforge:trim-test",
+      file: "trim-test.json",
+    });
+    for (let i = 0; i < 6; i++) {
+      await col.insert({ id: `r${i}`, updatedAt: `2026-01-0${i + 1}` });
+    }
+    // All records are "removable" under this predicate; keep the 3 newest.
+    const removed = await col.trim(() => true, 3);
+    expect(removed).toBe(3);
+    const rest = (await col.list()).map((r) => r.id).sort();
+    expect(rest).toEqual(["r3", "r4", "r5"]);
+    // Insert races: a second insert of the same id loses.
+    const won = await col.insert({ id: "r3", updatedAt: "2026-01-04" });
+    expect(won).toBe(false);
+    // And a mutate on a record that does not exist is a clean null.
+    expect(await col.mutate("nope", () => {})).toBeNull();
   });
 });

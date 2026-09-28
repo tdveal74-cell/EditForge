@@ -1,6 +1,6 @@
 import { PROVIDERS, credentialKeysFor, hasCredentials, isLiveWired } from "./provider-registry";
 
-export type GenProvider = "xai-video" | "runway" | "kling" | "veo" | "seedream" | "mock";
+export type GenProvider = "xai-video" | "runway" | "kling" | "veo" | "mock";
 export type GenMode = "text-to-video" | "image-to-video" | "extend" | "restyle";
 export type QualityTier = "draft" | "social" | "broadcast-intent";
 
@@ -17,7 +17,6 @@ const STRENGTHS: Record<GenProvider, string> = {
   runway: "Gen-4.5 · motion brush · restyle · extend",
   kling: "Longer takes · strong motion coherence",
   veo: "High fidelity · cinematic intent",
-  seedream: "Stylized · concept-heavy looks",
   mock: "Plan + QA only — no cloud spend",
 };
 

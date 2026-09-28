@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { JOB_STUBS, type StudioJob } from "@/lib/jobs";
+import { JOB_STUBS } from "@/lib/jobs";
 import type { Cut } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";

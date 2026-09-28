@@ -7,7 +7,7 @@ import {
   contentTypeForArtifact,
   isArtifactName,
 } from "@/lib/artifacts";
-import { createAndQueue, getJob, pollJob, pollJobs, submitJob } from "@/lib/jobstore";
+import { createAndQueue, getJob, pollJobs, submitJob } from "@/lib/jobstore";
 import { findProvider, providerReadiness } from "@/lib/providers";
 import {
   RUNWAY_IMAGE_RATIOS,

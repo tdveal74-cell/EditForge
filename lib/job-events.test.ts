@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   SSE_HEARTBEAT_MS,
@@ -27,7 +27,7 @@ describe("job event bus", () => {
     subscribeToJobEvents(() => {
       throw new Error("dead socket");
     });
-    const off = subscribeToJobEvents((e) => seen.push(e.jobId));
+    subscribeToJobEvents((e) => seen.push(e.jobId));
     expect(() => emitJobEvent({ jobId: "j1", status: "queued", at: 1 })).not.toThrow();
     emitJobEvent({ jobId: "j2", status: "queued", at: 2 });
     expect(seen).toEqual(["j1", "j2"]);

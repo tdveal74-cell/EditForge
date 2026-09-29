@@ -16,6 +16,8 @@ services:
     cap_drop: [ALL]
     environment:
       NODE_ENV: production
+      KLING_API_KEY: ${KLING_API_KEY:-}
+      VEO_API_KEY: ${VEO_API_KEY:-}
       EDITFORGE_DATA_DIR: /data
       EDITFORGE_SESSION_SECRET: ${EDITFORGE_SESSION_SECRET:?set EDITFORGE_SESSION_SECRET}
       EDITFORGE_PASSKEY_RP_ID: ${EDITFORGE_PASSKEY_RP_ID:-editforge.online}
@@ -81,6 +83,8 @@ services:
     cap_drop: [ALL]
     environment:
       NODE_ENV: production
+      KLING_API_KEY: ${KLING_API_KEY:-}
+      VEO_API_KEY: ${VEO_API_KEY:-}
       EDITFORGE_WORK_DIR: /data
       EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
       EDITFORGE_CALLBACK_ORIGIN: http://web:3000
@@ -149,6 +153,8 @@ services:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
+      KLING_API_KEY: ${KLING_API_KEY:-}
+      VEO_API_KEY: ${VEO_API_KEY:-}
       EDITFORGE_PROVIDER_TOKEN: ${EDITFORGE_PROVIDER_TOKEN:?set EDITFORGE_PROVIDER_TOKEN}
       EDITFORGE_IDENTITY_REGISTRY_FILE: /run/secrets/editforge-identities.json
       EDITFORGE_PROVIDER_ARTIFACT_DIR: /provider-artifacts

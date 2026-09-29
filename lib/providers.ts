@@ -97,12 +97,30 @@ function mockId(req: SubmitRequest): string {
   return `mock-${req.kind}-${req.idempotencyKey}`;
 }
 
+/** A spec's endpoint, resolving the function form against the live env. */
+function endpointFor(spec: ProviderSpec, env: EnvLike): string | undefined {
+  return typeof spec.endpoint === "function" ? spec.endpoint(env) : spec.endpoint;
+}
+
 /** Credential header for this provider, however it wants to be given the key. */
 function authHeaders(spec: ProviderSpec, env: EnvLike): Record<string, string> {
   const key = credentialFor(spec, env);
   if (!key) return {};
   const auth = spec.wire?.auth ?? DEFAULT_AUTH;
+  // Query-param auth carries no header; the transport appends the parameter.
+  if (auth.query && key.startsWith("AQ")) return {};
   return { [auth.header]: auth.scheme ? `${auth.scheme} ${key}` : key };
+}
+
+/** Query parameters the provider's auth style adds (Vertex express `key`). */
+function authQuery(spec: ProviderSpec, env: EnvLike, path: string): string {
+  const key = credentialFor(spec, env);
+  const auth = spec.wire?.auth ?? DEFAULT_AUTH;
+  // Vertex express keys ("AQ…") authenticate only as a query parameter;
+  // Gemini keys ("AIza…") authenticate only as the x-goog-api-key header.
+  if (!auth.query || !key || !key.startsWith("AQ")) return "";
+  const sep = path.includes("?") ? "&" : "?";
+  return `${sep}${auth.query}=${encodeURIComponent(key)}`;
 }
 
 /** The refusal for a provider that has no key under any of its names. */
@@ -242,7 +260,7 @@ export async function submitToProvider(
 
   try {
     const res = await fetch(
-      `${ready.spec.endpoint}${wire.submitPath(hydrated, settings)}`,
+      `${endpointFor(ready.spec, process.env)}${wire.submitPath(hydrated, settings)}${authQuery(ready.spec, process.env, wire.submitPath(hydrated, settings))}`,
       {
         method: "POST",
         headers: {
@@ -426,7 +444,7 @@ export async function pollProvider(
 
   try {
     const res = await fetch(
-      `${spec.endpoint}${spec.wire.pollPath(externalId)}`,
+      `${endpointFor(spec, process.env)}${spec.wire.pollPath(externalId)}${authQuery(spec, process.env, spec.wire.pollPath(externalId))}`,
       {
         headers: {
           ...authHeaders(spec, process.env),
@@ -514,9 +532,11 @@ async function keepResult(
       // A provider may name a download URL on its own endpoint that still
       // expects the credential (Veo's file URIs do). Attaching the same auth
       // when the URL shares the endpoint origin is free and correct.
-      headers: spec.endpoint && url.startsWith(spec.endpoint)
-        ? authHeaders(spec, process.env)
-        : {},
+      headers: (() => {
+        const base = endpointFor(spec, process.env);
+        if (!base || !url.startsWith(base)) return {};
+        return authHeaders(spec, process.env);
+      })(),
     });
     if (!res.ok) return unkept(`download answered HTTP ${res.status}`);
     const type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();

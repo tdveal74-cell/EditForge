@@ -48,7 +48,7 @@ export type PollReading = {
  * 401 that looks exactly like a bad key. Making this explicit per provider is
  * what stops "the key is wrong" being the first guess when the header is.
  */
-export type ProviderAuth = { header: string; scheme?: string };
+export type ProviderAuth = { header: string; scheme?: string; /** Send the raw credential as this query parameter instead of a header (Vertex express mode). */ query?: string };
 
 /** What a wire gets when it does not name its own. */
 export const DEFAULT_AUTH: ProviderAuth = {
@@ -118,8 +118,8 @@ export type ProviderSpec = {
    * a different name to make the control plane agree.
    */
   envAliases?: string[];
-  /** Base endpoint for the live path. Absent means live is not wired yet. */
-  endpoint?: string;
+  /** Base endpoint for the live path. Absent means live is not wired yet. A function form reads the environment per request — Veo picks Gemini vs Vertex express by the key's own shape. */
+  endpoint?: string | ((env: EnvLike) => string);
   /** Absent means the shape is not implemented — the boundary refuses. */
   wire?: ProviderWire;
   /**
@@ -529,9 +529,16 @@ export const PROVIDERS: ProviderSpec[] = [
     kind: "gen-video",
     label: "Veo",
     envKey: "VEO_API_KEY",
-    endpoint: "https://generativelanguage.googleapis.com/v1beta",
+      // Vertex express keys ("AQ…", issued by AI Studio in some projects and
+      // by Cloud) are rejected by generativelanguage — "API keys are not
+      // supported" — but answer on aiplatform with the key as a query
+      // parameter. Gemini AI Studio keys ("AIza…") take the reverse path.
+      endpoint: (env) =>
+        text(env.VEO_API_KEY).startsWith("AQ")
+          ? "https://aiplatform.googleapis.com/v1"
+          : "https://generativelanguage.googleapis.com/v1beta",
     wire: {
-      auth: { header: "x-goog-api-key" },
+      auth: { header: "x-goog-api-key", query: "key" },
       settings: (_env, req) => {
         const aspect = text(req.options?.aspect) || "16:9";
         if (!VEO_ASPECTS.includes(aspect))

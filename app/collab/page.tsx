@@ -5,51 +5,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Section } from "@/components/ui/section";
-
-const roles = [
-  { role: "Director", access: ["Review", "Rubric", "Ship"], note: "Only role that can record a ship decision." },
-  { role: "Editor", access: ["Timeline", "Cuts", "Captions"], note: "Owns assembly and the caption lane." },
-  { role: "Color", access: ["Grade envelope", "Notes"], note: "Grades inside the envelope; cannot widen it." },
-  { role: "Sound", access: ["Hierarchy", "Stems"], note: "Realises the hierarchy, does not renegotiate it." },
-  { role: "Producer", access: ["Projects", "Dailies", "Archive"], note: "Moves work through stages; no grade access." },
-];
-
-/**
- * What the studio actually enforces, as opposed to what it agrees.
- *
- * The two are different here, and saying so is the point of this page. The gates
- * below are code; the roles above are a working agreement between people. This
- * page used to promise per-role auth was arriving "with the worker increment" —
- * the worker increment shipped, and what landed was one shared gate, so the
- * sentence had quietly become false.
- */
-const ENFORCED = [
-  {
-    what: "Access to the app",
-    how: "The allowlisted Google identity or a verified passkey creates the same hardened studio session. Protected pages and APIs refuse anonymous access.",
-    real: true,
-  },
-  {
-    what: "Master export",
-    how: "Refused unless a rubric pass is recorded on the cut. The decision is read from the store, never from the caller.",
-    real: true,
-  },
-  {
-    what: "A roll entering a cut",
-    how: "Refused unless an approval is recorded against that roll on /dailies.",
-    real: true,
-  },
-  {
-    what: "Spending money",
-    how: "A billable provider submit requires credentials and authentication independently of the access gate.",
-    real: true,
-  },
-  {
-    what: "Per-role permissions",
-    how: "Not enforced. One shared session means anyone through the gate can reach every surface — the roles above are a working agreement, not a check.",
-    real: false,
-  },
-];
+import { Button } from "@/components/ui/button";
+import { downloadText } from "@/lib/download";
+import { COLLAB_ENFORCED, COLLAB_ROLES, buildRoleAgreement } from "@/lib/collab";
 
 export default function CollabPage() {
   const [gate, setGate] = useState<boolean | null>(null);

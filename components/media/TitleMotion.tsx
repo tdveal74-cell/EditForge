@@ -36,11 +36,12 @@ export function TitleMotion({
     const reduced =
       typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduced || !full) {
-      setShown(full || "—");
-      return;
+      // Set inside a frame rather than synchronously here: setState in the
+      // effect body cascades a render before paint (react-hooks/set-state-in-effect).
+      const id = requestAnimationFrame(() => setShown(full || "—"));
+      return () => cancelAnimationFrame(id);
     }
 
-    setShown("");
     const duration = Math.max(600, (Number.isFinite(durationSec) ? durationSec : 3) * 1000);
     const anim = el.animate(
       [
@@ -58,7 +59,7 @@ export function TitleMotion({
           ? Number((effect as KeyframeEffect).getComputedTiming().progress ?? 0)
           : 0;
       setShown(typedPrefix(full, progress));
-      if (anim.playState === "running" || anim.playState === "pending") {
+      if (anim.playState === "running" || (anim.playState as string) === "pending") {
         raf = requestAnimationFrame(tick);
       } else {
         setShown(full);

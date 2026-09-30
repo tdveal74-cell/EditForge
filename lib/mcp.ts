@@ -83,7 +83,6 @@ async function viaPlanner(handler: (req: Request) => Promise<Response>, body: Re
   );
   return res.json();
 }
->>>>>>> origin/main
 
 /**
  * EditForge as an MCP server.

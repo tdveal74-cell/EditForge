@@ -11,7 +11,6 @@ import { StatusLabel, toneFor, toneForJob } from "@/components/ui/status-dot";
 import { PageHeader } from "@/components/PageHeader";
 import { HostNotice } from "@/components/HostNotice";
 import { useLiveJobs } from "@/components/useLiveJobs";
->>>>>>> origin/main
 
 export default function JobsPage() {
   const [kind, setKind] = useState<"proxy" | "export">("proxy");

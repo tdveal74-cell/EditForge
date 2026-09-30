@@ -225,11 +225,14 @@ describe("honesty: gen-video does not sell unwired modalities", () => {
     expect(runway?.liveWired).toBe(true);
   });
 
-  it("Kling, Veo, Seedream strengths do not sell a live path", () => {
-    for (const id of ["kling", "veo", "seedream"]) {
+  it("Kling, Veo are wired since main #76-#79 — strengths say so without overselling", () => {
+    // These landed as real wires after this branch was cut (Veo even gained
+    // Vertex express-mode keys). Honesty now means naming what they do, not
+    // pretending they are still unwired.
+    for (const id of ["kling", "veo"]) {
       const p = GEN_PROVIDERS.find((x) => x.id === id);
-      expect(p?.liveWired).toBe(false);
-      expect(p?.strengths).toMatch(/no live path/i);
+      expect(p?.liveWired, id).toBe(true);
+      expect(p?.strengths).not.toMatch(/no live path/i);
     }
   });
 
@@ -387,7 +390,8 @@ describe("honesty: mock is never live-wired", () => {
   it("isLiveWired(mock) is false — mock has no endpoint and no wire", () => {
     expect(isLiveWired("mock")).toBe(false);
     expect(isLiveWired("runway")).toBe(true);
-    expect(isLiveWired("kling")).toBe(false);
+    // Kling gained a real wire on main (#76); the honest claim flipped.
+    expect(isLiveWired("kling")).toBe(true);
   });
 });
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -17,6 +17,7 @@ import {
 } from "./providers";
 
 const KEYS = [
+  "XAI_API_KEY",
   "RUNWAY_API_KEY",
   "RUNWAYML_API_SECRET",
   "KLING_API_KEY",
@@ -31,6 +32,7 @@ const KEYS = [
   "EDITFORGE_ARTIFACT_DIR",
   "EDITFORGE_ARTIFACT_BASE_URL",
   "EDITFORGE_PUBLIC_URL",
+  "EDITFORGE_RUNWAY_CHARACTER_FILE",
 ];
 
 function clearKeys() {
@@ -55,17 +57,56 @@ function audioResponse(bytes: Uint8Array) {
     ok: true,
     status: 200,
     headers: new Headers({ "content-type": "audio/mpeg" }),
-    arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    arrayBuffer: async () =>
+      bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
   } as unknown as Response;
 }
 
 describe("provider boundary", () => {
+  it("stores Grok Imagine image bytes before reporting a finished still", async () => {
+    process.env.XAI_API_KEY = "tok";
+    process.env.EDITFORGE_ARTIFACT_DIR = store;
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: RequestInit) =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [{ b64_json: jpeg.toString("base64") }] }),
+          requestBody: init?.body,
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitToProvider({
+      provider: "xai-image",
+      kind: "gen-image",
+      prompt: "A quiet rooftop at blue hour",
+      idempotencyKey: "still-once",
+      options: { aspect: "9:16" },
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.state).toBe("succeeded");
+    expect(result.result).toMatch(
+      /^\/api\/artifacts\/xai-image-gen-image-[0-9a-f]{16}\.jpg$/,
+    );
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: "grok-imagine-image-2.0",
+      aspect_ratio: "9:16",
+      response_format: "b64_json",
+    });
+  });
+
   it("routes providers by the kind of work they serve", () => {
     expect(providersFor("voice").map((p) => p.id)).toContain("elevenlabs");
     expect(providersFor("avatar").map((p) => p.id)).toContain("heygen");
     expect(providersFor("gen-video").map((p) => p.id)).toEqual(
-      expect.arrayContaining(["runway", "kling", "veo", "seedream"])
+      expect.arrayContaining(["runway", "kling", "veo"]),
     );
+    expect(providersFor("gen-image").map((p) => p.id)).toContain("seedream");
   });
 
   it("refuses a provider asked to do work it does not serve", async () => {
@@ -81,8 +122,18 @@ describe("provider boundary", () => {
   });
 
   it("mock submits deterministically and never claims to have made media", async () => {
-    const a = await submitToProvider({ provider: "mock", kind: "gen-video", prompt: "x", idempotencyKey: "same" });
-    const b = await submitToProvider({ provider: "mock", kind: "gen-video", prompt: "x", idempotencyKey: "same" });
+    const a = await submitToProvider({
+      provider: "mock",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "same",
+    });
+    const b = await submitToProvider({
+      provider: "mock",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "same",
+    });
     expect(a.ok && b.ok).toBe(true);
     if (a.ok && b.ok) expect(a.externalId).toBe(b.externalId);
 
@@ -113,12 +164,16 @@ describe("provider boundary", () => {
     expect(res).not.toHaveProperty("externalId");
   });
 
-  it("refuses a credentialled provider whose API shape is not implemented", async () => {
-    clearKeys();
-    process.env.KLING_API_KEY = "tok";
-    const res = await submitToProvider({ provider: "kling", kind: "gen-video", prompt: "x", idempotencyKey: "k3" });
-    expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.error).toMatch(/not implemented/i);
+  it("has an implemented shape for every provider a picker can offer", () => {
+    // There used to be unwired stubs (Kling, Veo, Seedream) that a picker
+    // offered and the boundary refused. Every registered provider now carries
+    // an endpoint and a wire; this keeps it that way, so a refusal after a
+    // submit can only come from the provider, never from us.
+    for (const spec of providersFor("gen-video")) {
+      if (spec.id === "mock") continue;
+      expect(spec.endpoint, spec.id).toBeTruthy();
+      expect(spec.wire, spec.id).toBeDefined();
+    }
   });
 
   it("reports live-wired only where a shape is actually implemented", () => {
@@ -127,8 +182,10 @@ describe("provider boundary", () => {
     expect(isLiveWired("runway")).toBe(true);
     expect(isLiveWired("elevenlabs")).toBe(true);
     expect(isLiveWired("heygen")).toBe(true);
-    expect(isLiveWired("mock")).toBe(false);
-    expect(isLiveWired("kling")).toBe(false);
+    expect(isLiveWired("mock")).toBe(true);
+    expect(isLiveWired("kling")).toBe(true);
+    expect(isLiveWired("veo")).toBe(true);
+    expect(isLiveWired("seedream")).toBe(true);
     expect(isLiveWired("nope")).toBe(false);
   });
 
@@ -138,7 +195,10 @@ describe("provider boundary", () => {
     // Typed with the fetch signature so the recorded init is inspectable.
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ id: "task_789" }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ id: "task_789" }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -182,16 +242,25 @@ describe("provider boundary", () => {
     clearKeys();
     process.env.RUNWAYML_API_SECRET = "sdk-name";
     expect(hasCredentials("runway")).toBe(true);
-    expect(credentialKeysFor(findProvider("runway")!)).toEqual(["RUNWAY_API_KEY", "RUNWAYML_API_SECRET"]);
+    expect(credentialKeysFor(findProvider("runway")!)).toEqual([
+      "RUNWAY_API_KEY",
+      "RUNWAYML_API_SECRET",
+    ]);
 
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response
+        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
-    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "alias" });
+    const res = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "alias",
+    });
     expect(res.ok).toBe(true);
-    const headers = (fetchMock.mock.calls[0][1] as RequestInit).headers as Record<string, string>;
+    const headers = (fetchMock.mock.calls[0][1] as RequestInit)
+      .headers as Record<string, string>;
     expect(headers.Authorization).toBe("Bearer sdk-name");
   });
 
@@ -233,7 +302,7 @@ describe("provider boundary", () => {
     process.env.RUNWAY_API_KEY = "tok";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response
+        ({ ok: true, json: async () => ({ id: "t1" }) }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -242,15 +311,69 @@ describe("provider boundary", () => {
       kind: "gen-video",
       prompt: "x",
       idempotencyKey: "portrait",
-      options: { aspect: "9:16", durationSec: 8, quality: "social", mode: "text-to-video" },
+      options: {
+        aspect: "9:16",
+        durationSec: 8,
+        quality: "social",
+        mode: "text-to-video",
+      },
     });
-    const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+    const body = JSON.parse(
+      String((fetchMock.mock.calls[0][1] as RequestInit).body),
+    );
     expect(body.ratio).toBe("720:1280");
     expect(body.duration).toBe(8);
     expect(body).not.toHaveProperty("aspect");
     expect(body).not.toHaveProperty("quality");
     expect(body).not.toHaveProperty("durationSec");
     expect(body).not.toHaveProperty("mode");
+  });
+
+  it("keeps the private presenter path server-side and submits Runway image-to-video", async () => {
+    clearKeys();
+    process.env.RUNWAY_API_KEY = "tok";
+    const reference = path.join(store, "tee.png");
+    await writeFile(reference, new Uint8Array([137, 80, 78, 71]));
+    process.env.EDITFORGE_RUNWAY_CHARACTER_FILE = reference;
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        ({ ok: true, json: async () => ({ id: "presenter-1" }) }) as unknown as Response
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "subtle motion",
+      idempotencyKey: "presenter",
+      options: { mode: "image-to-video", aspect: "16:9", durationSec: 5 },
+    });
+
+    expect(result.ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0];
+    const body = JSON.parse(String((init as RequestInit).body));
+    expect(String(url)).toBe("https://api.dev.runwayml.com/v1/image_to_video");
+    expect(body.promptImage).toBe("data:image/png;base64,iVBORw==");
+    expect(body).not.toHaveProperty("EDITFORGE_RUNWAY_CHARACTER_FILE");
+  });
+
+  it("refuses presenter B-roll before network use when the private reference is missing", async () => {
+    clearKeys();
+    process.env.RUNWAY_API_KEY = "tok";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "subtle motion",
+      idempotencyKey: "missing-presenter",
+      options: { mode: "image-to-video", aspect: "16:9", durationSec: 5 },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/EDITFORGE_RUNWAY_CHARACTER_FILE/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("refuses an aspect Runway text-to-video does not render", async () => {
@@ -275,22 +398,35 @@ describe("provider boundary", () => {
     process.env.RUNWAY_API_KEY = "tok";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ status: "RUNNING" }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ status: "RUNNING" }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
     await pollProvider("runway", "task_789");
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe("https://api.dev.runwayml.com/v1/tasks/task_789");
-    expect((init?.headers as Record<string, string>)["X-Runway-Version"]).toBe("2024-11-06");
+    expect((init?.headers as Record<string, string>)["X-Runway-Version"]).toBe(
+      "2024-11-06",
+    );
   });
 
   it("surfaces a provider HTTP error instead of a fabricated success", async () => {
     clearKeys();
     process.env.RUNWAY_API_KEY = "tok";
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 429 }) as unknown as Response));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({ ok: false, status: 429 }) as unknown as Response),
+    );
 
-    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k5" });
+    const res = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "k5",
+    });
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.error).toContain("429");
   });
@@ -302,14 +438,22 @@ describe("provider boundary", () => {
     process.env.RUNWAY_API_KEY = "tok";
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => ({
-        ok: false,
-        status: 400,
-        text: async () => '{"error":"Invalid value for ratio"}',
-      }) as unknown as Response)
+      vi.fn(
+        async () =>
+          ({
+            ok: false,
+            status: 400,
+            text: async () => '{"error":"Invalid value for ratio"}',
+          }) as unknown as Response,
+      ),
     );
 
-    const res = await submitToProvider({ provider: "runway", kind: "gen-video", prompt: "x", idempotencyKey: "k6" });
+    const res = await submitToProvider({
+      provider: "runway",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "k6",
+    });
     expect(res.ok).toBe(false);
     if (!res.ok) {
       expect(res.error).toContain("400");
@@ -350,7 +494,12 @@ describe("provider boundary", () => {
 
       // Anything a picker offers must be something the boundary will accept.
       for (const id of ids) {
-        const res = await submitToProvider({ provider: id, kind, prompt: "x", idempotencyKey: `pick-${kind}-${id}` });
+        const res = await submitToProvider({
+          provider: id,
+          kind,
+          prompt: "x",
+          idempotencyKey: `pick-${kind}-${id}`,
+        });
         if (!res.ok) expect(res.error).not.toContain("does not serve");
       }
     }
@@ -366,7 +515,9 @@ describe("ElevenLabs voice", () => {
     process.env.ELEVENLABS_VOICE_ID_AUREN = "auren-voice";
     expect(elevenLabsVoiceId(process.env, "vo-auren")).toBe("auren-voice");
     // A caller that already knows the provider's own id passes it straight on.
-    expect(elevenLabsVoiceId(process.env, "JBFqnCBsd6RMkjVDRZzb")).toBe("JBFqnCBsd6RMkjVDRZzb");
+    expect(elevenLabsVoiceId(process.env, "JBFqnCBsd6RMkjVDRZzb")).toBe(
+      "JBFqnCBsd6RMkjVDRZzb",
+    );
   });
 
   it("refuses before the request when no provider voice is configured", async () => {
@@ -413,7 +564,10 @@ describe("ElevenLabs voice", () => {
     process.env.ELEVENLABS_VOICE_ID = "voice-1";
     process.env.EDITFORGE_ARTIFACT_DIR = store;
     const bytes = new Uint8Array([1, 2, 3, 4, 5]);
-    const fetchMock = vi.fn(async (_url: string | URL | Request, _init?: RequestInit) => audioResponse(bytes));
+    const fetchMock = vi.fn(
+      async (_url: string | URL | Request, _init?: RequestInit) =>
+        audioResponse(bytes),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const res = await submitToProvider({
@@ -425,7 +579,7 @@ describe("ElevenLabs voice", () => {
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(String(url)).toBe(
-      "https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=mp3_44100_128"
+      "https://api.elevenlabs.io/v1/text-to-speech/voice-1?output_format=mp3_44100_128",
     );
     const headers = init?.headers as Record<string, string>;
     // A bearer token here is a 401 that looks exactly like a bad key.
@@ -441,7 +595,9 @@ describe("ElevenLabs voice", () => {
     const stored = await readFile(path.join(store, res.externalId));
     expect(new Uint8Array(stored)).toEqual(bytes);
     expect(res.externalId).toMatch(/^elevenlabs-voice-[0-9a-f]{16}\.mp3$/);
-    expect(res.externalId).toContain(createHash("sha256").update(bytes).digest("hex").slice(0, 16));
+    expect(res.externalId).toContain(
+      createHash("sha256").update(bytes).digest("hex").slice(0, 16),
+    );
   });
 
   it("says the store failed, not that the provider was unreachable", async () => {
@@ -454,7 +610,7 @@ describe("ElevenLabs voice", () => {
     process.env.EDITFORGE_ARTIFACT_DIR = store;
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => audioResponse(new Uint8Array()))
+      vi.fn(async () => audioResponse(new Uint8Array())),
     );
 
     const res = await submitToProvider({
@@ -477,11 +633,16 @@ describe("ElevenLabs voice", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const res = await pollProvider("elevenlabs", "elevenlabs-voice-abcdef0123456789.mp3");
+    const res = await pollProvider(
+      "elevenlabs",
+      "elevenlabs-voice-abcdef0123456789.mp3",
+    );
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.state).toBe("succeeded");
-      expect(res.result).toBe("/api/artifacts/elevenlabs-voice-abcdef0123456789.mp3");
+      expect(res.result).toBe(
+        "/api/artifacts/elevenlabs-voice-abcdef0123456789.mp3",
+      );
     }
     // ElevenLabs has no task route; issuing one would 404.
     expect(fetchMock).not.toHaveBeenCalled();
@@ -495,12 +656,22 @@ describe("HeyGen avatar", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    const noAvatar = await submitToProvider({ provider: "heygen", kind: "avatar", prompt: "hi", idempotencyKey: "a1" });
+    const noAvatar = await submitToProvider({
+      provider: "heygen",
+      kind: "avatar",
+      prompt: "hi",
+      idempotencyKey: "a1",
+    });
     expect(noAvatar.ok).toBe(false);
     if (!noAvatar.ok) expect(noAvatar.error).toContain("HEYGEN_AVATAR_ID");
 
     process.env.HEYGEN_AVATAR_ID = "look-1";
-    const noVoice = await submitToProvider({ provider: "heygen", kind: "avatar", prompt: "hi", idempotencyKey: "a2" });
+    const noVoice = await submitToProvider({
+      provider: "heygen",
+      kind: "avatar",
+      prompt: "hi",
+      idempotencyKey: "a2",
+    });
     expect(noVoice.ok).toBe(false);
     if (!noVoice.ok) expect(noVoice.error).toContain("HEYGEN_VOICE_ID");
 
@@ -514,7 +685,10 @@ describe("HeyGen avatar", () => {
     process.env.HEYGEN_VOICE_ID = "voice-9";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ data: { id: "vid_xyz789", status: "pending" } }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ data: { id: "vid_xyz789", status: "pending" } }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -546,7 +720,10 @@ describe("HeyGen avatar", () => {
     clearKeys();
     process.env.HEYGEN_API_KEY = "hg-key";
     const respond = (body: unknown) =>
-      vi.fn(async () => ({ ok: true, json: async () => body }) as unknown as Response);
+      vi.fn(
+        async () =>
+          ({ ok: true, json: async () => body }) as unknown as Response,
+      );
 
     vi.stubGlobal("fetch", respond({ data: { status: "processing" } }));
     const running = await pollProvider("heygen", "vid_1");
@@ -554,7 +731,12 @@ describe("HeyGen avatar", () => {
 
     vi.stubGlobal(
       "fetch",
-      respond({ data: { status: "completed", video_url: "https://files.heygen.ai/video/vid_1.mp4" } })
+      respond({
+        data: {
+          status: "completed",
+          video_url: "https://files.heygen.ai/video/vid_1.mp4",
+        },
+      }),
     );
     const done = await pollProvider("heygen", "vid_1");
     expect(done.ok).toBe(true);
@@ -563,7 +745,12 @@ describe("HeyGen avatar", () => {
       expect(done.result).toBe("https://files.heygen.ai/video/vid_1.mp4");
     }
 
-    vi.stubGlobal("fetch", respond({ data: { status: "failed", failure_message: "script too long" } }));
+    vi.stubGlobal(
+      "fetch",
+      respond({
+        data: { status: "failed", failure_message: "script too long" },
+      }),
+    );
     const failed = await pollProvider("heygen", "vid_1");
     expect(failed.ok).toBe(true);
     if (failed.ok) {
@@ -577,10 +764,284 @@ describe("HeyGen avatar", () => {
     process.env.HEYGEN_API_KEY = "hg-key";
     const fetchMock = vi.fn(
       async (_url: string | URL | Request, _init?: RequestInit) =>
-        ({ ok: true, json: async () => ({ data: { status: "pending" } }) }) as unknown as Response
+        ({
+          ok: true,
+          json: async () => ({ data: { status: "pending" } }),
+        }) as unknown as Response,
     );
     vi.stubGlobal("fetch", fetchMock);
     await pollProvider("heygen", "vid_xyz789");
-    expect(String(fetchMock.mock.calls[0][0])).toBe("https://api.heygen.com/v3/videos/vid_xyz789");
+    expect(String(fetchMock.mock.calls[0][0])).toBe(
+      "https://api.heygen.com/v3/videos/vid_xyz789",
+    );
+  });
+});
+
+describe("Kling", () => {
+  it("submits text-to-video with the studio's settings and reads the id out of data", async () => {
+    process.env.KLING_API_KEY = "tok";
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: RequestInit) =>
+        ({
+          ok: true,
+          json: async () => ({ code: 0, data: { id: "kling-task-1" } }),
+          requestBody: init?.body,
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await submitToProvider({
+      provider: "kling",
+      kind: "gen-video",
+      prompt: "A tram at dusk",
+      idempotencyKey: "kling-once",
+      options: { aspect: "9:16", duration: 10 },
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.externalId).toBe("kling-task-1");
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api-singapore.klingai.com/text-to-video/kling-2.6");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      prompt: "A tram at dusk",
+      settings: { aspect_ratio: "9:16", duration: 10, resolution: "720p" },
+    });
+  });
+
+  it("routes image-to-video through contents with the first frame", async () => {
+    process.env.KLING_API_KEY = "tok";
+    const fetchMock = vi.fn(
+      async (_url: unknown, _init?: RequestInit) =>
+        ({ ok: true, json: async () => ({ code: 0, data: { id: "k2" } }) }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await submitToProvider({
+      provider: "kling",
+      kind: "gen-video",
+      prompt: "Animate",
+      idempotencyKey: "kling-img",
+      options: { mode: "image-to-video", imageUrl: "https://img.example/a.png" },
+    });
+    expect(res.ok).toBe(true);
+    const body = JSON.parse(
+      String((fetchMock.mock.calls[0][1] as RequestInit).body),
+    );
+    expect(body.contents).toEqual([
+      { type: "prompt", text: "Animate" },
+      { type: "first_frame", url: "https://img.example/a.png" },
+    ]);
+  });
+
+  it("refuses an image-to-video mode without an HTTPS frame before any call", async () => {
+    process.env.KLING_API_KEY = "tok";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await submitToProvider({
+      provider: "kling",
+      kind: "gen-video",
+      prompt: "Animate",
+      idempotencyKey: "kling-bad",
+      options: { mode: "image-to-video" },
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("HTTPS first-frame");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("polls the batch task route and reads the video out of outputs", async () => {
+    process.env.KLING_API_KEY = "tok";
+    const fetchMock = vi.fn(
+      async (_url: unknown) =>
+        ({
+          ok: true,
+          json: async () => ({
+            code: 0,
+            data: [
+              {
+                id: "t",
+                status: "succeeded",
+                outputs: [{ type: "video", url: "https://kling.example/v.mp4" }],
+              },
+            ],
+          }),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await pollProvider("kling", "t");
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.state).toBe("succeeded");
+    expect(res.result).toBe("https://kling.example/v.mp4");
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/tasks?task_ids=t");
+  });
+});
+
+describe("Veo", () => {
+  it("submits a long-running operation with the key in x-goog-api-key", async () => {
+    process.env.VEO_API_KEY = "gtok";
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: RequestInit) =>
+        ({
+          ok: true,
+          json: async () => ({
+            name: "models/veo-3.1-generate-preview/operations/op1",
+          }),
+          headers: new Headers(init?.headers as Record<string, string>),
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await submitToProvider({
+      provider: "veo",
+      kind: "gen-video",
+      prompt: "Coastal road at sunset",
+      idempotencyKey: "veo-once",
+      options: { aspect: "9:16" },
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.externalId).toBe(
+      "models/veo-3.1-generate-preview/operations/op1",
+    );
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe(
+      "https://generativelanguage.googleapis.com/v1beta/models/veo-3.1-generate-preview:predictLongRunning",
+    );
+    const headers = new Headers(init.headers as Record<string, string>);
+    expect(headers.get("x-goog-api-key")).toBe("gtok");
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      instances: [{ prompt: "Coastal road at sunset" }],
+      parameters: { aspectRatio: "9:16" },
+    });
+  });
+
+  it("polls the operation itself and keeps the finished video with the key attached", async () => {
+    process.env.VEO_API_KEY = "gtok";
+    process.env.EDITFORGE_ARTIFACT_DIR = store;
+    const mp4 = Buffer.from([0x66, 0x74, 0x79, 0x70]);
+    let call = 0;
+    let downloadAuth: string | null = null;
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: RequestInit) => {
+        call += 1;
+        if (call === 1)
+          return {
+            ok: true,
+            json: async () => ({
+              done: true,
+              response: {
+                generateVideoResponse: {
+                  generatedSamples: [
+                    {
+                      video: {
+                        uri: "https://generativelanguage.googleapis.com/v1beta/files/f:download?alt=media",
+                      },
+                    },
+                  ],
+                },
+              },
+            }),
+          } as unknown as Response;
+        downloadAuth = new Headers(init?.headers as Record<string, string>).get("x-goog-api-key");
+        return {
+          ok: true,
+          headers: new Headers({ "content-type": "video/mp4" }),
+          arrayBuffer: async () =>
+            mp4.buffer.slice(
+              mp4.byteOffset,
+              mp4.byteOffset + mp4.byteLength,
+            ),
+        } as unknown as Response;
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await pollProvider(
+      "veo",
+      "models/veo-3.1-generate-preview/operations/op1",
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.state).toBe("succeeded");
+    expect(res.result).toMatch(/^\/api\/artifacts\/veo-gen-video-[0-9a-f]{16}\.mp4$/);
+    // The download went back to the provider's own file route, which answers
+    // only to the API key.
+    expect(String(fetchMock.mock.calls[1][0])).toContain("/v1beta/files/");
+    expect(downloadAuth).toBe("gtok");
+  });
+
+  it("reports a failed operation in the provider's own words", async () => {
+    process.env.VEO_API_KEY = "gtok";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          ({
+            ok: true,
+            json: async () => ({ done: true, error: { message: "content policy" } }),
+          }) as unknown as Response,
+      ),
+    );
+    const res = await pollProvider("veo", "models/veo-3.1-generate-preview/operations/op2");
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.state).toBe("failed");
+    expect(res.note).toContain("content policy");
+  });
+});
+
+describe("Seedream stills", () => {
+  it("answers the submit with the image and stores it before success", async () => {
+    process.env.SEEDREAM_API_KEY = "tok";
+    process.env.EDITFORGE_ARTIFACT_DIR = store;
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xd9]);
+    const fetchMock = vi.fn(
+      async (_url: unknown, init?: RequestInit) =>
+        ({
+          ok: true,
+          status: 200,
+          json: async () => ({ data: [{ b64_json: jpeg.toString("base64") }] }),
+          requestBody: init?.body,
+        }) as unknown as Response,
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const res = await submitToProvider({
+      provider: "seedream",
+      kind: "gen-image",
+      prompt: "Stylized concept look",
+      idempotencyKey: "seed-once",
+      options: { aspect: "3:2" },
+    });
+
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.state).toBe("succeeded");
+    expect(res.result).toMatch(/^\/api\/artifacts\/seedream-gen-image-[0-9a-f]{16}\.jpg$/);
+    const body = JSON.parse(
+      String((fetchMock.mock.calls[0][1] as RequestInit).body),
+    );
+    expect(body).toMatchObject({
+      model: "seedream-4-0-250828",
+      size: "2304x1536",
+      response_format: "b64_json",
+    });
+  });
+
+  it("refuses being asked for motion", async () => {
+    process.env.SEEDREAM_API_KEY = "tok";
+    const res = await submitToProvider({
+      provider: "seedream",
+      kind: "gen-video",
+      prompt: "x",
+      idempotencyKey: "seed-motion",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("does not serve");
   });
 });

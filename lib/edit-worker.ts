@@ -4,6 +4,8 @@ export type WorkerDispatchResult =
   | { ok: true; workerJobId: string }
   | { ok: false; error: string };
 
+const WORKER_CONTROL_TIMEOUT_MS = 15_000;
+
 function workerConfig(): { url: string; token: string } | null {
   const url = process.env.EDITFORGE_WORKER_URL?.trim().replace(/\/$/, "");
   const token = process.env.EDITFORGE_WORKER_TOKEN?.trim();
@@ -60,6 +62,7 @@ export async function dispatchToWorker(execution: EditExecution): Promise<Worker
           : undefined,
       }),
       cache: "no-store",
+      signal: AbortSignal.timeout(WORKER_CONTROL_TIMEOUT_MS),
     });
     const body = (await response.json().catch(() => ({}))) as { workerJobId?: string; error?: string };
     if (!response.ok || !body.workerJobId) {
@@ -77,6 +80,7 @@ export async function pollWorker(workerJobId: string): Promise<EditReceipt | nul
   const response = await fetch(`${config.url}/v1/jobs/${encodeURIComponent(workerJobId)}`, {
     headers: { Authorization: `Bearer ${config.token}` },
     cache: "no-store",
+    signal: AbortSignal.timeout(WORKER_CONTROL_TIMEOUT_MS),
   });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`worker poll failed: HTTP ${response.status}`);
@@ -91,6 +95,7 @@ export async function cancelWorker(workerJobId: string): Promise<void> {
     method: "POST",
     headers: { Authorization: `Bearer ${config.token}` },
     cache: "no-store",
+    signal: AbortSignal.timeout(WORKER_CONTROL_TIMEOUT_MS),
   });
   if (!response.ok && response.status !== 409) {
     const body = (await response.json().catch(() => ({}))) as { error?: string };

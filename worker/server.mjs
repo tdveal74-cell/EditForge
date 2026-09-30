@@ -15,6 +15,10 @@ const TOKEN = process.env.EDITFORGE_WORKER_TOKEN || "";
 const ROOT = path.resolve(process.env.EDITFORGE_WORK_DIR || "/tmp/editforge-worker");
 const JOB_FILE = path.join(ROOT, "worker-jobs.json");
 const MAX_BODY = 1_000_000;
+const DOWNLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+const ADAPTER_TIMEOUT_MS = 31 * 60 * 1000;
+const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
+const CALLBACK_TIMEOUT_MS = 15_000;
 const requestedConcurrency = Number(process.env.EDITFORGE_WORKER_CONCURRENCY || 1);
 const MAX_CONCURRENCY = Number.isInteger(requestedConcurrency)
   ? Math.max(1, Math.min(8, requestedConcurrency))
@@ -85,7 +89,10 @@ async function download(uri, target) {
     return;
   }
   const parsed = remoteMediaUrl(uri, "source URI");
-  const response = await fetch(parsed, { redirect: "follow" });
+  const response = await fetch(parsed, {
+    redirect: "follow",
+    signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS),
+  });
   if (!response.ok || !response.body) throw new Error(`source download failed: HTTP ${response.status}`);
   await pipeline(Readable.fromWeb(response.body), createWriteStream(target));
 }
@@ -149,6 +156,7 @@ async function callAdapter(step, command, inputArtifact) {
       input: inputArtifact,
       output: command.output,
     }),
+    signal: AbortSignal.timeout(ADAPTER_TIMEOUT_MS),
   });
   const value = await response.json().catch(() => ({}));
   if (!response.ok || !value.artifact?.uri || !value.artifact?.sha256) {
@@ -179,6 +187,7 @@ async function upload(file, uploadUrl, commandId) {
     body: createReadStream(file),
     duplex: "half",
     headers: { "Content-Type": "application/octet-stream" },
+    signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
   });
   if (!response.ok) throw new Error(`artifact upload failed: HTTP ${response.status}`);
   return uploadUrl.split("?")[0];
@@ -186,12 +195,23 @@ async function upload(file, uploadUrl, commandId) {
 
 async function callback(url, commandId, receipt) {
   if (!url) return;
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "receipt", receipt }),
-  });
-  if (!response.ok) throw new Error(`receipt callback failed: HTTP ${response.status}`);
+  let lastError;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "receipt", receipt }),
+        signal: AbortSignal.timeout(CALLBACK_TIMEOUT_MS),
+      });
+      if (response.ok) return;
+      lastError = new Error(`receipt callback failed: HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 500));
+  }
+  throw lastError;
 }
 
 function callbackUrlFor(commandId, requested) {
@@ -299,12 +319,24 @@ async function execute(job) {
 const server = http.createServer(async (req, res) => {
   try {
     if (req.method === "GET" && req.url === "/health") {
-      const [ffmpeg, ffprobe] = await Promise.all([binaryAvailable("ffmpeg"), binaryAvailable("ffprobe")]);
-      return respond(res, ffmpeg && ffprobe ? 200 : 503, {
-        status: ffmpeg && ffprobe ? "healthy" : "degraded",
+      const providerHealthUrl = process.env.EDITFORGE_PROVIDER_HEALTH_URL?.trim();
+      const [ffmpeg, ffprobe, provider] = await Promise.all([
+        binaryAvailable("ffmpeg"),
+        binaryAvailable("ffprobe"),
+        providerHealthUrl
+          ? fetch(providerHealthUrl, { signal: AbortSignal.timeout(5_000) })
+              .then((response) => response.ok)
+              .catch(() => false)
+          : Promise.resolve(true),
+      ]);
+      const healthy = ffmpeg && ffprobe && provider;
+      return respond(res, healthy ? 200 : 503, {
+        status: healthy ? "healthy" : "degraded",
         service: "editforge-worker",
         ffmpeg,
         ffprobe,
+        providerConfigured: Boolean(providerHealthUrl),
+        providerReachable: provider,
         activeJobs,
         queuedJobs: pendingJobs.length,
         maxConcurrency: MAX_CONCURRENCY,

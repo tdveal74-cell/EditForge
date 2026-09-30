@@ -100,8 +100,13 @@ if [ ! -f .env ]; then
 EDITFORGE_PORT=3100
 EDITFORGE_PUBLIC_URL=http://localhost:3100
 
-# Browser password for the whole deployment.
-EDITFORGE_ACCESS_PASSWORD=
+# Google is the first browser identity. Add a local OAuth callback for
+# http://localhost:3100/api/auth/google/callback in the Google Web client.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+EDITFORGE_GOOGLE_ALLOWED_EMAIL=
+# Browser session signing. Generated locally and never used as a login value.
+EDITFORGE_SESSION_SECRET=
 # DEVON's bearer token. This is the value DEVON holds as EDITFORGE_TOKEN.
 EDITFORGE_MCP_TOKEN=
 # Control plane -> worker. Different value on purpose; DEVON never sees it.
@@ -125,13 +130,19 @@ else
   ok ".env already exists, leaving your settings alone"
 fi
 
-for key in EDITFORGE_ACCESS_PASSWORD EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
+for key in EDITFORGE_SESSION_SECRET EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
   if fill_if_blank "$key" "$(secret)"; then
     ok "Generated $key"
   fi
 done
 
-for key in EDITFORGE_ACCESS_PASSWORD EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
+for key in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET EDITFORGE_GOOGLE_ALLOWED_EMAIL; do
+  [ -n "$(env_value "$key")" ] || die \
+"$key is missing from .env. Google must be configured before the passwordless
+studio can start."
+done
+
+for key in EDITFORGE_SESSION_SECRET EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
   [ -n "$(env_value "$key")" ] || die \
 "$key is missing from .env. Add the line '$key=' and run this again, or set a
 value yourself."

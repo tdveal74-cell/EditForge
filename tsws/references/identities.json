@@ -1,0 +1,25 @@
+{
+  "schema": "tsws.identity-lock.v1",
+  "property": "THE SHADOW WE SHARE",
+  "status": "locked",
+  "approvedBy": "Tee",
+  "approvedAt": "2026-09-26T15:38:45-04:00",
+  "sourceAuthority": {
+    "name": "TSWS_CANON_VISUAL_BOARD_AUREN_VESPERA.png",
+    "libraryFileId": "libfile_bc12f5c58c448191bace1ffb8fd9796d",
+    "role": "canonical likeness source"
+  },
+  "characters": {
+    "auren": {
+      "version": "TSWS-AUREN-IDENTITY-V1",
+      "file": "TSWS_AUREN_IDENTITY_SHEET_V1.png",
+      "sha256": "6130295289410367c1485b81ea6e2341d37038c0b9ee07fa304896e7ac6fe1cb"
+    },
+    "vespera": {
+      "version": "TSWS-VESPERA-IDENTITY-V1",
+      "file": "TSWS_VESPERA_IDENTITY_SHEET_V1.png",
+      "sha256": "8d31e2702ba2ec8e484fbc824de280ee118adcaa57d3d5690842d16f3e93645b"
+    }
+  },
+  "changePolicy": "A new version and explicit Tee approval are required to replace either identity."
+}

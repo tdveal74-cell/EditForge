@@ -1,0 +1,30 @@
+[Unit]
+Description=EditForge local AI tools adapter
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/editforge-local-tools
+EnvironmentFile=/opt/editforge/app/.env
+Environment=EDITFORGE_LOCAL_TOOLS_HOST=172.16.2.1
+Environment=EDITFORGE_LOCAL_TOOLS_PORT=3410
+Environment=KOKORO_MODEL_PATH=/opt/editforge-local-tools/models/kokoro-v1.0.onnx
+Environment=KOKORO_VOICES_PATH=/opt/editforge-local-tools/models/voices-v1.0.bin
+Environment=HYPERFRAMES_PROJECT_ROOT=/opt/hyperframes-projects
+Environment=HYPERFRAMES_BIN=hyperframes
+Environment=HYPERFRAMES_TIMEOUT_SECONDS=600
+ExecStart=/opt/hyperframes-musicgen/bin/python /opt/editforge-local-tools/kokoro_server.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadOnlyPaths=/opt/editforge-local-tools /opt/hyperframes-musicgen /opt/editforge/app/.env
+ReadWritePaths=/opt/hyperframes-projects /root/.cache/hyperframes
+
+[Install]
+WantedBy=multi-user.target

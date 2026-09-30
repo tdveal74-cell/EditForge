@@ -3,19 +3,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { JobKind, JobStatus, StudioJob } from "@/lib/jobs";
 import { idempotencyKeyFor } from "@/lib/idempotency";
-import { liveSubmitBlocked, type PickerReadiness } from "@/lib/provider-registry";
+import { decideSpendClick } from "@/lib/billable-confirmation";
+import { isPlayableAudio, isPlayableVideo } from "@/lib/media";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label, Select } from "@/components/ui/field";
 import { StatusDot, toneForJob } from "@/components/ui/status-dot";
-import { HostNotice } from "@/components/HostNotice";
-import { JobResultStage, stageKindForJob } from "@/components/JobResultStage";
 
 export type ProviderChoice = { id: string; label: string };
 
-type ProviderReadiness = PickerReadiness & {
+type ProviderReadiness = {
+  id: string;
+  billable: boolean;
+  wired: boolean;
+  /** "local" runs on this VPS and costs nothing; "paid" bills a provider. */
+  billing?: "paid" | "local" | "offline";
+  /** Ready to run now, paid or local. Older APIs omit it and billable stands in. */
+  runnable?: boolean;
   envKey?: string;
   envKeys?: string[];
+  credentialSet?: boolean;
+  /** Env this provider still needs beyond its API key, e.g. an avatar look id. */
+  settingsMissing?: string[];
+  requiresArtifactStore?: boolean;
 };
 
 type Props = {
@@ -27,17 +37,22 @@ type Props = {
   options?: Record<string, unknown>;
   requiresRubricPass?: boolean;
   blockedReason?: string;
-  /** Parent owns the media well (gen-video / voice / avatar). */
-  hideResult?: boolean;
-  onJobChange?: (job: StudioJob | null) => void;
-  /** Controlled provider. Defaults to mock when omitted. */
-  providerId?: string;
-  onProviderChange?: (id: string) => void;
 };
 
 const SETTLED: JobStatus[] = ["completed", "failed", "cancelled", "validating"];
 const POLL_MS = 3000;
-const MAX_POLLS = 40;
+const MAX_POLLS = 60;
+/**
+ * Poll cadence. Providers answer in wildly different times — mock is instant,
+ * Veo can take minutes — so a fixed 3s beat both hammered the API early and
+ * gave up far too soon on long renders (40 × 3s = 120s, while a Veo clip
+ * routinely runs 1–6 minutes and then read as “stalled”). Poll fast for the
+ * first half, then stretch; the window is now ~10 minutes with fewer total
+ * requests than the old fixed cadence used.
+ */
+function pollDelay(pollsDone: number): number {
+  return pollsDone < MAX_POLLS / 2 ? POLL_MS : POLL_MS * 4;
+}
 
 export function JobRunner({
   kind,
@@ -48,21 +63,16 @@ export function JobRunner({
   options,
   requiresRubricPass,
   blockedReason,
-  hideResult,
-  onJobChange,
-  providerId,
-  onProviderChange,
 }: Props) {
-  const [internalProvider, setInternalProvider] = useState(
-    providers.find((p) => p.id === "mock")?.id ?? providers[0]?.id ?? "mock"
-  );
-  const provider = providerId ?? internalProvider;
+  const [provider, setProvider] = useState(providers[0]?.id ?? "mock");
   const [job, setJob] = useState<StudioJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<Record<string, ProviderReadiness>>({});
   const [artifactStore, setArtifactStore] = useState(true);
   const [polls, setPolls] = useState(0);
+  const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
+  const [providersLoaded, setProvidersLoaded] = useState(false);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -70,15 +80,6 @@ export function JobRunner({
       alive.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    onJobChange?.(job);
-  }, [job, onJobChange]);
-
-  function chooseProvider(id: string) {
-    onProviderChange?.(id);
-    if (providerId === undefined) setInternalProvider(id);
-  }
 
   useEffect(() => {
     void (async () => {
@@ -91,6 +92,8 @@ export function JobRunner({
         setReadiness(Object.fromEntries(data.providers.map((p) => [p.id, p])));
       } catch {
         // degraded picker is fine
+      } finally {
+        if (alive.current) setProvidersLoaded(true);
       }
     })();
   }, []);
@@ -98,18 +101,17 @@ export function JobRunner({
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
   const missingSettings = chosen?.settingsMissing ?? [];
-  const readyLoaded = Object.keys(readiness).length > 0;
-  const liveBlocked =
-    provider !== "mock" && readyLoaded
-      ? liveSubmitBlocked(chosen ?? { id: provider, billable: false, wired: false }, artifactStore)
-      : null;
-  const liveReady = provider !== "mock" && !liveBlocked && Boolean(chosen?.billable);
+  const liveReady =
+    Boolean(chosen?.billable) && missingSettings.length === 0 && providersLoaded;
+  const spend = decideSpendClick({
+    billable: liveReady,
+    readinessKnown: providersLoaded && Boolean(chosen),
+    currentKey: key,
+    confirmedKey,
+  });
+  const waitingOnReadiness = provider !== "mock" && !providersLoaded;
 
   async function run() {
-    if (liveBlocked) {
-      setError(liveBlocked);
-      return;
-    }
     setBusy(true);
     setError(null);
     setPolls(0);
@@ -125,6 +127,10 @@ export function JobRunner({
           options,
           idempotencyKey: key,
           requiresRubricPass,
+          // The API refuses a live billable submit without this. The client
+          // only reaches run() for a paid provider after the confirm click
+          // bound confirmedKey to this exact brief.
+          confirmBillable: liveReady && confirmedKey === key,
         }),
       });
       const data = await res.json();
@@ -133,11 +139,21 @@ export function JobRunner({
         return;
       }
       setJob(data.job);
+      setConfirmedKey(null);
     } catch (err) {
       setError(`Could not reach the studio API: ${(err as Error).message}`);
     } finally {
       setBusy(false);
     }
+  }
+
+  function onPrimaryClick() {
+    if (spend === "confirm") {
+      setConfirmedKey(key);
+      return;
+    }
+    if (spend === "wait") return;
+    void run();
   }
 
   const act = useCallback(async (id: string, action: "poll" | "complete" | "retry" | "cancel") => {
@@ -162,7 +178,7 @@ export function JobRunner({
     const t = setTimeout(() => {
       setPolls((n) => n + 1);
       void act(job.id, "poll");
-    }, POLL_MS);
+    }, pollDelay(polls));
     return () => clearTimeout(t);
   }, [job, polls, act]);
 
@@ -176,20 +192,35 @@ export function JobRunner({
 
   const tracking = job !== null && !SETTLED.includes(job.status);
   const stalled = tracking && polls >= MAX_POLLS;
-  const submitDisabled =
-    busy || tracking || Boolean(blockedReason) || !prompt.trim() || Boolean(liveBlocked);
+  const primaryDisabled =
+    busy ||
+    tracking ||
+    Boolean(blockedReason) ||
+    !prompt.trim() ||
+    waitingOnReadiness ||
+    spend === "wait";
 
   return (
     <section className="mt-6 rounded-card border border-border bg-surface-elevated p-5">
-      <HostNotice />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <Label text="Run against" className="min-w-48 flex-1">
-          <Select value={provider} onChange={(e) => chooseProvider(e.target.value)} disabled={tracking}>
+          <Select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={tracking}>
             {providers.map((p) => {
               const r = readiness[p.id];
-              // "live" has to mean runnable, not merely credentialled.
-              const ready = Boolean(r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
-              const mark = !r ? "" : ready ? " · live" : p.id === "mock" ? " · mock" : " · unavailable";
+              // "live" has to mean runnable, not merely credentialled: a
+              // provider whose key is set but whose look id is not would other-
+              // wise be offered as live and refuse on click.
+              const ready =
+                Boolean(r?.runnable ?? r?.billable) && (r?.settingsMissing?.length ?? 0) === 0;
+              const mark = !r
+                ? ""
+                : ready && r.billing === "local"
+                  ? " · local/free"
+                  : ready
+                    ? " · live"
+                    : p.id === "mock"
+                      ? ""
+                      : " · unavailable";
               return (
                 <option key={p.id} value={p.id}>
                   {p.label}
@@ -201,20 +232,29 @@ export function JobRunner({
         </Label>
         <Button
           type="button"
-          variant={liveReady ? "accent" : "primary"}
+          variant="accent"
           className="min-h-11 w-full sm:w-auto"
-          onClick={run}
-          disabled={submitDisabled}
+          onClick={onPrimaryClick}
+          disabled={primaryDisabled}
         >
-          {busy && !job ? "Submitting…" : provider === "mock" ? "Run mock" : liveBlocked ? "Live unavailable" : "Run job"}
+          {busy && !job
+            ? "Submitting…"
+            : spend === "confirm"
+              ? "Confirm paid run"
+              : "Run job"}
         </Button>
       </div>
 
       {chosen && (
         <p className="mt-2.5 text-xs">
-          {liveReady ? (
-            <span className="text-navy/70">
+          {chosen.runnable && chosen.billing === "local" && missingSettings.length === 0 ? (
+            <span className="text-emerald-700">
+              Local provider. Uses this VPS and does not consume provider credits.
+            </span>
+          ) : chosen.billable && missingSettings.length === 0 ? (
+            <span className="text-amber-700">
               Live provider — running this bills real work against {chosen.envKey}.
+              {spend === "confirm" ? " Confirm the exact brief before it is submitted." : ""}
             </span>
           ) : chosen.id === "mock" ? (
             <span className="text-navy/50">Offline path — no spend, and no media produced.</span>
@@ -257,24 +297,64 @@ export function JobRunner({
       </p>
 
       {error && (
-        <p className="mt-3 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
-          {error}
-        </p>
-      )}
-
-      {!hideResult && job && (job.status === "completed" || job.status === "validating") && (
-        <div className="mt-4">
-          <JobResultStage
-            job={job}
-            kind={stageKindForJob(kind)}
-            emptyTitle="Result"
-            emptyBody="The job result lands here."
-          />
+        <div className="mt-3 rounded-control border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-800">
+          <p>{error}</p>
+          {error.toLowerCase().includes("authentication") && (
+            <a
+              className="mt-2 inline-block font-semibold underline underline-offset-2"
+              href="/api/auth/google/start"
+            >
+              Sign in with Google
+            </a>
+          )}
         </div>
       )}
 
       {job && (
         <div className="mt-4 space-y-3">
+          {(job.status === "completed" || job.status === "validating") && (
+            <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
+              <div className="flex min-h-[8rem] flex-col items-center justify-center bg-navy/[0.03] px-4 py-8">
+                {job.result ? (
+                  <>
+                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">
+                      Result ready
+                    </p>
+                    {isPlayableAudio(job.result) ? (
+                      <audio className="mt-3 w-full max-w-md" controls preload="metadata" src={job.result} />
+                    ) : isPlayableVideo(job.result) ? (
+                      <video
+                        className="mt-3 max-h-64 w-full max-w-md rounded-control bg-navy/5"
+                        controls
+                        preload="metadata"
+                        src={job.result}
+                      />
+                    ) : null}
+                    <a
+                      href={job.result}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 max-w-full break-all font-mono text-xs text-navy underline underline-offset-2"
+                    >
+                      {job.result}
+                    </a>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">
+                      {job.status === "validating" ? "Awaiting human accept" : "Lifecycle complete"}
+                    </p>
+                    <p className="mt-2 max-w-sm text-center text-sm text-navy/65">
+                      {job.mode === "mock"
+                        ? "Mock path — no media file was produced. The job record is real."
+                        : "Provider finished. Open the result when a URL is present."}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-control border border-border-faint bg-surface p-4">
             <div className="flex flex-wrap items-center gap-2.5">
               <StatusDot tone={toneForJob(job.status)} />
@@ -306,7 +386,9 @@ export function JobRunner({
 
             {stalled && (
               <p className="mt-2 text-xs text-navy/60">
-                Still running after {Math.round((MAX_POLLS * POLL_MS) / 1000)}s. Automatic polling
+                Still running after {Math.round(
+                  (MAX_POLLS / 2) * POLL_MS + (MAX_POLLS / 2) * POLL_MS * 4,
+                ) / 1000}s. Automatic polling
                 stopped so this page is not left spinning; check again when you expect it to be done.
               </p>
             )}

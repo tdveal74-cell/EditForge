@@ -10,7 +10,7 @@
 # inside a sandboxed agent session.
 #
 # What you give up against compose.local.yaml: container isolation, the pinned
-# node:20-bookworm-slim base, and the named volumes. It uses whatever ffmpeg is
+# node:22-bookworm-slim base, and the named volumes. It uses whatever ffmpeg is
 # on PATH and writes state under .local-run/. Treat it as a way to exercise and
 # verify the lane, not as the way to run a studio people depend on.
 #
@@ -67,7 +67,9 @@ bold "EditForge — local DEVON lane, without Docker"
 # ---------------------------------------------------------------------------
 step 1 "Checking the runtime"
 # ---------------------------------------------------------------------------
-command -v node >/dev/null 2>&1 || die "Node is not installed. Node 20 or newer is required."
+command -v node >/dev/null 2>&1 || die "Node is not installed. Node 22 or newer is required."
+NODE_MAJOR="$(node -p 'Number(process.versions.node.split(".")[0])')"
+[ "$NODE_MAJOR" -ge 22 ] || die "Node 22 or newer is required; found $(node --version)."
 ok "$(node --version)"
 if command -v ffmpeg >/dev/null 2>&1 && command -v ffprobe >/dev/null 2>&1; then
   ok "ffmpeg and ffprobe on PATH"
@@ -87,14 +89,17 @@ if [ ! -f .env ]; then
 # EditForge local settings. Private: git ignores this file.
 EDITFORGE_PORT=3100
 EDITFORGE_PUBLIC_URL=http://localhost:3100
-EDITFORGE_ACCESS_PASSWORD=
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+EDITFORGE_GOOGLE_ALLOWED_EMAIL=
+EDITFORGE_SESSION_SECRET=
 EDITFORGE_MCP_TOKEN=
 EDITFORGE_WORKER_TOKEN=
 EDITFORGE_SOURCE_MEDIA_HOST_DIR=./media
 ENVEOF
   ok "Wrote .env"
 fi
-for key in EDITFORGE_ACCESS_PASSWORD EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
+for key in EDITFORGE_SESSION_SECRET EDITFORGE_MCP_TOKEN EDITFORGE_WORKER_TOKEN; do
   if grep -q "^${key}=$" .env 2>/dev/null; then
     python3 - "$key" "$(secret)" <<'PYEOF'
 import pathlib, sys
@@ -109,6 +114,11 @@ p.write_text("\n".join(lines) + "\n")
 PYEOF
     ok "Generated $key"
   fi
+done
+for key in GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET EDITFORGE_GOOGLE_ALLOWED_EMAIL; do
+  [ -n "$(env_value "$key")" ] || die \
+"$key is missing from .env. Google must be configured before the passwordless
+studio can start."
 done
 
 PORT="$(env_value EDITFORGE_PORT)"; PORT="${PORT:-3100}"
@@ -132,6 +142,9 @@ else
   npm run build >"$RUN_DIR/build.log" 2>&1 || die "Build failed. See .local-run/build.log"
   ok "Built"
 fi
+mkdir -p .next/standalone/.next
+cp -R .next/static .next/standalone/.next/
+cp -R public .next/standalone/
 
 # ---------------------------------------------------------------------------
 step 4 "Starting"
@@ -155,7 +168,8 @@ EDITFORGE_SOURCE_MEDIA_DIR="$MEDIA_ABS" \
 EDITFORGE_WORKER_URL="http://127.0.0.1:8787" \
 EDITFORGE_WORKER_CALLBACK_BASE_URL="$PUBLIC_URL" \
 EDITFORGE_PUBLIC_URL="$PUBLIC_URL" \
-PORT="$PORT" npm start >"$RUN_DIR/web.log" 2>&1 &
+HOSTNAME=127.0.0.1 \
+PORT="$PORT" node .next/standalone/server.js >"$RUN_DIR/web.log" 2>&1 &
 echo $! >> "$PID_FILE"
 ok "worker on 8787, control plane on $PORT"
 

@@ -6,10 +6,22 @@ services:
       context: .
       dockerfile: infrastructure/web/Dockerfile
     restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     environment:
       NODE_ENV: production
       EDITFORGE_DATA_DIR: /data
-      EDITFORGE_ACCESS_PASSWORD: ${EDITFORGE_ACCESS_PASSWORD:?set EDITFORGE_ACCESS_PASSWORD}
+      KLING_API_KEY: ${KLING_API_KEY:-}
+      VEO_API_KEY: ${VEO_API_KEY:-}
+      EDITFORGE_SESSION_SECRET: ${EDITFORGE_SESSION_SECRET:?set EDITFORGE_SESSION_SECRET}
+      EDITFORGE_PASSKEY_RP_ID: ${EDITFORGE_PASSKEY_RP_ID:-editforge.online}
+      EDITFORGE_PASSKEY_ORIGIN: ${EDITFORGE_PASSKEY_ORIGIN:-https://editforge.online}
+      EDITFORGE_PASSKEY_NAME: ${EDITFORGE_PASSKEY_NAME:-EditForge}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      EDITFORGE_GOOGLE_ALLOWED_EMAIL: ${EDITFORGE_GOOGLE_ALLOWED_EMAIL:-}
+      EDITFORGE_GOOGLE_REDIRECT_ORIGIN: ${EDITFORGE_GOOGLE_REDIRECT_ORIGIN:-https://editforge.online}
       EDITFORGE_MCP_TOKEN: ${EDITFORGE_MCP_TOKEN:?set EDITFORGE_MCP_TOKEN}
       EDITFORGE_WORKER_URL: http://worker:8787
       EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
@@ -22,6 +34,10 @@ services:
       # a separate boundary with its own credentials. Passing none of them here
       # was why a self-host with every key set still had a studio that could
       # only run mock.
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      XAI_AGENT_MODEL: ${XAI_AGENT_MODEL:-grok-4.6}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_AGENT_MODEL: ${ANTHROPIC_AGENT_MODEL:-claude-sonnet-5}
       RUNWAY_API_KEY: ${RUNWAY_API_KEY:-${RUNWAYML_API_SECRET:-}}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
       ELEVENLABS_VOICE_ID: ${ELEVENLABS_VOICE_ID:-}
@@ -34,7 +50,7 @@ services:
       HEYGEN_AVATAR_ID: ${HEYGEN_AVATAR_ID:-}
       HEYGEN_VOICE_ID: ${HEYGEN_VOICE_ID:-}
     ports:
-      - "${EDITFORGE_PORT:-3000}:3000"
+      - "127.0.0.1:${EDITFORGE_PORT:-3000}:3000"
     volumes:
       - editforge_web_data:/data
       - editforge_artifacts:/artifacts
@@ -49,18 +65,27 @@ services:
       retries: 8
       start_period: 30s
     networks: [control, render]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   worker:
     build:
       context: .
       dockerfile: infrastructure/worker/Dockerfile
     restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     environment:
       NODE_ENV: production
       EDITFORGE_WORK_DIR: /data
+      KLING_API_KEY: ${KLING_API_KEY:-}
+      VEO_API_KEY: ${VEO_API_KEY:-}
       EDITFORGE_WORKER_TOKEN: ${EDITFORGE_WORKER_TOKEN:?set EDITFORGE_WORKER_TOKEN}
       EDITFORGE_CALLBACK_ORIGIN: http://web:3000
       EDITFORGE_WORKER_CONCURRENCY: ${EDITFORGE_WORKER_CONCURRENCY:-1}
+      EDITFORGE_PROVIDER_HEALTH_URL: http://provider:9080/health
       EDITFORGE_PROVIDER_TOKEN: ${EDITFORGE_PROVIDER_TOKEN:-}
       EDITFORGE_VOICE_ADAPTER_URL: ${EDITFORGE_VOICE_ADAPTER_URL:-http://provider:9080/v1/voice}
       EDITFORGE_MOTION_ADAPTER_URL: ${EDITFORGE_MOTION_ADAPTER_URL:-http://provider:9080/v1/motion}
@@ -84,12 +109,18 @@ services:
     depends_on:
       provider:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
   provider:
     build:
       context: .
       dockerfile: infrastructure/provider/Dockerfile
     restart: unless-stopped
+    init: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     environment:
       NODE_ENV: production
       EDITFORGE_PROVIDER_TOKEN: ${EDITFORGE_PROVIDER_TOKEN:?set EDITFORGE_PROVIDER_TOKEN}
@@ -99,6 +130,8 @@ services:
       EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB: ${EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB:?set EDITFORGE_PROVIDER_MAX_CREDITS_PER_JOB}
       EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB: ${EDITFORGE_VOICE_MAX_CHARACTERS_PER_JOB:-5000}
       RUNWAYML_API_SECRET: ${RUNWAYML_API_SECRET:-}
+      KLING_API_KEY: ${KLING_API_KEY:-}
+      VEO_API_KEY: ${VEO_API_KEY:-}
       RUNWAY_API_VERSION: ${RUNWAY_API_VERSION:-2024-11-06}
       ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
     volumes:
@@ -112,6 +145,9 @@ services:
       retries: 8
       start_period: 15s
     networks: [render]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
 
 volumes:
   editforge_web_data:

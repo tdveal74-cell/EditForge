@@ -1,0 +1,84 @@
+{
+  "schema": "tsws.shot-plan.v1",
+  "episode": "TSWS-S01E01",
+  "title": "THE MASK",
+  "status": "opening-proof-draft",
+  "canonRevision": "TSWS close-up ruling and character identity lock 2026-09-26; timed script unverified",
+  "frameRate": 24,
+  "width": 1920,
+  "height": 1080,
+  "targetFrames": 16248,
+  "proofFrames": 288,
+  "referencePolicy": {
+    "status": "locked",
+    "registry": "references/identities.json",
+    "auren": {
+      "version": "TSWS-AUREN-IDENTITY-V1",
+      "file": "references/TSWS_AUREN_IDENTITY_SHEET_V1.png",
+      "sha256": "6130295289410367c1485b81ea6e2341d37038c0b9ee07fa304896e7ac6fe1cb"
+    },
+    "vespera": {
+      "version": "TSWS-VESPERA-IDENTITY-V1",
+      "file": "references/TSWS_VESPERA_IDENTITY_SHEET_V1.png",
+      "sha256": "8d31e2702ba2ec8e484fbc824de280ee118adcaa57d3d5690842d16f3e93645b"
+    },
+    "storyboardImage": "visual reference only; its no-close-up rule is superseded"
+  },
+  "voicePolicy": {
+    "status": "selected-pending-provider-and-consent-verification",
+    "source": "Tee supplied character-to-voice IDs on 2026-09-26",
+    "provider": "ElevenLabs",
+    "auren": "USxJ7iK6fkV5HUUevtiC",
+    "vespera": "RtKXZUQ5zUk0evjF3XMZ",
+    "note": "IDs are pinned as selections. No provider lookup, sample audit, consent-to-ID match, or generated take has passed QC."
+  },
+  "canon": {
+    "closeUpFacesAllowed": true,
+    "goldThreadMaxConcurrent": 1,
+    "goldThreadColor": "#FFC878",
+    "anahataColor": "#3ED58A",
+    "anahataOccurrences": 1,
+    "anahataAnchorFrame": 10128,
+    "protectedSilenceFrames": 96,
+    "note": "These are production targets. Visual and audio evidence remains a human QC decision."
+  },
+  "timelineQuestions": [
+    "The 11:17 closing beat is also the target endpoint. Place its final hold and fade before the endpoint in the timed edit.",
+    "The script's 61.8 percent protected-silence position and the storyboard's 07:02 Anahata anchor differ by about four seconds; settle against the authoritative timed script.",
+    "The gold thread disappears at 08:05 but later beats mention it at 09:25 and 10:40. Treat later appearances as unresolved until the director locks continuity."
+  ],
+  "beatAnchors": [
+    ["00:00", "city at blue hour"], ["00:12", "opening window hold begins within Beat 1"],
+    ["00:26", "Auren and Vespera in high-windowed room"],
+    ["00:45", "mask described as load-bearing"], ["01:05", "Vespera's question"],
+    ["01:28", "hands and objects"], ["01:45", "Auren at window"],
+    ["02:10", "the representative's story"], ["02:30", "Vespera listens"],
+    ["03:00", "question becomes personal"], ["03:25", "protection and cost"],
+    ["03:38", "Auren's admission"], ["03:45", "dim bedroom"],
+    ["04:12", "first mask creak"], ["04:55", "crossing reflections"],
+    ["05:35", "hiding with me"], ["06:10", "third mask creak"],
+    ["06:58", "shared admission"], ["07:02", "Anahata and four seconds protected silence"],
+    ["07:45", "city masks loosen"], ["08:05", "thread beneath mask and honest response"],
+    ["08:30", "not lying"], ["09:25", "stop asking"],
+    ["09:50", "city at night"], ["10:40", "same window"],
+    ["11:17", "target endpoint, hold and fade included"]
+  ],
+  "shots": [
+    {
+      "id": "TSWS-S01E01-SH001", "inFrame": 0, "outFrame": 120,
+      "beat": "00:00 Beat 1 city arrival", "framing": "wide", "characters": [],
+      "brief": "A city at blue hour, neither night nor evening. Rooftops and a street of moving people, each wearing a calm plausible face mask. Restrained 1970s British contemporary texture, light from no visible source, fine grain, patient camera. No close face or revealed identity in this opening plate.",
+      "providerLane": "external-video-manual-import", "canonVfx": [],
+      "audio": "City footsteps through glass to be designed in the finishing mix",
+      "costApproval": "required before any paid provider submit"
+    },
+    {
+      "id": "TSWS-S01E01-SH002", "inFrame": 120, "outFrame": 288,
+      "beat": "00:05 Beat 1 rooftops to window", "framing": "wide", "characters": [],
+      "brief": "Continue the same blue-hour city and street. Settle across the gap toward a third-floor window with warm light and two small masked figures seated facing one another. Leave room for the later uncut window hold. Preserve geographic and lighting continuity; no interior cut before Beat 2 at 00:30.",
+      "providerLane": "external-video-manual-import", "canonVfx": [],
+      "audio": "Continue the same footsteps through glass without a music sting",
+      "costApproval": "required before any paid provider submit"
+    }
+  ]
+}

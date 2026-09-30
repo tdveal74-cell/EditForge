@@ -76,11 +76,11 @@ Files are content-addressed — the same bytes always land on the same name, so 
 retried submit does not accumulate near-duplicates. `/api/artifacts/[name]`
 serves them behind the same authentication as the rest of the app.
 
-That last part has a consequence worth knowing: a browser authenticates with the
-session cookie from `/login`, which only exists when `EDITFORGE_ACCESS_PASSWORD`
-is set. On a deployment holding only `EDITFORGE_MCP_TOKEN`, jobs run fine through
-MCP but nobody can open the result in a browser. **Set the access password on any
-deployment where people will watch or listen to what it renders.**
+That last part has a consequence worth knowing: a browser authenticates with a
+session cookie minted after an allowlisted Google or passkey sign-in. On a
+deployment holding only `EDITFORGE_MCP_TOKEN`, jobs run fine through
+MCP but nobody can open the result in a browser. **Configure at least one browser
+sign-in method on any deployment where people will watch or listen to renders.**
 
 **On Vercel this store is not durable.** A serverless filesystem is per-instance
 and vanishes between invocations, so voice belongs on the self-hosted stack (or
@@ -92,13 +92,33 @@ link that 404s a minute later.
 
 | Variable | What it does |
 |---|---|
-| `EDITFORGE_ACCESS_PASSWORD` | Makes the whole deployment private: pages redirect to `/login`, APIs answer 401. |
+| `EDITFORGE_SESSION_SECRET` | Signs browser sessions. Use a long random value dedicated to this purpose. |
+| `EDITFORGE_PASSKEY_RP_ID` | WebAuthn relying-party hostname. Production defaults to `editforge.online`. |
+| `EDITFORGE_PASSKEY_ORIGIN` | Exact HTTPS origin accepted for passkey ceremonies. |
+| `EDITFORGE_PASSKEY_NAME` | Human-readable service name shown by the device during enrollment. |
+| `GOOGLE_CLIENT_ID` | Google Web OAuth client ID. The button remains hidden when Google configuration is incomplete. |
+| `GOOGLE_CLIENT_SECRET` | Google Web OAuth client secret. Server-side only. |
+| `EDITFORGE_GOOGLE_ALLOWED_EMAIL` | Exact verified Google account allowed into the studio. Accepts a comma-separated allowlist. |
+| `EDITFORGE_GOOGLE_REDIRECT_ORIGIN` | Public origin used to form the fixed OAuth callback. Production is `https://editforge.online`. |
 | `EDITFORGE_MCP_TOKEN` | Lets an MCP client run the state-changing tools. |
 
-Spending money always requires authentication, whether or not a password is set.
-With **neither** configured nothing can authenticate, so no billable provider is
-reachable at all — live keys on an open deployment then cost nothing rather than
-everything. Set at least one before setting any provider key.
+Spending money always requires authentication. With neither Google owner
+identity nor an MCP request credential configured, production fails closed and
+local development cannot reach billable providers. Keep
+`EDITFORGE_SESSION_SECRET` and `EDITFORGE_MCP_TOKEN` different.
+
+The Google Cloud Web OAuth client must list this exact authorized redirect URI:
+
+```text
+https://editforge.online/api/auth/google/callback
+```
+
+Google sign-in uses Authorization Code with PKCE, validates the one-time state,
+verifies the signed ID token issuer and audience, requires `email_verified`, and
+accepts only an address in `EDITFORGE_GOOGLE_ALLOWED_EMAIL`. It never stores a
+Google access token. Google is the first sign-in and recovery identity. After
+that first sign-in, the owner enrolls a passkey at `/security`. There is no
+access-password endpoint or password verifier.
 
 ## Durable store
 
@@ -191,7 +211,7 @@ avatar render would refuse.
 Redeploy after changing them; Next.js reads `process.env` at request time on the
 server, but a running deployment keeps the values it booted with.
 
-Suitable there: `RUNWAY_API_KEY`, `HEYGEN_*`, `EDITFORGE_ACCESS_PASSWORD`,
+Suitable there: `RUNWAY_API_KEY`, `HEYGEN_*`, `GOOGLE_CLIENT_ID`,
 `EDITFORGE_MCP_TOKEN`, `KV_REST_API_*`.
 Not suitable there: `ELEVENLABS_*` (needs the durable artifact store) and the
 whole DEVON path (needs the worker and provider services).

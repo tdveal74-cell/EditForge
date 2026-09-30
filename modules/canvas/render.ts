@@ -1,0 +1,319 @@
+import { createHash } from "node:crypto";
+import { promises as fs, statSync } from "node:fs";
+import path from "node:path";
+import {
+  artifactDir,
+  artifactStoreConfigured,
+  contentTypeForArtifact,
+  isArtifactName,
+} from "@/lib/artifacts";
+import { createAndQueue, getJob, pollJobs, submitJob } from "@/lib/jobstore";
+import { findProvider, providerReadiness } from "@/lib/providers";
+import {
+  RUNWAY_IMAGE_RATIOS,
+  RUNWAY_PROMPT_MAX,
+  RUNWAY_REFERENCE_MAX_BYTES,
+  RUNWAY_VIDEO_ASPECTS,
+} from "@/lib/provider-registry";
+import { connectedContext, generationNodes, safeAssetUrl } from "./model";
+import { getProject, saveProject } from "./server-store";
+import type { GraphNode, Project } from "./types";
+
+export type RenderItem = {
+  nodeId: string;
+  title: string;
+  kind: string;
+  provider: string;
+  prompt: string;
+  duration: number;
+  aspect: string;
+  ready: boolean;
+  reason?: string;
+  voiceId?: string;
+  reference?: string;
+};
+// Stills and motion render on Runway; dialogue stays on ElevenLabs.
+const providerFor = (n: GraphNode) =>
+  n.kind === "image"
+    ? "runway-image"
+    : n.kind === "voice"
+      ? "elevenlabs"
+      : "runway";
+
+/** What Runway will refuse, caught before the confirmation rather than after it. */
+function runwayReason(n: GraphNode, prompt: string): string | undefined {
+  if (n.kind === "voice") return undefined;
+  if (prompt.length > RUNWAY_PROMPT_MAX)
+    return `Runway takes prompts up to ${RUNWAY_PROMPT_MAX} characters, including connected context. Shorten this one.`;
+  if (n.kind === "image" && !RUNWAY_IMAGE_RATIOS[n.aspectRatio])
+    return `Runway stills render ${Object.keys(RUNWAY_IMAGE_RATIOS).join(", ")}. Change the aspect from ${n.aspectRatio}.`;
+  if (n.kind === "video") {
+    if (!RUNWAY_VIDEO_ASPECTS.includes(n.aspectRatio))
+      return `Runway motion renders ${RUNWAY_VIDEO_ASPECTS.join(" or ")}. Change the aspect from ${n.aspectRatio}.`;
+    const d = Math.round(n.duration ?? 6);
+    if (d < 2 || d > 10) return "Runway motion runs 2 to 10 seconds. Change the shot duration.";
+  }
+  return undefined;
+}
+export function renderPlan(p: Project, ids: string[]) {
+  if (!ids.length || ids.length > 12 || new Set(ids).size !== ids.length)
+    throw new Error("Choose between 1 and 12 unique render nodes.");
+  const nodes = generationNodes(p).filter((n) => ids.includes(n.id));
+  if (nodes.length !== ids.length)
+    throw new Error("Choose still, motion or dialogue nodes to render.");
+  const items: RenderItem[] = nodes.map((n) => {
+    const provider = providerFor(n);
+    const spec = findProvider(provider)!;
+    const readiness = providerReadiness(spec, {
+      artifactStore: artifactStoreConfigured(),
+    });
+    const imageParents = p.edges
+      .filter((e) => e.to === n.id)
+      .map((e) => p.nodes.find((x) => x.id === e.from))
+      .filter((x) => x?.kind === "image");
+    const reference = n.kind === "video" ? imageParents[0] : undefined;
+    let reason: string | undefined;
+    if (!readiness.credentialSet)
+      reason = `${spec.envKey} is not configured on this server.`;
+    else if (
+      (spec.wire?.binary || spec.wire?.jsonMedia) &&
+      !artifactStoreConfigured()
+    )
+      reason = "The artifact store is not configured.";
+    else if (
+      n.kind === "voice" &&
+      !n.voiceId &&
+      readiness.settingsMissing.length
+    )
+      reason =
+        "Set an authorized ElevenLabs voice ID in the inspector or server settings.";
+    const prompt = connectedContext(p, n);
+    reason ??= runwayReason(n, prompt);
+    if (!n.prompt.trim()) reason = "Add a prompt first.";
+    if (n.jobId)
+      reason =
+        "This version already has a job. Review its receipt, or duplicate the node for a new take.";
+    if (
+      reference &&
+      (!reference.assetUrl ||
+        reference.status !== "done" ||
+        ids.includes(reference.id))
+    )
+      reason = "Render and accept the connected reference still first.";
+    else if (reference?.assetUrl) {
+      const bytes = localReferenceBytes(reference.assetUrl);
+      if (bytes !== undefined && bytes > RUNWAY_REFERENCE_MAX_BYTES)
+        reason = `The connected still is ${(bytes / 1_000_000).toFixed(1)} MB. Runway takes a reference up to 3.3 MB.`;
+    }
+    return {
+      nodeId: n.id,
+      title: n.title,
+      kind: n.kind,
+      provider,
+      prompt,
+      duration: Math.round(n.duration ?? 6),
+      aspect: n.aspectRatio,
+      voiceId: n.voiceId,
+      reference: reference?.assetUrl,
+      ready: !reason,
+      reason,
+    };
+  });
+  const confirmation = createHash("sha256")
+    .update(JSON.stringify({ project: p.id, revision: p.revision, items }))
+    .digest("hex");
+  return { items, confirmation, projectId: p.id, revision: p.revision };
+}
+
+/** Where a studio still lives on disk; HTTPS references are fetched by Runway. */
+function localReferencePath(url: string): string | undefined {
+  if (!safeAssetUrl(url)) return undefined;
+  const publicBase = process.env.EDITFORGE_PUBLIC_URL?.replace(/\/$/, "");
+  if (url.startsWith("https://")) {
+    if (!publicBase || !url.startsWith(`${publicBase}/api/artifacts/`)) return undefined;
+    url = url.slice(publicBase.length);
+  }
+  const name = path.basename(url);
+  const root =
+    url.startsWith("/api/artifacts/") && isArtifactName(name)
+      ? artifactDir()
+      : path.join(process.cwd(), "public", path.dirname(url));
+  return root ? path.join(root, name) : undefined;
+}
+
+/** Size of a local reference still, so the plan can refuse before anyone pays. */
+function localReferenceBytes(url: string): number | undefined {
+  const file = localReferencePath(url);
+  if (!file) return undefined;
+  try {
+    return statSync(file).size;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Only read our own public stills/artifacts. Arbitrary paths never reach fs. */
+export async function imageReference(url: string): Promise<string> {
+  if (!safeAssetUrl(url)) throw new Error("Invalid reference image.");
+  if (url.startsWith("https://")) {
+    const publicBase = process.env.EDITFORGE_PUBLIC_URL?.replace(/\/$/, "");
+    if (publicBase && url.startsWith(`${publicBase}/api/artifacts/`))
+      url = url.slice(publicBase.length);
+    else return url;
+  }
+  const name = path.basename(url);
+  if (!/\.(jpg|jpeg|png|webp)$/i.test(name))
+    throw new Error("Motion needs a still image reference.");
+  const root =
+    url.startsWith("/api/artifacts/") && isArtifactName(name)
+      ? artifactDir()
+      : path.join(process.cwd(), "public", path.dirname(url));
+  if (!root) throw new Error("Artifact store unavailable.");
+  const file = path.join(root, name);
+  const stat = await fs.stat(file);
+  if (stat.size > 15 * 1024 * 1024) throw new Error("Reference exceeds 15 MB.");
+  const bytes = await fs.readFile(file);
+  return `data:${contentTypeForArtifact(name)};base64,${bytes.toString("base64")}`;
+}
+
+export async function renderNode(
+  projectId: string,
+  nodeIds: string[],
+  confirmation: string,
+  voiceConsent: boolean,
+) {
+  let p = await getProject(projectId);
+  if (!p) throw new Error("Saved project not found.");
+  const plan = renderPlan(p, nodeIds);
+  if (confirmation !== plan.confirmation)
+    throw new Error("The graph changed. Review a fresh render confirmation.");
+  if (plan.items.some((i) => !i.ready))
+    throw new Error(plan.items.find((i) => !i.ready)!.reason);
+  if (plan.items.some((i) => i.kind === "voice") && !voiceConsent)
+    throw new Error(
+      "Confirm that you are authorized to use the selected voice.",
+    );
+  // Persist every job reference before any paid request. A refresh cannot lose
+  // the receipt. Optimistic revision conflicts refuse before provider submit.
+  const prepared = await Promise.all(
+    plan.items.map(async (item) => {
+      const options = {
+        aspect: item.aspect,
+        duration: item.duration,
+        voiceId: item.voiceId,
+        // reference-to-video sends the connected Canvas still. Never
+        // image-to-video, which the server fills with the private presenter file.
+        ...(item.kind === "video"
+          ? { mode: item.reference ? "reference-to-video" : "text-to-video" }
+          : {}),
+        ...(item.reference
+          ? { imageUrl: await imageReference(item.reference) }
+          : {}),
+      };
+      const idempotencyKey = createHash("sha256")
+        .update(`${p!.id}:${item.nodeId}:${plan.confirmation}`)
+        .digest("hex")
+        .slice(0, 40);
+      const job = await createAndQueue({
+        kind:
+          item.kind === "image"
+            ? "gen-image"
+            : item.kind === "voice"
+              ? "voice"
+              : "gen-video",
+        label: `${p!.name} · ${item.title}`,
+        note: "Confirmed in Canvas",
+        idempotencyKey,
+      });
+      return { item, options, job };
+    }),
+  );
+  p = await saveProject({
+    ...p,
+    nodes: p.nodes.map((n) => {
+      const run = prepared.find((r) => r.item.nodeId === n.id);
+      return run
+        ? {
+            ...n,
+            jobId: run.job.id,
+            status: "running",
+            example: false,
+            assetUrl: undefined,
+            error: undefined,
+          }
+        : n;
+    }),
+  });
+  // Submissions are bounded so a big canvas cannot open twenty provider
+  // sessions at once — but the bound is a knob, not a law: a batch of cheap
+  // stills can be raised with EDITFORGE_SUBMIT_CONCURRENCY.
+  const concurrency = Math.max(
+    1,
+    Number(process.env.EDITFORGE_SUBMIT_CONCURRENCY ?? 1) || 1,
+  );
+  for (let i = 0; i < prepared.length; i += concurrency) {
+    await Promise.all(
+      prepared.slice(i, i + concurrency).map((run) =>
+        submitJob(run.job.id, {
+          provider: run.item.provider,
+          prompt: run.item.prompt,
+          options: run.options,
+        }),
+      ),
+    );
+  }
+  return syncJobs(p.id, false);
+}
+
+export async function syncJobs(id: string, poll: boolean): Promise<Project> {
+  const p = await getProject(id);
+  if (!p) throw new Error("Saved project not found.");
+  const jobIds = p.nodes.filter((n) => n.jobId).map((n) => n.jobId!);
+  // Polling goes through the batched path: one read of every referenced job
+  // and one round of provider calls, instead of a store transaction per node.
+  const jobs = poll ? await pollJobs(jobIds) : await Promise.all(jobIds.map(getJob));
+  const assets = [...p.assets];
+  const nodes = p.nodes.map((n): GraphNode => {
+    const j = jobs.find((x) => x && x.id === n.jobId);
+    if (!j) return n;
+    const status =
+      j.status === "completed"
+        ? "done"
+        : j.status === "validating"
+          ? "validating"
+          : j.status === "failed" || j.status === "cancelled"
+            ? "error"
+            : "running";
+    const url = j.result && safeAssetUrl(j.result) ? j.result : undefined;
+    const kind =
+      n.kind === "voice" ? "audio" : n.kind === "video" ? "video" : "image";
+    if (url && !assets.some((a) => a.id === j.id))
+      assets.push({
+        id: j.id,
+        url,
+        kind,
+        prompt: n.prompt,
+        title: n.title,
+        createdAt: Date.now(),
+        aspectRatio: n.aspectRatio,
+      });
+    return {
+      ...n,
+      status,
+      assetUrl: url,
+      assetKind: kind,
+      example: false,
+      error:
+        j.error ||
+        (j.status === "cancelled"
+          ? "Tracking stopped. Provider work may still bill."
+          : undefined),
+    };
+  });
+  if (
+    JSON.stringify(nodes) === JSON.stringify(p.nodes) &&
+    assets.length === p.assets.length
+  )
+    return p;
+  return saveProject({ ...p, nodes, assets });
+}

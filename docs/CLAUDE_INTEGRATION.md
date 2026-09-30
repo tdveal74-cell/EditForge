@@ -89,9 +89,9 @@ Vercel SSO session. A browser signed into the account gets through; an MCP clien
 never does. `Project → Settings → Deployment Protection` shows the current
 setting. Two ways out: attach a custom domain (protection skips those), or turn
 Vercel Authentication off and let the app's own gate do the work —
-`EDITFORGE_ACCESS_PASSWORD` makes the whole deployment private and
-`EDITFORGE_MCP_TOKEN` gates the write tools, which is what they are for. Do not
-turn it off without setting at least one of those first.
+the allowlisted Google identity makes the browser private and
+`EDITFORGE_MCP_TOKEN` gates the write tools. Do not turn it off without setting
+both production identities first.
 
 **Client-side egress rules.** Some Claude environments only reach an allowlist of
 hosts. A `403` on `CONNECT editforge.online:443` — or on any host you point the
@@ -112,33 +112,20 @@ offers one. The URL token authenticates **only** `/api/mcp` — it will not
 unlock the rest of the app, so it cannot become a shareable link to a private
 studio.
 
-### Interaction with the access gate
+### Interaction with the identity gate
 
-`EDITFORGE_ACCESS_PASSWORD` makes the whole deployment private, and that
-includes `/api/mcp`. The two variables are independent, but the combination
-matters:
-
-| `ACCESS_PASSWORD` | `MCP_TOKEN` | What the connector can do |
-|---|---|---|
-| unset | unset | Read tools only; no billable work by anyone |
-| unset | set | Everything, with the bearer token |
-| set | unset | **Nothing — not even reads.** The gate needs a credential and there is none for MCP |
-| set | set | Everything, with the bearer token |
-
-The third row is the one that surprises: turning on the access password without
-also setting an MCP token takes the connector offline entirely. Set both if you
-want a private studio that Claude can still reach.
+The browser and MCP use separate identities. The browser begins with the exact
+Google account in `EDITFORGE_GOOGLE_ALLOWED_EMAIL`, then may use an enrolled
+passkey. Claude uses `EDITFORGE_MCP_TOKEN`. Configure the Google identity and
+the MCP token on production so both operator paths remain available.
 
 ### What the gate does not do
 
-The login route is not rate-limited, so a weak access password is brute-forcible
-by anyone who can reach the deployment. Use a generated value
-(`openssl rand -hex 32`), not something memorable — you type it once per browser.
-
-When the access gate is off, the non-billable write routes (`POST /api/cuts`,
+When the identity gate is off, the non-billable write routes (`POST /api/cuts`,
 and the poll/complete/retry/cancel actions on `/api/jobs/[id]`) remain open.
 They cannot spend money, but anyone reaching the deployment could disturb job
-and cut state. Turning on the access password closes them too.
+and cut state. The production runtime therefore fails closed until Google owner
+identity and session signing are configured.
 
 ### Tools
 

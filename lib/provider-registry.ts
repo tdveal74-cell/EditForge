@@ -12,6 +12,7 @@ import type { JobKind } from "./jobs";
  */
 
 export type ProviderMode = "mock" | "live";
+export type ProviderBilling = "paid" | "local" | "offline";
 
 /** Provider-side lifecycle, deliberately narrower than the studio's job states. */
 export type ProviderState = "queued" | "running" | "succeeded" | "failed";
@@ -30,9 +31,14 @@ export type EnvLike = Record<string, string | undefined>;
 /** Resolved per-request configuration a wire needs beyond the API key. */
 export type WireSettings = Record<string, string>;
 
-export type SettingsResult = { ok: true; value: WireSettings } | { ok: false; error: string };
+export type SettingsResult =
+  { ok: true; value: WireSettings } | { ok: false; error: string };
 
-export type PollReading = { state: ProviderState; result?: string; note?: string };
+export type PollReading = {
+  state: ProviderState;
+  result?: string;
+  note?: string;
+};
 
 /**
  * Where a provider expects its credential.
@@ -42,10 +48,13 @@ export type PollReading = { state: ProviderState; result?: string; note?: string
  * 401 that looks exactly like a bad key. Making this explicit per provider is
  * what stops "the key is wrong" being the first guess when the header is.
  */
-export type ProviderAuth = { header: string; scheme?: string };
+export type ProviderAuth = { header: string; scheme?: string; /** Send the raw credential as this query parameter instead of a header (Vertex express mode). */ query?: string };
 
 /** What a wire gets when it does not name its own. */
-export const DEFAULT_AUTH: ProviderAuth = { header: "Authorization", scheme: "Bearer" };
+export const DEFAULT_AUTH: ProviderAuth = {
+  header: "Authorization",
+  scheme: "Bearer",
+};
 
 /**
  * How one provider's HTTP surface actually looks.
@@ -67,7 +76,10 @@ export type ProviderWire = {
    */
   settings?: (env: EnvLike, req: SubmitRequest) => SettingsResult;
   submitPath: (req: SubmitRequest, settings: WireSettings) => string;
-  buildBody: (req: SubmitRequest, settings: WireSettings) => Record<string, unknown>;
+  buildBody: (
+    req: SubmitRequest,
+    settings: WireSettings,
+  ) => Record<string, unknown>;
   /** Pull the provider's own task id out of its submit envelope. */
   readSubmitId?: (data: unknown) => string | undefined;
   /** Absent only for `binary` providers, which have nothing to poll. */
@@ -80,12 +92,23 @@ export type ProviderWire = {
    * already finished. `extension` is what the stored file is named.
    */
   binary?: { extension: string };
+  jsonMedia?: {
+    extension: string;
+    readBase64: (data: unknown) => string | undefined;
+  };
+  /**
+   * The finished task names a provider URL that expires. Copy the file into the
+   * artifact store when the poll first reads success, so the studio keeps it.
+   */
+  storeResult?: { maxBytes: number };
 };
 
 export type ProviderSpec = {
   id: string;
   kind: JobKind;
   label: string;
+  /** Whether execution consumes provider credits, local compute, or nothing. */
+  billing?: ProviderBilling;
   /** Env var holding the credential; empty means the provider needs none. */
   envKey: string;
   /**
@@ -95,8 +118,8 @@ export type ProviderSpec = {
    * a different name to make the control plane agree.
    */
   envAliases?: string[];
-  /** Base endpoint for the live path. Absent means live is not wired yet. */
-  endpoint?: string;
+  /** Base endpoint for the live path. Absent means live is not wired yet. A function form reads the environment per request — Veo picks Gemini vs Vertex express by the key's own shape. */
+  endpoint?: string | ((env: EnvLike) => string);
   /** Absent means the shape is not implemented — the boundary refuses. */
   wire?: ProviderWire;
   /**
@@ -119,17 +142,78 @@ const RUNWAY_API_VERSION = "2024-11-06";
 
 /**
  * Runway carries the output resolution in `ratio`; aspect names are refused.
- * `text_to_video` offers landscape and portrait only — there is no square.
+ * The supported Runway lanes here offer landscape and portrait only.
  */
 const RUNWAY_RATIOS = ["1280:720", "720:1280"];
-const RUNWAY_ASPECT_RATIOS: Record<string, string> = { "16:9": "1280:720", "9:16": "720:1280" };
+const RUNWAY_ASPECT_RATIOS: Record<string, string> = {
+  "16:9": "1280:720",
+  "9:16": "720:1280",
+};
+
+/** Runway caps promptText at 1000 characters on every generation route. */
+export const RUNWAY_PROMPT_MAX = 1000;
+
+/**
+ * Runway `text_to_image` output resolutions for the studio's aspect names,
+ * from the accepted `ratio` list in Runway's API reference. 3:2 has no
+ * matching Runway resolution, so it is refused rather than cropped silently.
+ */
+export const RUNWAY_IMAGE_RATIOS: Record<string, string> = {
+  "16:9": "1920:1080",
+  "9:16": "1080:1920",
+  "1:1": "1080:1080",
+  "4:3": "1440:1080",
+};
+
+/** Motion aspects Runway renders here, exported so a planner can refuse first. */
+export const RUNWAY_VIDEO_ASPECTS = Object.keys(RUNWAY_ASPECT_RATIOS);
+
+/** Kling 2.6 accepts three frame shapes, 5 or 10 seconds, and two resolutions. */
+export const KLING_ASPECTS = ["16:9", "9:16", "1:1"];
+export const KLING_DURATIONS = [5, 10];
+export const KLING_RESOLUTIONS = ["720p", "1080p"];
+/** Kling 2.6 caps promptText at 2500 characters on every generation route. */
+export const KLING_PROMPT_MAX = 2500;
+
+/** Veo on the Gemini API renders landscape or portrait only. */
+export const VEO_ASPECTS = ["16:9", "9:16"];
+export const VEO_DEFAULT_MODEL = "veo-3.1-generate-preview";
+
+export const SEEDREAM_MODEL = "seedream-4-0-250828";
+/** Seedream output sizes for the studio's aspect names. */
+export const SEEDREAM_SIZES: Record<string, string> = {
+  "16:9": "2048x1152",
+  "9:16": "1152x2048",
+  "1:1": "2048x2048",
+  "4:3": "2048x1536",
+  "3:2": "2304x1536",
+};
+
+/**
+ * Largest reference image, in decoded bytes, sent to Runway as a data URI.
+ * The same bound the private presenter reference already keeps.
+ */
+export const RUNWAY_REFERENCE_MAX_BYTES = 3_300_000;
+
+function referenceImageError(image: string): string | undefined {
+  if (!image) return "Reference motion needs a reference image";
+  if (/^https:\/\//.test(image)) return undefined;
+  const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(image);
+  if (!m) return "Motion reference must be an HTTPS image or embedded image";
+  const bytes = Math.floor((m[2].length * 3) / 4);
+  if (bytes > RUNWAY_REFERENCE_MAX_BYTES)
+    return "Motion reference is too large for Runway; keep the still at or below 3.3 MB";
+  return undefined;
+}
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 /**
@@ -143,11 +227,109 @@ function record(value: unknown): Record<string, unknown> {
 export function elevenLabsVoiceId(env: EnvLike, studioVoiceId: string): string {
   const asked = text(studioVoiceId);
   if (asked && !asked.startsWith("vo-")) return asked;
-  const slug = asked.replace(/^vo-/, "").replace(/[^A-Za-z0-9]+/g, "_").toUpperCase();
-  return text(slug ? env[`ELEVENLABS_VOICE_ID_${slug}`] : "") || text(env.ELEVENLABS_VOICE_ID);
+  const slug = asked
+    .replace(/^vo-/, "")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .toUpperCase();
+  return (
+    text(slug ? env[`ELEVENLABS_VOICE_ID_${slug}`] : "") ||
+    text(env.ELEVENLABS_VOICE_ID)
+  );
 }
 
 export const PROVIDERS: ProviderSpec[] = [
+  {
+    id: "xai-image",
+    kind: "gen-image",
+    label: "Grok Imagine still",
+    envKey: "XAI_API_KEY",
+    endpoint: "https://api.x.ai/v1",
+    wire: {
+      jsonMedia: {
+        extension: ".jpg",
+        readBase64: (data) => {
+          const rows = record(data).data;
+          return Array.isArray(rows)
+            ? text(record(rows[0]).b64_json) || undefined
+            : undefined;
+        },
+      },
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!["16:9", "9:16", "1:1", "4:3", "3:2"].includes(aspect))
+          return { ok: false, error: "Unsupported image aspect ratio" };
+        return { ok: true, value: { aspect } };
+      },
+      submitPath: () => "/images/generations",
+      buildBody: (req, s) => ({
+        model: "grok-imagine-image-2.0",
+        prompt: req.prompt,
+        n: 1,
+        aspect_ratio: s.aspect,
+        response_format: "b64_json",
+      }),
+    },
+  },
+  {
+    id: "xai-video",
+    kind: "gen-video",
+    label: "Grok Imagine motion",
+    envKey: "XAI_API_KEY",
+    endpoint: "https://api.x.ai/v1",
+    wire: {
+      settings: (_env, req) => {
+        const duration = Number(req.options?.duration ?? 6);
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!Number.isInteger(duration) || duration < 1 || duration > 15)
+          return {
+            ok: false,
+            error: "Motion duration must be 1 to 15 whole seconds",
+          };
+        if (!["16:9", "9:16", "1:1", "4:3", "3:2"].includes(aspect))
+          return { ok: false, error: "Unsupported video aspect ratio" };
+        const image = text(req.options?.imageUrl);
+        if (
+          image &&
+          !/^https:\/\//.test(image) &&
+          !/^data:image\/(jpeg|png|webp);base64,/.test(image)
+        )
+          return {
+            ok: false,
+            error: "Motion reference must be an HTTPS image or embedded image",
+          };
+        return {
+          ok: true,
+          value: { duration: String(duration), aspect, image },
+        };
+      },
+      submitPath: () => "/videos/generations",
+      buildBody: (req, s) => ({
+        model: "grok-imagine-video-1.5",
+        prompt: req.prompt,
+        duration: Number(s.duration),
+        aspect_ratio: s.aspect,
+        resolution: "720p",
+        generate_audio: false,
+        ...(s.image ? { image: { url: s.image } } : {}),
+      }),
+      readSubmitId: (data) => text(record(data).request_id) || undefined,
+      pollPath: (id) => `/videos/${encodeURIComponent(id)}`,
+      readPoll: (data) => {
+        const r = record(data);
+        const v = record(r.video);
+        const state =
+          r.status === "expired" ? "failed" : normalizeState(text(r.status));
+        return {
+          state,
+          result: state === "succeeded" ? text(v.url) || undefined : undefined,
+          note:
+            state === "failed"
+              ? "Video generation failed or expired."
+              : undefined,
+        };
+      },
+    },
+  },
   // Gen video
   {
     id: "runway",
@@ -165,43 +347,296 @@ export const PROVIDERS: ProviderSpec[] = [
       // through: Runway rejects a body carrying fields it does not define, so
       // spreading the studio's own brief into it made every live submit fail.
       settings: (_env, req) => {
+        // image-to-video animates the approved private presenter reference,
+        // which the server swaps in. reference-to-video animates the caller's
+        // own still (a Canvas reference), and never reaches the presenter file.
+        const mode = text(req.options?.mode) || "text-to-video";
+        if (!["text-to-video", "image-to-video", "reference-to-video"].includes(mode)) {
+          return {
+            ok: false,
+            error: "Runway mode must be text-to-video, image-to-video or reference-to-video",
+          };
+        }
+        if (req.prompt.length > RUNWAY_PROMPT_MAX) {
+          return { ok: false, error: `Runway prompts are limited to ${RUNWAY_PROMPT_MAX} characters` };
+        }
+        const reference = mode === "reference-to-video" ? text(req.options?.imageUrl) : "";
+        if (mode === "reference-to-video") {
+          const problem = referenceImageError(reference);
+          if (problem) return { ok: false, error: problem };
+        }
         const asked = text(req.options?.ratio);
         const aspect = text(req.options?.aspect);
         if (asked && !RUNWAY_RATIOS.includes(asked)) {
-          return { ok: false, error: `Runway ratio must be one of ${RUNWAY_RATIOS.join(", ")}` };
+          return {
+            ok: false,
+            error: `Runway ratio must be one of ${RUNWAY_RATIOS.join(", ")}`,
+          };
         }
         if (!asked && aspect && !RUNWAY_ASPECT_RATIOS[aspect]) {
           return {
             ok: false,
-            error: `Runway text-to-video renders ${Object.keys(RUNWAY_ASPECT_RATIOS).join(" or ")}, not ${aspect}`,
+            error: `Runway renders ${Object.keys(RUNWAY_ASPECT_RATIOS).join(" or ")}, not ${aspect}`,
           };
         }
-        const duration = Number(req.options?.duration ?? req.options?.durationSec ?? 5);
+        const duration = Number(
+          req.options?.duration ?? req.options?.durationSec ?? 5,
+        );
         if (!Number.isInteger(duration) || duration < 2 || duration > 10) {
-          return { ok: false, error: "Runway duration must be a whole number of seconds from 2 to 10" };
+          return {
+            ok: false,
+            error:
+              "Runway duration must be a whole number of seconds from 2 to 10",
+          };
         }
         return {
           ok: true,
           value: {
+            mode,
             ratio: asked || RUNWAY_ASPECT_RATIOS[aspect] || RUNWAY_RATIOS[0],
             duration: String(duration),
+            promptImage:
+              mode === "reference-to-video" ? reference : text(req.options?.promptImage),
           },
         };
       },
       // Creation is per-modality; there is no generic task-creation route.
-      submitPath: () => "/text_to_video",
+      submitPath: (_req, settings) =>
+        settings.mode === "text-to-video" ? "/text_to_video" : "/image_to_video",
       buildBody: (req, settings) => ({
         model: text(req.options?.model) || "gen4.5",
         promptText: req.prompt,
+        ...(settings.mode !== "text-to-video" ? { promptImage: settings.promptImage } : {}),
         ratio: settings.ratio,
         duration: Number(settings.duration),
       }),
       pollPath: (id) => `/tasks/${encodeURIComponent(id)}`,
     },
   },
-  { id: "kling", kind: "gen-video", label: "Kling", envKey: "KLING_API_KEY" },
-  { id: "veo", kind: "gen-video", label: "Veo", envKey: "VEO_API_KEY" },
-  { id: "seedream", kind: "gen-video", label: "Seedream", envKey: "SEEDREAM_API_KEY" },
+  {
+    // Canvas stills. Runway returns a task; the finished image is a URL on the
+    // task, read by the same poller as Runway video.
+    id: "runway-image",
+    kind: "gen-image",
+    label: "Runway still",
+    envKey: "RUNWAY_API_KEY",
+    envAliases: ["RUNWAYML_API_SECRET"],
+    endpoint: "https://api.dev.runwayml.com/v1",
+    wire: {
+      headers: { "X-Runway-Version": RUNWAY_API_VERSION },
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        const ratio = RUNWAY_IMAGE_RATIOS[aspect];
+        if (!ratio)
+          return {
+            ok: false,
+            error: `Runway stills render ${Object.keys(RUNWAY_IMAGE_RATIOS).join(", ")}, not ${aspect}`,
+          };
+        if (req.prompt.length > RUNWAY_PROMPT_MAX)
+          return { ok: false, error: `Runway prompts are limited to ${RUNWAY_PROMPT_MAX} characters` };
+        return { ok: true, value: { ratio } };
+      },
+      submitPath: () => "/text_to_image",
+      buildBody: (req, s) => ({
+        model: "gen4_image",
+        promptText: req.prompt,
+        ratio: s.ratio,
+      }),
+      pollPath: (id) => `/tasks/${encodeURIComponent(id)}`,
+      storeResult: { maxBytes: 20_000_000 },
+    },
+  },
+  {
+    // Kling's 2.6 API: one submit route per modality, tasks polled in batch
+    // under a query param rather than a path segment.
+    id: "kling",
+    kind: "gen-video",
+    label: "Kling",
+    envKey: "KLING_API_KEY",
+    endpoint: "https://api-singapore.klingai.com",
+    wire: {
+      settings: (_env, req) => {
+        const mode = text(req.options?.mode) || "text-to-video";
+        if (mode === "image-to-video" &&
+          !/^https:\/\//.test(text(req.options?.imageUrl)))
+          return { ok: false, error: "Kling image-to-video needs an HTTPS first-frame image URL" };
+        if (!["text-to-video", "image-to-video"].includes(mode))
+          return { ok: false, error: "Kling mode must be text-to-video or image-to-video" };
+        if (req.prompt.length > KLING_PROMPT_MAX)
+          return { ok: false, error: `Kling prompts are limited to ${KLING_PROMPT_MAX} characters` };
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!KLING_ASPECTS.includes(aspect))
+          return { ok: false, error: `Kling renders ${KLING_ASPECTS.join(", ")}, not ${aspect}` };
+        const duration = Number(req.options?.duration ?? 5);
+        if (!KLING_DURATIONS.includes(duration))
+          return { ok: false, error: `Kling duration must be ${KLING_DURATIONS.join(" or ")} seconds` };
+        const resolution = text(req.options?.resolution) || "720p";
+        if (!KLING_RESOLUTIONS.includes(resolution))
+          return { ok: false, error: `Kling resolution must be ${KLING_RESOLUTIONS.join(" or ")}` };
+        return {
+          ok: true,
+          value: {
+            mode,
+            aspect,
+            duration: String(duration),
+            resolution,
+            image: text(req.options?.imageUrl),
+          },
+        };
+      },
+      submitPath: (_req, s) =>
+        s.mode === "text-to-video" ? "/text-to-video/kling-2.6" : "/image-to-video/kling-2.6",
+      buildBody: (req, s) => ({
+        ...(s.mode === "text-to-video"
+          ? { prompt: req.prompt }
+          : {
+              contents: [
+                { type: "prompt", text: req.prompt },
+                { type: "first_frame", url: s.image },
+              ],
+            }),
+        settings: {
+          resolution: s.resolution,
+          aspect_ratio: s.aspect,
+          duration: Number(s.duration),
+        },
+      }),
+      readSubmitId: (data) => text(record(record(data).data).id) || undefined,
+      pollPath: (id) => `/tasks?task_ids=${encodeURIComponent(id)}`,
+      readPoll: (data) => {
+        const envelope = record(data);
+        const rows = Array.isArray(envelope.data) ? envelope.data : [envelope.data];
+        const task = record(rows[0]);
+        const state = normalizeState(text(task.status));
+        const outputs = Array.isArray(task.outputs) ? task.outputs : [];
+        const video = record(outputs.find((o) => record(o).type === "video"));
+        return {
+          state,
+          result: state === "succeeded" ? text(video.url) || undefined : undefined,
+          note: state === "failed" ? text(task.message) || undefined : undefined,
+        };
+      },
+      storeResult: { maxBytes: 100_000_000 },
+    },
+  },
+  {
+    // Veo on the Gemini API: submits are long-running operations. The submit
+    // answers with an operation name that is itself the poll URL relative to
+    // the base endpoint, and the finished sample names a file URI that only
+    // downloads with the same API key — `keepResult` recognises the endpoint
+    // origin and attaches it.
+    id: "veo",
+    kind: "gen-video",
+    label: "Veo",
+    envKey: "VEO_API_KEY",
+      // Vertex express keys ("AQ…", issued by AI Studio in some projects and
+      // by Cloud) are rejected by generativelanguage — "API keys are not
+      // supported" — but answer on aiplatform with the key as a query
+      // parameter. Gemini AI Studio keys ("AIza…") take the reverse path.
+      endpoint: (env) =>
+        text(env.VEO_API_KEY).startsWith("AQ")
+          ? "https://aiplatform.googleapis.com/v1"
+          : "https://generativelanguage.googleapis.com/v1beta",
+    wire: {
+      auth: { header: "x-goog-api-key", query: "key" },
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        if (!VEO_ASPECTS.includes(aspect))
+          return { ok: false, error: `Veo renders ${VEO_ASPECTS.join(" or ")}, not ${aspect}` };
+        const image = text(req.options?.imageUrl);
+        let imageMime = "";
+        let imageData = "";
+        if (image) {
+          const m = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=\r\n]+)$/.exec(image);
+          if (!m)
+            return {
+              ok: false,
+              error: "Veo image-to-video needs an embedded image (a data URI) — it does not fetch image URLs",
+            };
+          imageMime = `image/${m[1]}`;
+          imageData = m[2].replace(/[\r\n]/g, "");
+        }
+        return {
+          ok: true,
+          value: {
+            aspect,
+            model: text(req.options?.model) || VEO_DEFAULT_MODEL,
+            imageMime,
+            imageData,
+          },
+        };
+      },
+      submitPath: (_req, s) => `/models/${s.model}:predictLongRunning`,
+      buildBody: (req, s) => ({
+        instances: [
+          {
+            prompt: req.prompt,
+            ...(s.imageData
+              ? { image: { inlineData: { mimeType: s.imageMime, data: s.imageData } } }
+              : {}),
+          },
+        ],
+        parameters: { aspectRatio: s.aspect },
+      }),
+      readSubmitId: (data) => text(record(data).name) || undefined,
+      pollPath: (id) => `/${id}`,
+      readPoll: (data) => {
+        const op = record(data);
+        if (!op.done) return { state: "running" };
+        const message = text(record(op.error).message);
+        if (message) return { state: "failed", note: message };
+        const gvr = record(record(op.response).generateVideoResponse);
+        const samples = Array.isArray(gvr.generatedSamples) ? gvr.generatedSamples : [];
+        const uri = text(record(record(samples[0]).video).uri);
+        return {
+          state: "succeeded",
+          result: uri || undefined,
+          note: uri ? undefined : "Veo finished without a video URI",
+        };
+      },
+      storeResult: { maxBytes: 60_000_000 },
+    },
+  },
+  {
+    // Seedream is a stills model, not a motion model — the registry used to
+    // file it under gen-video, a picker could offer it for work it cannot do.
+    // It answers the submit with the image itself, synchronously, like Grok
+    // Imagine stills.
+    id: "seedream",
+    kind: "gen-image",
+    label: "Seedream still",
+    envKey: "SEEDREAM_API_KEY",
+    endpoint: "https://ark.ap-southeast.bytepluses.com/api/v3",
+    wire: {
+      settings: (_env, req) => {
+        const aspect = text(req.options?.aspect) || "16:9";
+        const size = SEEDREAM_SIZES[aspect];
+        if (!size)
+          return {
+            ok: false,
+            error: `Seedream stills render ${Object.keys(SEEDREAM_SIZES).join(", ")}, not ${aspect}`,
+          };
+        return { ok: true, value: { size, model: text(req.options?.model) || SEEDREAM_MODEL } };
+      },
+      submitPath: () => "/images/generations",
+      buildBody: (req, s) => ({
+        model: s.model,
+        prompt: req.prompt,
+        size: s.size,
+        response_format: "b64_json",
+        watermark: false,
+      }),
+      jsonMedia: {
+        extension: ".jpg",
+        readBase64: (data) => {
+          const rows = record(data).data;
+          return Array.isArray(rows)
+            ? text(record(rows[0]).b64_json) || undefined
+            : undefined;
+        },
+      },
+    },
+  },
 
   // Voice. Text-to-speech answers with the audio bytes themselves, so there is
   // no task id and nothing to poll — `binary` says so, and the boundary stores
@@ -212,7 +647,12 @@ export const PROVIDERS: ProviderSpec[] = [
     label: "ElevenLabs",
     envKey: "ELEVENLABS_API_KEY",
     endpoint: "https://api.elevenlabs.io/v1",
-    settingKeys: [{ label: "ELEVENLABS_VOICE_ID", anyOf: ["ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_ID_*"] }],
+    settingKeys: [
+      {
+        label: "ELEVENLABS_VOICE_ID",
+        anyOf: ["ELEVENLABS_VOICE_ID", "ELEVENLABS_VOICE_ID_*"],
+      },
+    ],
     wire: {
       auth: { header: "xi-api-key" },
       binary: { extension: ".mp3" },
@@ -225,7 +665,8 @@ export const PROVIDERS: ProviderSpec[] = [
               "No ElevenLabs voice id for this voice — set ELEVENLABS_VOICE_ID, or ELEVENLABS_VOICE_ID_<VOICE> to pin one studio voice",
           };
         }
-        if (!req.prompt.trim()) return { ok: false, error: "ElevenLabs needs a script to speak" };
+        if (!req.prompt.trim())
+          return { ok: false, error: "ElevenLabs needs a script to speak" };
         return {
           ok: true,
           value: {
@@ -249,6 +690,64 @@ export const PROVIDERS: ProviderSpec[] = [
       }),
     },
   },
+  {
+    id: "kokoro-local",
+    kind: "voice",
+    label: "Kokoro (local, free)",
+    billing: "local",
+    // Reuse the provider token already managed by the deployment. The local
+    // adapter is private, but it still refuses unauthenticated requests.
+    envKey: "EDITFORGE_PROVIDER_TOKEN",
+    endpoint: process.env.EDITFORGE_LOCAL_TOOLS_URL || "http://172.16.2.1:3410",
+    wire: {
+      binary: { extension: ".wav" },
+      settings: (_env, req) => {
+        if (!req.prompt.trim()) return { ok: false, error: "Kokoro needs a script to speak" };
+        const speed = Number(req.options?.speed ?? 1);
+        if (!Number.isFinite(speed) || speed < 0.5 || speed > 2) {
+          return { ok: false, error: "Kokoro speed must be from 0.5 to 2" };
+        }
+        return {
+          ok: true,
+          value: {
+            voiceId: text(req.options?.voiceId) || "af_sarah",
+            speed: String(speed),
+            lang: text(req.options?.lang) || "en-us",
+          },
+        };
+      },
+      submitPath: () => "/v1/kokoro",
+      buildBody: (req, settings) => ({
+        text: req.prompt,
+        voice: settings.voiceId,
+        speed: Number(settings.speed),
+        lang: settings.lang,
+      }),
+    },
+  },
+  {
+    id: "hyperframes-local",
+    kind: "gen-video",
+    label: "HyperFrames (local render)",
+    billing: "local",
+    envKey: "EDITFORGE_PROVIDER_TOKEN",
+    endpoint: process.env.EDITFORGE_LOCAL_TOOLS_URL || "http://172.16.2.1:3410",
+    wire: {
+      binary: { extension: ".mp4" },
+      settings: (_env, req) => {
+        const project = text(req.options?.project) || "hyperframes-smoke";
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/.test(project)) {
+          return { ok: false, error: "HyperFrames project must be a safe project slug" };
+        }
+        return { ok: true, value: { project } };
+      },
+      submitPath: () => "/v1/hyperframes",
+      buildBody: (req, settings) => ({
+        project: settings.project,
+        note: req.prompt,
+      }),
+    },
+  },
 
   // Avatar. HeyGen renders the talking head; EditForge owns the brief, the cut
   // linkage and the rubric gate.
@@ -262,11 +761,25 @@ export const PROVIDERS: ProviderSpec[] = [
     wire: {
       auth: { header: "X-Api-Key" },
       settings: (env, req) => {
-        const avatarId = text(req.options?.avatarId) || text(env.HEYGEN_AVATAR_ID);
+        const avatarId =
+          text(req.options?.avatarId) || text(env.HEYGEN_AVATAR_ID);
         const voiceId = text(req.options?.voiceId) || text(env.HEYGEN_VOICE_ID);
-        if (!avatarId) return { ok: false, error: "HEYGEN_AVATAR_ID is not set — HeyGen needs the avatar look to render" };
-        if (!voiceId) return { ok: false, error: "HEYGEN_VOICE_ID is not set — HeyGen needs a voice for the script" };
-        return { ok: true, value: { avatarId, voiceId, title: text(req.options?.title) } };
+        if (!avatarId)
+          return {
+            ok: false,
+            error:
+              "HEYGEN_AVATAR_ID is not set — HeyGen needs the avatar look to render",
+          };
+        if (!voiceId)
+          return {
+            ok: false,
+            error:
+              "HEYGEN_VOICE_ID is not set — HeyGen needs a voice for the script",
+          };
+        return {
+          ok: true,
+          value: { avatarId, voiceId, title: text(req.options?.title) },
+        };
       },
       submitPath: () => "/v3/videos",
       buildBody: (req, settings) => ({
@@ -281,7 +794,12 @@ export const PROVIDERS: ProviderSpec[] = [
       // answered without a task id.
       readSubmitId: (data) => {
         const envelope = record(record(data).data);
-        return text(envelope.id) || text(envelope.video_id) || text(record(data).video_id) || undefined;
+        return (
+          text(envelope.id) ||
+          text(envelope.video_id) ||
+          text(record(data).video_id) ||
+          undefined
+        );
       },
       pollPath: (id) => `/v3/videos/${encodeURIComponent(id)}`,
       readPoll: (data) => {
@@ -289,18 +807,34 @@ export const PROVIDERS: ProviderSpec[] = [
         const state = normalizeState(text(envelope.status));
         return {
           state,
-          result: state === "succeeded" ? text(envelope.video_url) || undefined : undefined,
-          note: state === "failed"
-            ? text(envelope.failure_message) || text(envelope.error) || undefined
-            : undefined,
+          result:
+            state === "succeeded"
+              ? text(envelope.video_url) || undefined
+              : undefined,
+          note:
+            state === "failed"
+              ? text(envelope.failure_message) ||
+                text(envelope.error) ||
+                undefined
+              : undefined,
         };
       },
     },
   },
 
   // Always available, never charges, never pretends.
-  { id: "mock", kind: "gen-video", label: "Mock (offline)", envKey: "" },
+  { id: "mock", kind: "gen-video", label: "Mock (offline)", billing: "offline", envKey: "" },
 ];
+
+export function billingFor(spec: ProviderSpec): ProviderBilling {
+  if (spec.id === "mock") return "offline";
+  return spec.billing ?? "paid";
+}
+
+export function isBillable(id: string): boolean {
+  const spec = findProvider(id);
+  return Boolean(spec && billingFor(spec) === "paid");
+}
 
 function clamp01(value: unknown, fallback: number): number {
   const n = Number(value);
@@ -341,7 +875,10 @@ export function credentialKeysFor(spec: ProviderSpec): string[] {
 }
 
 /** The credential value for this provider, under whichever name it was set. */
-export function credentialFor(spec: ProviderSpec, env: EnvLike = process.env): string {
+export function credentialFor(
+  spec: ProviderSpec,
+  env: EnvLike = process.env,
+): string {
   for (const key of credentialKeysFor(spec)) {
     const value = text(env[key]);
     if (value) return value;
@@ -350,7 +887,10 @@ export function credentialFor(spec: ProviderSpec, env: EnvLike = process.env): s
 }
 
 /** True when this provider could actually run live right now. */
-export function hasCredentials(id: string, env: EnvLike = process.env): boolean {
+export function hasCredentials(
+  id: string,
+  env: EnvLike = process.env,
+): boolean {
   const p = findProvider(id);
   if (!p) return false;
   if (!p.envKey) return true;
@@ -360,9 +900,16 @@ export function hasCredentials(id: string, env: EnvLike = process.env): boolean 
 /** Providers each spell their statuses differently; collapse to our four. */
 export function normalizeState(raw?: string): ProviderState {
   const s = (raw ?? "").toLowerCase();
-  if (["succeeded", "success", "completed", "complete", "done", "ready"].includes(s)) return "succeeded";
-  if (["failed", "error", "cancelled", "canceled", "rejected"].includes(s)) return "failed";
-  if (["running", "processing", "in_progress", "generating"].includes(s)) return "running";
+  if (
+    ["succeeded", "success", "completed", "complete", "done", "ready"].includes(
+      s,
+    )
+  )
+    return "succeeded";
+  if (["failed", "error", "cancelled", "canceled", "rejected"].includes(s))
+    return "failed";
+  if (["running", "processing", "in_progress", "generating"].includes(s))
+    return "running";
   return "queued";
 }
 
@@ -373,7 +920,10 @@ export function normalizeState(raw?: string): ProviderState {
  * the `editforge_status` tool, so a picker and an assistant cannot disagree
  * about why a run would refuse.
  */
-export function missingSettingsFor(spec: ProviderSpec, env: EnvLike = process.env): string[] {
+export function missingSettingsFor(
+  spec: ProviderSpec,
+  env: EnvLike = process.env,
+): string[] {
   const missing: string[] = [];
   for (const entry of spec.settingKeys ?? []) {
     if (typeof entry === "string") {
@@ -383,8 +933,10 @@ export function missingSettingsFor(spec: ProviderSpec, env: EnvLike = process.en
     // A wildcard stands for a family of names — any member satisfies it.
     const satisfied = entry.anyOf.some((name) =>
       name.endsWith("*")
-        ? Object.keys(env).some((key) => key.startsWith(name.slice(0, -1)) && text(env[key]))
-        : Boolean(text(env[name]))
+        ? Object.keys(env).some(
+            (key) => key.startsWith(name.slice(0, -1)) && text(env[key]),
+          )
+        : Boolean(text(env[name])),
     );
     if (!satisfied) missing.push(entry.label);
   }
@@ -394,20 +946,31 @@ export function missingSettingsFor(spec: ProviderSpec, env: EnvLike = process.en
 /** Whether a submit to this provider would reach it and bill for it. */
 export function providerReadiness(
   spec: ProviderSpec,
-  opts: { artifactStore: boolean; env?: EnvLike }
-): { wired: boolean; credentialSet: boolean; settingsMissing: string[]; ready: boolean } {
+  opts: { artifactStore: boolean; env?: EnvLike },
+): {
+  wired: boolean;
+  credentialSet: boolean;
+  settingsMissing: string[];
+  ready: boolean;
+} {
   const env = opts.env ?? process.env;
   const wired = isLiveWired(spec.id);
   const credentialSet = hasCredentials(spec.id, env);
   const settingsMissing = missingSettingsFor(spec, env);
   // A provider whose submit answers with bytes cannot run at all without
   // somewhere to keep them, so it is not ready until the store exists.
-  const storeOk = !spec.wire?.binary || opts.artifactStore;
+  const storeOk =
+    !(spec.wire?.binary || spec.wire?.jsonMedia) || opts.artifactStore;
   return {
     wired,
     credentialSet,
     settingsMissing,
-    ready: spec.id !== "mock" && wired && credentialSet && storeOk && settingsMissing.length === 0,
+    ready:
+      spec.id !== "mock" &&
+      wired &&
+      credentialSet &&
+      storeOk &&
+      settingsMissing.length === 0,
   };
 }
 

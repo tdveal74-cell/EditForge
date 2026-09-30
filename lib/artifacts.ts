@@ -22,11 +22,81 @@ import path from "node:path";
  */
 
 /** Extensions the store will hold, and therefore that the route will serve. */
-export const ARTIFACT_EXTENSIONS = ["mp4", "mov", "webm", "mp3", "wav", "m4a"] as const;
+export const ARTIFACT_EXTENSIONS = [
+  "mp4",
+  "mov",
+  "webm",
+  "mp3",
+  "wav",
+  "m4a",
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "avif",
+  "zip",
+  "md",
+  "txt",
+  "json",
+  "pdf",
+  "srt",
+  "vtt",
+  "csv",
+  "mkv",
+  "avi",
+  "m4v",
+  "mpeg",
+  "mpg",
+  "flac",
+  "ogg",
+  "aac",
+  "aiff",
+  "aif",
+  "opus",
+  "wma",
+  "caf",
+  "amr",
+  "wmv",
+  "3gp",
+  "3g2",
+  "mts",
+  "m2ts",
+  "ts",
+  "tif",
+  "tiff",
+  "psd",
+  "exr",
+  "dpx",
+  "heic",
+  "heif",
+  "svg",
+] as const;
 
-const ARTIFACT_NAME = new RegExp(`^[A-Za-z0-9._-]+\\.(${ARTIFACT_EXTENSIONS.join("|")})$`);
+const ARTIFACT_NAME = new RegExp(
+  `^[A-Za-z0-9._-]+\\.(${ARTIFACT_EXTENSIONS.join("|")})$`,
+);
 
 const CONTENT_TYPES: Record<string, string> = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".avif": "image/avif",
+  ".zip": "application/zip",
+  ".md": "text/plain; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
+  ".json": "application/json",
+  ".pdf": "application/pdf",
+  ".srt": "text/plain; charset=utf-8",
+  ".vtt": "text/vtt",
+  ".flac": "audio/flac",
+  ".ogg": "audio/ogg",
+  ".aac": "audio/aac",
+  ".aiff": "audio/aiff",
+  ".opus": "audio/ogg",
+  ".m4v": "video/mp4",
+  ".png": "image/png",
+  ".webp": "image/webp",
   ".mp4": "video/mp4",
   ".mov": "video/quicktime",
   ".webm": "video/webm",
@@ -58,7 +128,10 @@ export function isArtifactName(name: string): boolean {
 }
 
 export function contentTypeForArtifact(name: string): string {
-  return CONTENT_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
+  return (
+    CONTENT_TYPES[path.extname(name).toLowerCase()] ??
+    "application/octet-stream"
+  );
 }
 
 /**
@@ -69,7 +142,8 @@ export function contentTypeForArtifact(name: string): string {
  * the browser session — the render worker, a webhook — has to resolve it.
  */
 export function artifactUrl(name: string): string {
-  const base = (process.env.EDITFORGE_ARTIFACT_BASE_URL?.trim() ||
+  const base = (
+    process.env.EDITFORGE_ARTIFACT_BASE_URL?.trim() ||
     (process.env.EDITFORGE_PUBLIC_URL?.trim()
       ? `${process.env.EDITFORGE_PUBLIC_URL.trim().replace(/\/$/, "")}/api/artifacts`
       : "/api/artifacts")
@@ -87,7 +161,10 @@ export type StoredArtifact = {
 
 /** Strip anything the store's own name rule would reject. */
 function safeSegment(value: string, fallback: string): string {
-  const cleaned = value.replace(/[^A-Za-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+  const cleaned = value
+    .replace(/[^A-Za-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
   return cleaned || fallback;
 }
 
@@ -105,13 +182,20 @@ export async function storeArtifact(input: {
   const dir = artifactDir();
   if (!dir) throw new Error("EDITFORGE_ARTIFACT_DIR is not configured");
 
-  const body = input.bytes instanceof Uint8Array ? input.bytes : new Uint8Array(input.bytes);
-  if (body.byteLength === 0) throw new Error("provider returned an empty artifact");
+  const body =
+    input.bytes instanceof Uint8Array
+      ? input.bytes
+      : new Uint8Array(input.bytes);
+  if (body.byteLength === 0)
+    throw new Error("provider returned an empty artifact");
 
-  const extension = input.extension.startsWith(".") ? input.extension.toLowerCase() : `.${input.extension.toLowerCase()}`;
+  const extension = input.extension.startsWith(".")
+    ? input.extension.toLowerCase()
+    : `.${input.extension.toLowerCase()}`;
   const sha256 = createHash("sha256").update(body).digest("hex");
   const name = `${safeSegment(input.prefix, "artifact")}-${sha256.slice(0, 16)}${extension}`;
-  if (!isArtifactName(name)) throw new Error(`refusing to store an unservable artifact name: ${name}`);
+  if (!isArtifactName(name))
+    throw new Error(`refusing to store an unservable artifact name: ${name}`);
 
   await fs.mkdir(dir, { recursive: true });
   await fs.writeFile(path.join(dir, name), body);

@@ -48,12 +48,14 @@ describe("provider readiness endpoint", () => {
     expect(runway.wired).toBe(true);
   });
 
-  it("marks a credentialled provider with no live path as wired-false, not billable", async () => {
+  it("wires a credentialled provider that has a live path as ready", async () => {
+    // Kling used to be a stub — credentialled yet wired-false. Now the API
+    // shape exists, so the same key marks it ready instead of refused.
     process.env.KLING_API_KEY = "tok";
     const body = await (await GET()).json();
     const kling = body.providers.find((p: { id: string }) => p.id === "kling");
-    expect(kling.wired).toBe(false);
-    expect(kling.billable).toBe(false);
+    expect(kling.wired).toBe(true);
+    expect(kling.credentialSet).toBe(true);
     delete process.env.KLING_API_KEY;
   });
 

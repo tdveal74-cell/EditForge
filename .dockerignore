@@ -1,9 +1,10 @@
 .git
 .next
 node_modules
-.data
-.data-test-*
-.env
-.env.*
-*.log
-*.tsbuildinfo
+npm-debug.log*
+.data*
+.presenter-broll-backups
+editforge-presenter-broll-upgrade*
+
+
+.env*

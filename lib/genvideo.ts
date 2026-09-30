@@ -1,6 +1,6 @@
 import { PROVIDERS, credentialKeysFor, hasCredentials, isLiveWired } from "./provider-registry";
 
-export type GenProvider = "runway" | "kling" | "veo" | "seedream" | "mock";
+export type GenProvider = "xai-video" | "runway" | "kling" | "veo" | "mock";
 export type GenMode = "text-to-video" | "image-to-video" | "extend" | "restyle";
 export type QualityTier = "draft" | "social" | "broadcast-intent";
 
@@ -13,11 +13,11 @@ export type QualityTier = "draft" | "social" | "broadcast-intent";
  * chance to disagree with the boundary that actually dispatches.
  */
 const STRENGTHS: Record<GenProvider, string> = {
-  runway: "Text-to-video only (Gen-4.5). Motion brush, restyle, and extend are not wired.",
-  kling: "Registered — no live path implemented.",
-  veo: "Registered — no live path implemented.",
-  seedream: "Registered — no live path implemented.",
-  mock: "Plan + QA only — no cloud spend, no media.",
+  "xai-video": "Grok Imagine · text or image to video",
+  runway: "Gen-4.5 · motion brush · restyle · extend",
+  kling: "Longer takes · strong motion coherence",
+  veo: "High fidelity · cinematic intent",
+  mock: "Plan + QA only — no cloud spend",
 };
 
 export type GenProviderInfo = {

@@ -1,4 +1,10 @@
-import { artifactStoreConfigured, artifactUrl, storeArtifact } from "./artifacts";
+import {
+  artifactStoreConfigured,
+  artifactUrl,
+  storeArtifact,
+} from "./artifacts";
+import { readFile, stat } from "node:fs/promises";
+import path from "node:path";
 import {
   DEFAULT_AUTH,
   credentialFor,
@@ -15,6 +21,9 @@ import {
 } from "./provider-registry";
 
 export * from "./provider-registry";
+
+const PROVIDER_SUBMIT_TIMEOUT_MS = 120_000;
+const PROVIDER_POLL_TIMEOUT_MS = 30_000;
 
 /**
  * The one execution boundary for AI media work.
@@ -54,7 +63,14 @@ export type SubmitResult =
   | { ok: false; provider: string; mode: ProviderMode; error: string };
 
 export type PollResult =
-  | { ok: true; provider: string; mode: ProviderMode; state: ProviderState; result?: string; note?: string }
+  | {
+      ok: true;
+      provider: string;
+      mode: ProviderMode;
+      state: ProviderState;
+      result?: string;
+      note?: string;
+    }
   | { ok: false; provider: string; mode: ProviderMode; error: string };
 
 /**
@@ -81,22 +97,80 @@ function mockId(req: SubmitRequest): string {
   return `mock-${req.kind}-${req.idempotencyKey}`;
 }
 
+/** A spec's endpoint, resolving the function form against the live env. */
+function endpointFor(spec: ProviderSpec, env: EnvLike): string | undefined {
+  return typeof spec.endpoint === "function" ? spec.endpoint(env) : spec.endpoint;
+}
+
 /** Credential header for this provider, however it wants to be given the key. */
 function authHeaders(spec: ProviderSpec, env: EnvLike): Record<string, string> {
   const key = credentialFor(spec, env);
   if (!key) return {};
   const auth = spec.wire?.auth ?? DEFAULT_AUTH;
+  // Query-param auth carries no header; the transport appends the parameter.
+  if (auth.query && key.startsWith("AQ")) return {};
   return { [auth.header]: auth.scheme ? `${auth.scheme} ${key}` : key };
+}
+
+/** Query parameters the provider's auth style adds (Vertex express `key`). */
+function authQuery(spec: ProviderSpec, env: EnvLike, path: string): string {
+  const key = credentialFor(spec, env);
+  const auth = spec.wire?.auth ?? DEFAULT_AUTH;
+  // Vertex express keys ("AQ…") authenticate only as a query parameter;
+  // Gemini keys ("AIza…") authenticate only as the x-goog-api-key header.
+  if (!auth.query || !key || !key.startsWith("AQ")) return "";
+  const sep = path.includes("?") ? "&" : "?";
+  return `${sep}${auth.query}=${encodeURIComponent(key)}`;
 }
 
 /** The refusal for a provider that has no key under any of its names. */
 function missingCredential(spec: ProviderSpec): string {
   const keys = credentialKeysFor(spec);
-  const names = keys.length > 1 ? `${keys.slice(0, -1).join(", ")} or ${keys[keys.length - 1]}` : keys[0];
+  const names =
+    keys.length > 1
+      ? `${keys.slice(0, -1).join(", ")} or ${keys[keys.length - 1]}`
+      : keys[0];
   return `${names} not configured — set it or submit against the mock provider`;
 }
 
 type Ready = { spec: ProviderSpec; settings: WireSettings };
+
+const MAX_RUNWAY_DATA_URI_SOURCE_BYTES = 3_300_000;
+
+/**
+ * Add the approved server-side presenter reference to a Runway image-to-video
+ * request. The browser never supplies a path and never receives the source
+ * bytes, so a caller cannot turn this into an arbitrary file reader.
+ */
+async function withPrivateRunwayImage(req: SubmitRequest, env: EnvLike): Promise<SubmitRequest> {
+  if (req.provider !== "runway" || req.options?.mode !== "image-to-video") return req;
+
+  const configured = String(env.EDITFORGE_RUNWAY_CHARACTER_FILE ?? "").trim();
+  if (!configured) {
+    throw new Error(
+      "EDITFORGE_RUNWAY_CHARACTER_FILE is not configured. Presenter B-roll requires the approved private reference"
+    );
+  }
+
+  const extension = path.extname(configured).toLowerCase();
+  const mime = extension === ".png" ? "image/png" : extension === ".jpg" || extension === ".jpeg" ? "image/jpeg" : extension === ".webp" ? "image/webp" : "";
+  if (!mime) throw new Error("Presenter reference must be PNG, JPEG, or WebP");
+
+  const info = await stat(configured);
+  if (!info.isFile()) throw new Error("Presenter reference is not a regular file");
+  if (info.size > MAX_RUNWAY_DATA_URI_SOURCE_BYTES) {
+    throw new Error("Presenter reference is too large for a safe Runway data URI; keep the source at or below 3.3 MB");
+  }
+
+  const bytes = await readFile(configured);
+  return {
+    ...req,
+    options: {
+      ...(req.options ?? {}),
+      promptImage: `data:${mime};base64,${bytes.toString("base64")}`,
+    },
+  };
+}
 
 /**
  * Everything that must hold before a request is worth making.
@@ -105,12 +179,19 @@ type Ready = { spec: ProviderSpec; settings: WireSettings };
  * provider does not accept, or nowhere to put returned bytes are all cheaper to
  * catch here than after the provider has been paid.
  */
-function prepare(req: SubmitRequest, env: EnvLike): Ready | { error: string; mode: ProviderMode } {
+function prepare(
+  req: SubmitRequest,
+  env: EnvLike,
+): Ready | { error: string; mode: ProviderMode } {
   const spec = findProvider(req.provider);
-  if (!spec) return { error: `Unknown provider "${req.provider}"`, mode: "mock" };
+  if (!spec)
+    return { error: `Unknown provider "${req.provider}"`, mode: "mock" };
 
   if (spec.kind !== req.kind && spec.id !== "mock") {
-    return { error: `Provider ${spec.id} does not serve ${req.kind} work`, mode: "mock" };
+    return {
+      error: `Provider ${spec.id} does not serve ${req.kind} work`,
+      mode: "mock",
+    };
   }
   if (spec.envKey && !credentialFor(spec, env)) {
     return { error: missingCredential(spec), mode: "live" };
@@ -121,19 +202,25 @@ function prepare(req: SubmitRequest, env: EnvLike): Ready | { error: string; mod
       mode: "live",
     };
   }
-  if (spec.wire.binary && !artifactStoreConfigured()) {
+  if ((spec.wire.binary || spec.wire.jsonMedia) && !artifactStoreConfigured()) {
     return {
       error: `${spec.label} answers with the media itself and EDITFORGE_ARTIFACT_DIR is not set, so there is nowhere to keep it — configure the artifact store or run against mock`,
       mode: "live",
     };
   }
 
-  const resolved = spec.wire.settings?.(env, req) ?? { ok: true as const, value: {} };
-  if (!resolved.ok) return { error: `${spec.label}: ${resolved.error}`, mode: "live" };
+  const resolved = spec.wire.settings?.(env, req) ?? {
+    ok: true as const,
+    value: {},
+  };
+  if (!resolved.ok)
+    return { error: `${spec.label}: ${resolved.error}`, mode: "live" };
   return { spec, settings: resolved.value };
 }
 
-export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult> {
+export async function submitToProvider(
+  req: SubmitRequest,
+): Promise<SubmitResult> {
   const spec = findProvider(req.provider);
 
   if (spec?.id === "mock") {
@@ -147,26 +234,47 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
     };
   }
 
-  const ready = prepare(req, process.env);
+  let hydrated = req;
+  try {
+    hydrated = await withPrivateRunwayImage(req, process.env);
+  } catch (err) {
+    return {
+      ok: false,
+      provider: spec?.id ?? req.provider,
+      mode: "live",
+      error: `Runway: ${(err as Error).message}`,
+    };
+  }
+
+  const ready = prepare(hydrated, process.env);
   if ("error" in ready) {
-    return { ok: false, provider: spec?.id ?? req.provider, mode: ready.mode, error: ready.error };
+    return {
+      ok: false,
+      provider: spec?.id ?? req.provider,
+      mode: ready.mode,
+      error: ready.error,
+    };
   }
   const { settings } = ready;
   const wire = ready.spec.wire!;
 
   try {
-    const res = await fetch(`${ready.spec.endpoint}${wire.submitPath(req, settings)}`, {
-      method: "POST",
-      headers: {
-        ...authHeaders(ready.spec, process.env),
-        "Content-Type": "application/json",
-        // Providers that honour it will dedupe a retried submit for us.
-        "Idempotency-Key": req.idempotencyKey,
-        ...(wire.headers ?? {}),
+    const res = await fetch(
+      `${endpointFor(ready.spec, process.env)}${wire.submitPath(hydrated, settings)}${authQuery(ready.spec, process.env, wire.submitPath(hydrated, settings))}`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders(ready.spec, process.env),
+          "Content-Type": "application/json",
+          // Providers that honour it will dedupe a retried submit for us.
+          "Idempotency-Key": req.idempotencyKey,
+          ...(wire.headers ?? {}),
+        },
+        body: JSON.stringify(wire.buildBody(hydrated, settings)),
+        cache: "no-store",
+        signal: AbortSignal.timeout(PROVIDER_SUBMIT_TIMEOUT_MS),
       },
-      body: JSON.stringify(wire.buildBody(req, settings)),
-      cache: "no-store",
-    });
+    );
     if (!res.ok) {
       return {
         ok: false,
@@ -187,7 +295,7 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
         stored = await storeArtifact({
           bytes,
           extension: wire.binary.extension,
-          prefix: `${ready.spec.id}-${req.kind}`,
+          prefix: `${ready.spec.id}-${hydrated.kind}`,
         });
       } catch (err) {
         // Deliberately not inside the outer catch: the provider answered, and
@@ -212,10 +320,45 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
     }
 
     const data = (await res.json()) as { id?: string; task_id?: string };
+    if (wire.jsonMedia) {
+      const base64 = wire.jsonMedia.readBase64(data);
+      if (
+        !base64 ||
+        base64.length > 40_000_000 ||
+        !/^[A-Za-z0-9+/=\r\n]+$/.test(base64)
+      )
+        return {
+          ok: false,
+          provider: ready.spec.id,
+          mode: "live",
+          error: "Provider did not return a valid image.",
+        };
+      const stored = await storeArtifact({
+        bytes: Buffer.from(base64, "base64"),
+        extension: wire.jsonMedia.extension,
+        prefix: `${ready.spec.id}-${req.kind}`,
+      });
+      return {
+        ok: true,
+        provider: ready.spec.id,
+        mode: "live",
+        externalId: stored.name,
+        state: "succeeded",
+        result: stored.url,
+        note: "Generated image stored. Awaiting human review.",
+      };
+    }
     const externalId =
-      wire.readSubmitId?.(data) ?? (typeof data.id === "string" ? data.id : undefined) ?? data.task_id;
+      wire.readSubmitId?.(data) ??
+      (typeof data.id === "string" ? data.id : undefined) ??
+      data.task_id;
     if (!externalId) {
-      return { ok: false, provider: ready.spec.id, mode: "live", error: `${ready.spec.label} returned no task id` };
+      return {
+        ok: false,
+        provider: ready.spec.id,
+        mode: "live",
+        error: `${ready.spec.label} returned no task id`,
+      };
     }
     return {
       ok: true,
@@ -226,13 +369,27 @@ export async function submitToProvider(req: SubmitRequest): Promise<SubmitResult
       note: `Submitted to ${ready.spec.label}`,
     };
   } catch (err) {
-    return { ok: false, provider: ready.spec.id, mode: "live", error: `${ready.spec.label} unreachable: ${(err as Error).message}` };
+    return {
+      ok: false,
+      provider: ready.spec.id,
+      mode: "live",
+      error: `${ready.spec.label} unreachable: ${(err as Error).message}`,
+    };
   }
 }
 
-export async function pollProvider(provider: string, externalId: string): Promise<PollResult> {
+export async function pollProvider(
+  provider: string,
+  externalId: string,
+): Promise<PollResult> {
   const spec = findProvider(provider);
-  if (!spec) return { ok: false, provider, mode: "mock", error: `Unknown provider "${provider}"` };
+  if (!spec)
+    return {
+      ok: false,
+      provider,
+      mode: "mock",
+      error: `Unknown provider "${provider}"`,
+    };
 
   if (spec.id === "mock") {
     // The offline path settles immediately and says plainly that it produced
@@ -247,10 +404,20 @@ export async function pollProvider(provider: string, externalId: string): Promis
   }
 
   if (spec.envKey && !credentialFor(spec, process.env)) {
-    return { ok: false, provider: spec.id, mode: "live", error: `${credentialKeysFor(spec)[0]} not configured` };
+    return {
+      ok: false,
+      provider: spec.id,
+      mode: "live",
+      error: `${credentialKeysFor(spec)[0]} not configured`,
+    };
   }
   if (!spec.endpoint || !spec.wire) {
-    return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} has no implemented API shape yet` };
+    return {
+      ok: false,
+      provider: spec.id,
+      mode: "live",
+      error: `${spec.label} has no implemented API shape yet`,
+    };
   }
 
   // A binary provider finished at submit time. The work is the stored file, and
@@ -267,19 +434,28 @@ export async function pollProvider(provider: string, externalId: string): Promis
   }
 
   if (!spec.wire.pollPath) {
-    return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} has no poll route` };
+    return {
+      ok: false,
+      provider: spec.id,
+      mode: "live",
+      error: `${spec.label} has no poll route`,
+    };
   }
 
   try {
-    const res = await fetch(`${spec.endpoint}${spec.wire.pollPath(externalId)}`, {
-      headers: {
-        ...authHeaders(spec, process.env),
-        // The version header is required on every request, polls included — a
-        // poll that omitted it would 400 just as the submit did.
-        ...(spec.wire.headers ?? {}),
+    const res = await fetch(
+      `${endpointFor(spec, process.env)}${spec.wire.pollPath(externalId)}${authQuery(spec, process.env, spec.wire.pollPath(externalId))}`,
+      {
+        headers: {
+          ...authHeaders(spec, process.env),
+          // The version header is required on every request, polls included — a
+          // poll that omitted it would 400 just as the submit did.
+          ...(spec.wire.headers ?? {}),
+        },
+        cache: "no-store",
+        signal: AbortSignal.timeout(PROVIDER_POLL_TIMEOUT_MS),
       },
-      cache: "no-store",
-    });
+    );
     if (!res.ok) {
       return {
         ok: false,
@@ -289,7 +465,19 @@ export async function pollProvider(provider: string, externalId: string): Promis
       };
     }
     const data = await res.json();
-    const reading: PollReading = spec.wire.readPoll?.(data) ?? defaultPoll(data);
+    const reading: PollReading =
+      spec.wire.readPoll?.(data) ?? defaultPoll(data);
+    if (reading.state === "succeeded" && reading.result && spec.wire.storeResult) {
+      const kept = await keepResult(spec, reading.result, spec.wire.storeResult.maxBytes);
+      return {
+        ok: true,
+        provider: spec.id,
+        mode: "live",
+        state: reading.state,
+        result: kept.url,
+        note: kept.note,
+      };
+    }
     return {
       ok: true,
       provider: spec.id,
@@ -299,13 +487,82 @@ export async function pollProvider(provider: string, externalId: string): Promis
       note: reading.note,
     };
   } catch (err) {
-    return { ok: false, provider: spec.id, mode: "live", error: `${spec.label} unreachable: ${(err as Error).message}` };
+    return {
+      ok: false,
+      provider: spec.id,
+      mode: "live",
+      error: `${spec.label} unreachable: ${(err as Error).message}`,
+    };
+  }
+}
+
+/** Media types `keepResult` will store, and the artifact file name they map to. */
+const KEPT_MEDIA_TYPES: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/webp": ".webp",
+  // Videos come back from Runway, Kling and Veo the same way stills do — a
+  // finished render that only the provider's own (expiring) URL points at.
+  // Without these entries the studio kept every paid video as a link that dies.
+  "video/mp4": ".mp4",
+  "video/webm": ".webm",
+  "video/quicktime": ".mov",
+};
+
+/**
+ * Copy a finished provider file into the artifact store. The provider has
+ * already been paid by now, so a failure here never fails the job: it keeps
+ * the provider URL and says plainly that the file was not stored.
+ */
+async function keepResult(
+  spec: ProviderSpec,
+  url: string,
+  maxBytes: number,
+): Promise<{ url: string; note: string }> {
+  const unkept = (why: string) => ({
+    url,
+    note: `${spec.label} finished, but the file was not stored (${why}). The provider link may expire; download it or render again.`,
+  });
+  if (!artifactStoreConfigured()) return unkept("no artifact store configured");
+  if (!/^https:\/\//.test(url)) return unkept("the result is not an HTTPS URL");
+  try {
+    const res = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(PROVIDER_POLL_TIMEOUT_MS),
+      // A provider may name a download URL on its own endpoint that still
+      // expects the credential (Veo's file URIs do). Attaching the same auth
+      // when the URL shares the endpoint origin is free and correct.
+      headers: (() => {
+        const base = endpointFor(spec, process.env);
+        if (!base || !url.startsWith(base)) return {};
+        return authHeaders(spec, process.env);
+      })(),
+    });
+    if (!res.ok) return unkept(`download answered HTTP ${res.status}`);
+    const type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const extension = KEPT_MEDIA_TYPES[type];
+    if (!extension) return unkept(`unexpected content type ${type || "none"}`);
+    const declared = Number(res.headers.get("content-length") ?? 0);
+    if (declared > maxBytes) return unkept("the file is larger than the store allows");
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.byteLength > maxBytes) return unkept("the file is larger than the store allows");
+    const stored = await storeArtifact({ bytes, extension, prefix: `${spec.id}-${spec.kind}` });
+    return {
+      url: stored.url,
+      note: `${spec.label} stored as ${stored.name} (sha256 ${stored.sha256.slice(0, 12)}). Awaiting human review.`,
+    };
+  } catch (err) {
+    return unkept((err as Error).message);
   }
 }
 
 /** The common `{status, output, failure}` shape, which Runway speaks. */
 function defaultPoll(data: unknown): PollReading {
-  const body = (data ?? {}) as { status?: string; output?: string | string[]; failure?: string };
+  const body = (data ?? {}) as {
+    status?: string;
+    output?: string | string[];
+    failure?: string;
+  };
   const state = normalizeState(body.status);
   const output = Array.isArray(body.output) ? body.output[0] : body.output;
   return {

@@ -68,6 +68,25 @@ async function withServer(t, env, fetchImpl) {
   return `http://127.0.0.1:${address.port}`;
 }
 
+test("health fails closed when core provider configuration is missing", async (t) => {
+  const base = await withServer(t, {}, async () => { throw new Error("provider must not be called"); });
+  const response = await fetch(`${base}/health`);
+  const body = await response.json();
+  assert.equal(response.status, 503);
+  assert.equal(body.status, "configuration_required");
+  assert.equal(body.registryReady, false);
+});
+
+test("health is ready with a valid registry and adapter token", async (t) => {
+  const { env } = await fixture(t);
+  const base = await withServer(t, env, async () => { throw new Error("provider must not be called"); });
+  const response = await fetch(`${base}/health`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.status, "ready");
+  assert.equal(body.registryReady, true);
+});
+
 test("voice adapter locks identity and stores hashed ElevenLabs output", async (t) => {
   const { env } = await fixture(t);
   const fetchImpl = async (url, init) => {

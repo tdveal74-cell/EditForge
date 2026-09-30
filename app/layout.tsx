@@ -31,7 +31,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="flex min-h-screen flex-col bg-surface font-sans text-navy antialiased">
+      <body className="flex min-h-screen max-w-full overflow-x-hidden flex-col bg-surface font-sans text-navy antialiased">
         <PwaRegister />
         <div className="studio-atmosphere" aria-hidden="true">
           <span className="atmosphere-frame atmosphere-frame-a" />

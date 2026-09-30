@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DELIVERABLES } from "@/lib/pipeline";
+import { DELIVERABLES, buildExportMatrix } from "@/lib/pipeline";
+import { downloadText } from "@/lib/download";
 import type { Cut } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Label, Select, Output } from "@/components/ui/field";
@@ -45,9 +46,24 @@ export default function ExportPage() {
   return (
     <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
       <PageHeader
-        eyebrow="Deliverables"
+        eyebrow="Board"
         title="Export"
-        description="Resolve deliver + CapCut format matrix. Anything that isn't a proxy needs a recorded rubric pass first — that gate lives on the cut, not on this page."
+        description="Format matrix as a file. Not a live encoder, not Resolve deliver, not CapCut. The encode queue is /jobs. Anything that isn't a proxy needs a recorded rubric pass — that gate lives on the cut."
+        actions={
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() =>
+              downloadText(
+                `editforge-export-matrix-${format}.json`,
+                buildExportMatrix(DELIVERABLES, format),
+                "application/json",
+              )
+            }
+          >
+            Download matrix
+          </Button>
+        }
       />
 
       <ul className="mt-10 space-y-2">

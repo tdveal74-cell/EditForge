@@ -22,6 +22,7 @@ import {
 } from "./handoff";
 import { SAMPLE_TIMELINE } from "./timeline";
 import type { JobKind } from "./jobs";
+import { getAudioLaw } from "./audiostore";
 import { getProject, listProjects, saveProject } from "@/modules/canvas/server-store";
 import { newProject } from "@/modules/canvas/model";
 import { renderPlan } from "@/modules/canvas/render";
@@ -543,7 +544,7 @@ export const TOOLS: Tool[] = [
           return {
             filename: `${slug(cut.title) || cut.id}_stems_${target.id}.csv`,
             assemblySource,
-            content: buildStemSheet({ title: cut.title, clips, target }),
+            content: buildStemSheet({ title: cut.title, clips, target, hierarchy: await getAudioLaw() }),
           };
         }
 

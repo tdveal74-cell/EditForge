@@ -14,7 +14,7 @@ export type QualityTier = "draft" | "social" | "broadcast-intent";
  */
 const STRENGTHS: Record<GenProvider, string> = {
   "xai-video": "Grok Imagine · text or image to video",
-  runway: "Gen-4.5 · motion brush · restyle · extend",
+  runway: "Text-to-video only (Gen-4.5). Motion brush, restyle, and extend are not wired.",
   kling: "Longer takes · strong motion coherence",
   veo: "High fidelity · cinematic intent",
   mock: "Plan + QA only — no cloud spend",

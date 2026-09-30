@@ -11,7 +11,7 @@ Gen models = short clips. Long-form = chapters → segments → stitch → grade
 | Feature | ~120 min | NLE + farm |
 
 ## API
-`POST /api/longform/plan` — rubric required for master.
+`POST /api/longform/plan` — plans the chapters in the body. Rubric pass is read from a named cut in the store, never from `body.rubricPass`.
 
 ## UI
 `/longform`

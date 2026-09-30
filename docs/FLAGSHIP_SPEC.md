@@ -1,6 +1,6 @@
-# EditForge Flagship Spec — AAA
+# EditForge design contract
 
-The design contract for every surface in the Studio OS. Same AAA tokens as Meta Supreme.
+The design contract for every surface in the EditForge control plane. Navy / amber / surface tokens — the same AAA contrast floor as Meta Supreme. Not a Studio OS.
 Restraint is house law: the spec exists so nothing has to be decided twice — and nothing
 gets louder over time.
 

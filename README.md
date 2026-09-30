@@ -1,6 +1,6 @@
 # EditForge
 
-**Flagship production studio OS** — Ultra Meta Supreme AAA.
+Post-production control plane. Ready is never Live. Captions, titles, audio, and longform persist. Other boards still seed. Bridges emit files.
 
 Departments · long-form stitch · gen video · voice · avatar · stock · rubric ship gate.
 
@@ -10,7 +10,7 @@ npm install && npm test && npm run dev
 
 Start at **`/studio`**.
 
-Run hosted on Vercel or self-host the complete web + worker + provider stack with
+Run hosted on Vercel or self-host the web + worker + provider stack with
 `docker compose up -d --build`. DEVON control, self-hosting, clone voice, full motion,
 and long/short/micro-drama execution are documented in `docs/DEVON_EXECUTION.md`.
 

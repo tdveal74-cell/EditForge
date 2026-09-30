@@ -30,3 +30,20 @@ export const SAMPLE_TIMELINE: TimelineClip[] = [
 export function totalDuration(clips: TimelineClip[]): number {
   return clips.reduce((max, c) => Math.max(max, c.startSec + c.durationSec), 0);
 }
+
+/** Read-only assembly as a file. Not an NLE. */
+export function buildAssemblySketch(clips: TimelineClip[]): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "assembly-sketch",
+        notice:
+          "Read-only assembly sketch as a file. Not an NLE, not Premiere, not Resolve, not DaVinci. You cannot trim here.",
+        durationSec: totalDuration(clips),
+        clips,
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}

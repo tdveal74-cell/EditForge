@@ -23,3 +23,26 @@ export type Asset = {
   location?: string;
   addedAt: string;
 };
+
+/** Catalog index as a file. Names and filed paths — not Drive, not S3, not Frame.io. */
+export function buildAssetIndex(assets: Asset[]): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "asset-index",
+        notice:
+          "Catalog index of names and filed paths. Not Drive, not S3, not Frame.io. Bytes are not here.",
+        assets: assets.map((a) => ({
+          id: a.id,
+          name: a.name,
+          type: a.type,
+          tags: a.tags,
+          location: a.location ?? "",
+          addedAt: a.addedAt,
+        })),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}

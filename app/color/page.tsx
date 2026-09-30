@@ -69,7 +69,7 @@ export default function ColorPage() {
       <PageHeader
         eyebrow="Color"
         title="Restraint grade"
-        description="DaVinci-inspired controls inside the EditForge envelope. Subtle only — the grade protects the image, it does not restage it."
+        description="Restraint envelope sliders on a still. Not Resolve, not a live grade engine. Subtle only — the grade protects the image, it does not restage it."
       />
 
       {/* The grade is shown before it is described. A number that claims to be

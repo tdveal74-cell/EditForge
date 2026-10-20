@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { audioGain, frameAt, isMediaAsset, mediaDuration, SH135_HASH, snapTime, SOURCE_FACTS, type MediaAsset } from "./media-model.ts";
+import { activeMediaAudio, audioGain, frameAt, isMediaAsset, mediaDuration, SH135_HASH, snapTime, SOURCE_FACTS, trackAudible, type MediaAsset, type Track } from "./media-model.ts";
 
 test("30 fps retains all EP01 frame boundaries across the 20,877-frame cut", () => {
   for (let frame = 0; frame <= 20877; frame += 1) {
@@ -55,4 +55,17 @@ test("imported media metadata refuses invalid timebases and detached proxy bindi
   const preview = { id: `media-${proxyHash}`, sha256: proxyHash, bytes: 50, mime: "video/webm", duration: 8, sourceSha256: sha };
   assert.equal(isMediaAsset({ ...asset, preview }), true);
   assert.equal(isMediaAsset({ ...asset, preview: { ...preview, sourceSha256: proxyHash } }), false);
+});
+
+test("hidden picture audio is excluded while independent audio respects solo", () => {
+  const clips = [
+    { id: "hidden-picture", mediaId: "old", track: 0 as Track, start: 0, duration: 8 },
+    { id: "visible-picture", mediaId: "new", track: 0 as Track, start: 1, duration: 8 },
+    { id: "independent-read", mediaId: "read", track: 3 as Track, start: 0, duration: 9 },
+  ];
+  assert.deepEqual(activeMediaAudio(clips, 3, "visible-picture").map((clip) => clip.id), ["visible-picture", "independent-read"]);
+  assert.deepEqual(activeMediaAudio(clips, 3, "visible-picture", 3).map((clip) => clip.id), ["independent-read"]);
+  assert.equal(trackAudible(2, 3), false);
+  assert.equal(trackAudible(2, 2), true);
+  assert.equal(trackAudible(2, null), true);
 });

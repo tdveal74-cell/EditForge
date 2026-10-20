@@ -38,7 +38,7 @@ during every Docker build. No dependency versions or lockfile were changed.
 
 ## Verification
 
-`npm run test:media` runs ten tests covering every frame of the 20,877-frame
+`npm run test:media` runs eleven tests covering every frame of the 20,877-frame
 timebase, protected frame anchors, 24-to-30 source mapping, source-end bounds,
 gain/fade endpoints, ZIP round-trip/tamper/path checks, and failed-save/read safety.
 Python's independent `zipfile` reader also verified the emitted ZIP and its CRCs.

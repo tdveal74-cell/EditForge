@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mediaUrl } from "@/lib/studio/media-files";
-import { audioGain, type MediaAsset } from "@/lib/studio/media-model";
-import type { Clip, Project } from "@/lib/studio/model";
+import { activeMediaAudio, audioGain, type MediaAsset } from "@/lib/studio/media-model";
+import { clipAt, type Clip, type Project } from "@/lib/studio/model";
 
 function useSource(id: string) {
   const [state, setState] = useState<{ url?: string; error?: string }>({});
@@ -71,8 +71,7 @@ function MediaRead({ clip, asset, time, playing }: { clip: Clip; asset: MediaAss
 
 /** Real-media reads use separate players; a silent picture cannot mute A1–A5. */
 export function MediaAudio({ project, time, playing }: { project: Project; time: number; playing: boolean }) {
-  const active = project.clips.filter((clip) => clip.mediaId && !clip.muted && time >= clip.start && time < clip.start + clip.duration
-    && (project.soloTrack == null || clip.track === project.soloTrack));
+  const active = activeMediaAudio(project.clips, time, clipAt(project.clips, 0, time)?.id ?? null, project.soloTrack);
   return <>{active.map((clip) => {
     const asset = project.media?.find((item) => item.id === clip.mediaId);
     return asset && asset.kind !== "image" && asset.hasAudio !== false ? <MediaRead key={clip.id} clip={clip} asset={asset} time={time} playing={playing} /> : null;

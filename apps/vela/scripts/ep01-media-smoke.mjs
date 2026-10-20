@@ -77,6 +77,11 @@ try {
   assert.equal(imported.project.media[0].hasAudio, false);
   assert.equal(imported.project.media[1].hasAudio, true);
   assert.equal(imported.project.media[2].locked, true);
+  const scoreBlockedBySolo = await page.evaluate(async () => {
+    const { useStudio } = await import("/src/lib/studio/store.ts"); const s = useStudio.getState();
+    s.setSoloTrack(3); s.toggleScore(); const blocked = !useStudio.getState().scoreOn; s.setSoloTrack(null); return blocked;
+  });
+  assert.equal(scoreBlockedBySolo, true);
   for (let i = 0; i < 2; i += 1) {
     const row = page.locator(`[data-media-source="media-${hashes[i]}"]`);
     await row.locator('input[type="file"]').setInputFiles(proxies[i]);

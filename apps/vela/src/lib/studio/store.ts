@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { studioStorage } from "./safe-storage";
-import { mediaDuration, snapTime, type FrameRate, type MediaAsset, type Track } from "./media-model";
+import { mediaDuration, snapTime, trackAudible, type FrameRate, type MediaAsset, type Track } from "./media-model";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { setStepListener, startLoop, stopLoop } from "@/lib/studio/audio";
 import { planFloor, type FloorMark, type FloorSeat, type FloorStep } from "@/lib/studio/floor";
@@ -677,6 +677,10 @@ export const useStudio = create<Studio>()(
         if (get().scoreOn) {
           stopLoop();
           set({ scoreOn: false });
+          return;
+        }
+        if (!trackAudible(2, active(get()).soloTrack)) {
+          get().flash("The score is excluded by the current solo track. Clear solo before starting the score.");
           return;
         }
         void startLoop(() => active(get()).score);

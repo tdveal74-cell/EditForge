@@ -63,3 +63,14 @@ export function audioGain(db: number, localTime: number, duration: number, fadeI
     fadeOut > 0 ? Math.max(0, (duration - localTime) / fadeOut) : 1);
   return 10 ** (db / 20) * fade;
 }
+
+export function trackAudible(track: Track, soloTrack?: Track | null): boolean {
+  return soloTrack == null || soloTrack === track;
+}
+
+export function activeMediaAudio<T extends { id: string; mediaId?: string; muted?: boolean; track: Track; start: number; duration: number }>(
+  clips: T[], time: number, visiblePictureId: string | null, soloTrack?: Track | null,
+): T[] {
+  return clips.filter((clip) => clip.mediaId && !clip.muted && time >= clip.start && time < clip.start + clip.duration
+    && (clip.track !== 0 || clip.id === visiblePictureId) && trackAudible(clip.track, soloTrack));
+}

@@ -1,0 +1,293 @@
+{
+  "inspected": "2026-10-20",
+  "host": "srv1936193",
+  "method": "Read-only PostgreSQL inspection of workflow_entity and active workflow_history; no credentials decrypted",
+  "rows": [
+    {
+      "workflows": 185,
+      "active": 56,
+      "activeMissingHistory": 0
+    },
+    {
+      "id": "7UB8YzlsjPcJcKp6",
+      "name": "Ops: New Voice + HeyGen Probe (throwaway 2026-09-15)",
+      "active": false,
+      "archived": true,
+      "node": "HeyGen create video",
+      "method": "POST",
+      "url": "https://api.heygen.com/v3/videos",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "y7PCEQcNaSQb6c7i",
+      "name": "THROWAWAY HeyGen credential probe 2026-09-16",
+      "active": false,
+      "archived": true,
+      "node": "A: avatars via HeyGen cred",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/avatars",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "y7PCEQcNaSQb6c7i",
+      "name": "THROWAWAY HeyGen credential probe 2026-09-16",
+      "active": false,
+      "archived": true,
+      "node": "B: avatars via HEYGEN_API_KEY cred",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/avatars",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "y7PCEQcNaSQb6c7i",
+      "name": "THROWAWAY HeyGen credential probe 2026-09-16",
+      "active": false,
+      "archived": true,
+      "node": "A: remaining quota",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/user/remaining_quota",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "y7PCEQcNaSQb6c7i",
+      "name": "THROWAWAY HeyGen credential probe 2026-09-16",
+      "active": false,
+      "archived": true,
+      "node": "B: remaining quota",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/user/remaining_quota",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "JfCWMIitV7SgifAr",
+      "name": "THROWAWAY HeyGen docs probe 2026-09-16",
+      "active": false,
+      "archived": true,
+      "node": "Fetch llms.txt",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/users/me",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "ONWxd5HtuLZ6loM3",
+      "name": "ONE-OFF HeyGen read-only probe",
+      "active": false,
+      "archived": true,
+      "node": "Quota via HEYGEN_API_KEY",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/user/remaining_quota",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "ONWxd5HtuLZ6loM3",
+      "name": "ONE-OFF HeyGen read-only probe",
+      "active": false,
+      "archived": true,
+      "node": "Avatar via HEYGEN_API_KEY",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/avatar/1b799c8689a54ebcb6a55de37f92488c/details",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "ONWxd5HtuLZ6loM3",
+      "name": "ONE-OFF HeyGen read-only probe",
+      "active": false,
+      "archived": true,
+      "node": "Quota via HeyGen",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/user/remaining_quota",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "ONWxd5HtuLZ6loM3",
+      "name": "ONE-OFF HeyGen read-only probe",
+      "active": false,
+      "archived": true,
+      "node": "Avatar via HeyGen",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/avatar/1b799c8689a54ebcb6a55de37f92488c/details",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "wWZYwUkjQVUxZvn5",
+      "name": "ONE-OFF HeyGen v3 balance probe",
+      "active": false,
+      "archived": true,
+      "node": "HeyGen v3 users me",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/users/me",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "HSSPF9YMAZFQ2ZU7",
+      "name": "ONE-OFF HeyGen looks probe",
+      "active": false,
+      "archived": true,
+      "node": "HeyGen v3 my groups",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/avatars/groups",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "HSSPF9YMAZFQ2ZU7",
+      "name": "ONE-OFF HeyGen looks probe",
+      "active": false,
+      "archived": true,
+      "node": "HeyGen v3 my looks",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/avatars/looks",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "AwgBhnsvgqq0oPcN",
+      "name": "TEMP Claude 5 Oct: HeyGen landscape look test",
+      "active": false,
+      "archived": true,
+      "node": "Balance Before",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/users/me",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "AwgBhnsvgqq0oPcN",
+      "name": "TEMP Claude 5 Oct: HeyGen landscape look test",
+      "active": false,
+      "archived": true,
+      "node": "Generate Look",
+      "method": "POST",
+      "url": "https://api.heygen.com/v3/avatars",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "AwgBhnsvgqq0oPcN",
+      "name": "TEMP Claude 5 Oct: HeyGen landscape look test",
+      "active": false,
+      "archived": true,
+      "node": "Status A",
+      "method": "GET",
+      "url": "=https://api.heygen.com/v3/avatars/looks/{{ (function(d){ d = d || {}; return (d.avatar_item && d.avatar_item.id) || (d.look && d.look.id) || (d.avatar_look && d.avatar_look.id) || d.id || 'none'; })($('Generate Look').item.json.body.data) }}",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "AwgBhnsvgqq0oPcN",
+      "name": "TEMP Claude 5 Oct: HeyGen landscape look test",
+      "active": false,
+      "archived": true,
+      "node": "Status B",
+      "method": "GET",
+      "url": "=https://api.heygen.com/v3/avatars/looks/{{ (function(d){ d = d || {}; return (d.avatar_item && d.avatar_item.id) || (d.look && d.look.id) || (d.avatar_look && d.avatar_look.id) || d.id || 'none'; })($('Generate Look').item.json.body.data) }}",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "AwgBhnsvgqq0oPcN",
+      "name": "TEMP Claude 5 Oct: HeyGen landscape look test",
+      "active": false,
+      "archived": true,
+      "node": "Balance After",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/users/me",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "br4mVVm6vmRkKCqY",
+      "name": "TEMP Claude 5 Oct: HeyGen look status check",
+      "active": false,
+      "archived": true,
+      "node": "Get Look",
+      "method": "GET",
+      "url": "=https://api.heygen.com/v3/avatars/looks/{{ $json.id }}",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "br4mVVm6vmRkKCqY",
+      "name": "TEMP Claude 5 Oct: HeyGen look status check",
+      "active": false,
+      "archived": true,
+      "node": "Balance Now",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/users/me",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "kxSUUUGk70kVytbC",
+      "name": "TEMP Claude 5 Oct: delete stranger looks, reference look test",
+      "active": false,
+      "archived": true,
+      "node": "Delete Look",
+      "method": "DELETE",
+      "url": "=https://api.heygen.com/v3/avatars/looks/{{ $json.id }}",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "kxSUUUGk70kVytbC",
+      "name": "TEMP Claude 5 Oct: delete stranger looks, reference look test",
+      "active": false,
+      "archived": true,
+      "node": "Generate Ref Look",
+      "method": "POST",
+      "url": "https://api.heygen.com/v3/avatars",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "WI86enetkmku5Xhm",
+      "name": "TEMP Claude 5 Oct: generate 9 landscape looks",
+      "active": false,
+      "archived": true,
+      "node": "Generate Look",
+      "method": "POST",
+      "url": "https://api.heygen.com/v3/avatars",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "z1D6UyO95VOmDfsh",
+      "name": "TEMP Claude 5 Oct: avatar_iii engine test",
+      "active": false,
+      "archived": false,
+      "node": "Balance",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/users/me",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "z1D6UyO95VOmDfsh",
+      "name": "TEMP Claude 5 Oct: avatar_iii engine test",
+      "active": false,
+      "archived": false,
+      "node": "Submit",
+      "method": "POST",
+      "url": "https://api.heygen.com/v3/videos",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "qCSPJ1naaB1NdcFQ",
+      "name": "ONE-OFF HeyGen read probe (inactive, archive after)",
+      "active": false,
+      "archived": true,
+      "node": "Me",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/users/me",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "qCSPJ1naaB1NdcFQ",
+      "name": "ONE-OFF HeyGen read probe (inactive, archive after)",
+      "active": false,
+      "archived": true,
+      "node": "Voices v3",
+      "method": "GET",
+      "url": "https://api.heygen.com/v3/voices",
+      "auth": "genericCredentialType"
+    },
+    {
+      "id": "qCSPJ1naaB1NdcFQ",
+      "name": "ONE-OFF HeyGen read probe (inactive, archive after)",
+      "active": false,
+      "archived": true,
+      "node": "Voices v2",
+      "method": "GET",
+      "url": "https://api.heygen.com/v2/voices",
+      "auth": "genericCredentialType"
+    }
+  ]
+}
+

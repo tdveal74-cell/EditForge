@@ -34,8 +34,8 @@ DEFAULT_REFERENCE = Path("/opt/editforge/secrets/tee-runway-clone-reference.png"
 DEFAULT_IDENTITY = "tee-identity-v1"
 CONTAINER_REFERENCE = "/run/secrets/tee-runway-clone-reference.png"
 ELEVENLABS_VOICES_URL = "https://api.elevenlabs.io/v2/voices"
-HEYGEN_AVATARS_URL = "https://api.heygen.com/v2/avatars"
-HEYGEN_VOICES_URL = "https://api.heygen.com/v2/voices"
+HEYGEN_AVATARS_URL = "https://api.heygen.com/v3/avatars/looks"
+HEYGEN_VOICES_URL = "https://api.heygen.com/v3/voices"
 STUDIO_VOICE_KEY = "ELEVENLABS_VOICE_ID"
 STUDIO_VOICE_PREFIX = "ELEVENLABS_VOICE_ID_"
 
@@ -300,47 +300,51 @@ def fetch_heygen(url: str, api_key: str, what: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _heygen_data(payload: dict[str, Any], key: str) -> list[dict[str, Any]]:
-    """HeyGen wraps every list in `data`; reading the root finds nothing."""
-    data = payload.get("data")
-    entries = data.get(key) if isinstance(data, dict) else None
-    return [entry for entry in entries or [] if isinstance(entry, dict)]
+def fetch_heygen_catalog(url: str, api_key: str, what: str, **filters: str) -> list[dict[str, Any]]:
+    """Read the complete v3 catalog or refuse; never offer a partial picker."""
+    entries: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    token: str | None = None
+    for _ in range(1000):
+        query = {"limit": "50", **filters}
+        if token:
+            query["token"] = token
+        payload = fetch_heygen(f"{url}?{urllib.parse.urlencode(query)}", api_key, what)
+        page = payload.get("data")
+        if not isinstance(page, list) or any(not isinstance(item, dict) for item in page):
+            raise SetupError(f"HeyGen {what} returned an invalid v3 catalog")
+        entries.extend(page)
+        if payload.get("has_more") is False:
+            return entries
+        token = payload.get("next_token")
+        if payload.get("has_more") is not True or not isinstance(token, str) or not token.strip() or token in seen:
+            raise SetupError(f"HeyGen {what} returned invalid pagination; selection was not saved")
+        seen.add(token)
+    raise SetupError(f"HeyGen {what} exceeded the catalog page limit")
 
 
 def fetch_heygen_avatars(api_key: str) -> list[dict[str, str]]:
-    """The avatar looks this key can render.
-
-    Only `avatars` — HeyGen also returns `talking_photos`, but the wire submits
-    `type: "avatar"` with an `avatar_id`, so offering a talking-photo id would
-    build a body the boundary does not implement.
-    """
-    avatars: list[dict[str, str]] = []
-    for avatar in _heygen_data(fetch_heygen(HEYGEN_AVATARS_URL, api_key, "avatar"), "avatars"):
-        avatar_id = str(avatar.get("avatar_id") or "").strip()
-        if avatar_id:
-            avatars.append(
-                {
-                    "avatar_id": avatar_id,
-                    "name": str(avatar.get("avatar_name") or "Unnamed avatar").strip(),
-                    "gender": str(avatar.get("gender") or "unknown"),
-                }
-            )
-    return avatars
+    """Render accepts a look id, never the parent avatar group's id."""
+    return [
+        {"avatar_id": str(item["id"]).strip(),
+         "name": str(item.get("name") or "Unnamed avatar").strip(),
+         "gender": str(item.get("gender") or "unknown")}
+        for item in fetch_heygen_catalog(HEYGEN_AVATARS_URL, api_key, "avatar")
+        if isinstance(item.get("id"), str) and item["id"].strip()
+    ]
 
 
 def fetch_heygen_voices(api_key: str) -> list[dict[str, str]]:
-    voices: list[dict[str, str]] = []
-    for voice in _heygen_data(fetch_heygen(HEYGEN_VOICES_URL, api_key, "voice"), "voices"):
-        voice_id = str(voice.get("voice_id") or "").strip()
-        if voice_id:
-            voices.append(
-                {
-                    "voice_id": voice_id,
-                    "name": str(voice.get("name") or "Unnamed voice").strip(),
-                    "language": str(voice.get("language") or "unknown"),
-                }
-            )
-    return voices
+    # v3 defaults to public. Include private clones, with explicit human selection.
+    voices: dict[str, dict[str, str]] = {}
+    for kind in ("public", "private"):
+        for item in fetch_heygen_catalog(HEYGEN_VOICES_URL, api_key, "voice", type=kind):
+            voice_id = item.get("voice_id")
+            if isinstance(voice_id, str) and voice_id.strip():
+                voices[voice_id] = {"voice_id": voice_id,
+                                    "name": str(item.get("name") or "Unnamed voice").strip(),
+                                    "language": str(item.get("language") or "unknown")}
+    return list(voices.values())
 
 
 def resolve_heygen_avatar(

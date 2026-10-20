@@ -2,6 +2,10 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
+import io
+import urllib.error
+import urllib.parse
 from pathlib import Path
 
 
@@ -151,16 +155,46 @@ class ProviderSetupTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 provider_setup.parse_args(["--skip-avatar", flag, "some-id"])
 
-    def test_heygen_lists_read_the_data_envelope(self):
-        # HeyGen wraps every list in `data`; reading the root finds nothing and
-        # the picker would look like a key with no avatars behind it.
-        avatars = provider_setup._heygen_data(
-            {"data": {"avatars": [{"avatar_id": "a1"}], "talking_photos": [{"id": "tp"}]}},
-            "avatars",
-        )
-        self.assertEqual(avatars, [{"avatar_id": "a1"}])
-        self.assertEqual(provider_setup._heygen_data({"avatars": [{"avatar_id": "a1"}]}, "avatars"), [])
-        self.assertEqual(provider_setup._heygen_data({"data": None}, "avatars"), [])
+    def test_v3_looks_paginate_and_use_look_not_group_id(self):
+        calls = []
+        def read(request, timeout):
+            calls.append(request)
+            query = urllib.parse.parse_qs(urllib.parse.urlsplit(request.full_url).query)
+            self.assertEqual(urllib.parse.urlsplit(request.full_url).path, "/v3/avatars/looks")
+            self.assertEqual(request.get_header("X-api-key"), "fixture-key")
+            self.assertNotIn("Authorization", request.headers)
+            page = {"data": [{"id": "look-2", "group_id": "group-1", "name": "Suit"}], "has_more": False} if query.get("token") else {"data": [{"id": "look-1", "name": "Casual"}], "has_more": True, "next_token": "a+b /"}
+            return io.StringIO(json.dumps(page))
+        with patch.object(provider_setup.urllib.request, "urlopen", side_effect=read):
+            result = provider_setup.fetch_heygen_avatars("fixture-key")
+        self.assertEqual([v["avatar_id"] for v in result], ["look-1", "look-2"])
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(urllib.parse.parse_qs(urllib.parse.urlsplit(calls[1].full_url).query)["token"], ["a+b /"])
+
+    def test_v3_voices_include_private_clones_without_default_selection(self):
+        def read(request, timeout):
+            parts = urllib.parse.urlsplit(request.full_url)
+            self.assertEqual(parts.path, "/v3/voices")
+            kind = urllib.parse.parse_qs(parts.query)["type"][0]
+            return io.StringIO(json.dumps({"data": [{"voice_id": kind, "name": kind}], "has_more": False}))
+        with patch.object(provider_setup.urllib.request, "urlopen", side_effect=read):
+            voices = provider_setup.fetch_heygen_voices("fixture-key")
+        self.assertEqual([v["voice_id"] for v in voices], ["public", "private"])
+        self.assertEqual(provider_setup.resolve_heygen_voice(voices, "private")["voice_id"], "private")
+
+    def test_v3_catalog_refuses_incomplete_or_looping_pagination(self):
+        for payload in [{"data": [], "has_more": True}, {"data": [], "has_more": True, "next_token": "same"}, {"data": {}}, {"data": [None]}]:
+            with self.subTest(payload=payload), patch.object(provider_setup.urllib.request, "urlopen", side_effect=lambda *a, **kw: io.StringIO(json.dumps(payload))):
+                with self.assertRaises(provider_setup.SetupError):
+                    provider_setup.fetch_heygen_avatars("fixture-key")
+
+    def test_catalog_auth_and_rate_errors_are_safe_and_never_retried(self):
+        for code in [401, 403, 429, 500]:
+            with self.subTest(code=code), patch.object(provider_setup.urllib.request, "urlopen", side_effect=urllib.error.HTTPError("https://api.heygen.com/v3/voices", code, "fixture-key", {}, None)) as transport:
+                with self.assertRaises(provider_setup.SetupError) as error:
+                    provider_setup.fetch_heygen_voices("fixture-key")
+                self.assertNotIn("fixture-key", str(error.exception))
+                self.assertEqual(transport.call_count, 1)
 
     def test_exact_heygen_avatar_must_be_available_to_key(self):
         avatars = [
@@ -199,6 +233,17 @@ class ProviderSetupTests(unittest.TestCase):
             env = provider_setup.read_env(env_path)
             self.assertEqual(env["HEYGEN_AVATAR_ID"], "tee-look")
             self.assertEqual(env["HEYGEN_VOICE_ID"], "vo-1")
+
+    def test_failed_voice_catalog_preserves_existing_bindings(self):
+        with tempfile.TemporaryDirectory() as directory:
+            env_path = Path(directory) / ".env"
+            original = "HEYGEN_AVATAR_ID=approved-look\nHEYGEN_VOICE_ID=approved-voice\n"
+            env_path.write_text(original)
+            args = provider_setup.parse_args(["--env", str(env_path), "--heygen-avatar-id", "new-look"])
+            with patch.object(provider_setup, "fetch_heygen_avatars", return_value=[{"avatar_id": "new-look", "name": "New"}]), patch.object(provider_setup, "fetch_heygen_voices", side_effect=provider_setup.SetupError("catalog unavailable")):
+                with self.assertRaises(provider_setup.SetupError):
+                    provider_setup.configure_avatar(args, "fixture-key")
+            self.assertEqual(env_path.read_text(), original)
 
     def _stub_heygen(self, avatars, voices):
         original_avatars = provider_setup.fetch_heygen_avatars

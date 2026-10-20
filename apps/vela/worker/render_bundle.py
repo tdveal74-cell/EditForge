@@ -206,6 +206,8 @@ def render(bundle, output, height=720):
         print(json.dumps(value), flush=True)
     status("validating")
     try:
+        bundle_hash = digest(bundle)
+        renderer_hash = digest(Path(__file__))
         with tempfile.TemporaryDirectory(prefix=".work-", dir=output) as temporary:
             root = Path(temporary)
             manifest, sources = load_bundle(bundle, root)
@@ -307,9 +309,11 @@ def render(bundle, output, height=720):
             for source in sources.values():
                 if digest(source["file"]) != source["sha256"]:
                     raise ValueError("Source changed during render")
+            if digest(bundle) != bundle_hash:
+                raise ValueError("Source bundle changed during render; refusing a mismatched receipt")
             receipt = {"schema": "vela.source-cut-receipt/v1", "mode": "source-cut-review", "creative_approval": False,
-                       "renderer_sha256": digest(Path(__file__)),
-                       "project_id": project.get("id"), "bundle_sha256": digest(bundle), "output_sha256": digest(result),
+                       "renderer_sha256": renderer_hash,
+                       "project_id": project.get("id"), "bundle_sha256": bundle_hash, "output_sha256": digest(result),
                        "frames": total, "fps": fps, "duration_seconds": total / fps, "width": width, "height": height,
                        "audio_peak_dbfs_before_aac": peak_db, "audio_intervals": selected_audio,
                        "sources": [{"sha256": s["sha256"], "bytes": s["size"], "locked_sh135": s["sha256"] == SH135} for s in sources.values()],

@@ -192,6 +192,27 @@ class RenderTests(unittest.TestCase):
             render(self.write_bundle("clipped", project), output, 360)
         self.assertFalse((output / "source-cut-review.mp4").exists())
 
+    def test_bundle_changed_during_render_cannot_receive_success_receipt(self):
+        import render_bundle
+        bundle = self.write_bundle("changed-mid-render")
+        output = self.root / "changed-mid-render"
+        original_probe = render_bundle.probe
+        changed = False
+        try:
+            def mutate_after_load(*args, **kwargs):
+                nonlocal changed
+                if not changed:
+                    bundle.write_bytes(bundle.read_bytes() + b"changed during job")
+                    changed = True
+                return original_probe(*args, **kwargs)
+            render_bundle.probe = mutate_after_load
+            with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, "bundle changed"):
+                render(bundle, output, 360)
+            self.assertFalse((output / "receipt.json").exists())
+            self.assertFalse((output / "source-cut-review.mp4").exists())
+        finally:
+            render_bundle.probe = original_probe
+
 
 if __name__ == "__main__":
     unittest.main()

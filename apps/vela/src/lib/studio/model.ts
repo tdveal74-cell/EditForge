@@ -1,3 +1,5 @@
+import type { AvatarProfile, AudioReference } from "./avatar-reference";
+
 export type Room = "bay" | "cut" | "score" | "still" | "title" | "board" | "script" | "mcp" | "stage" | "enhance" | "booth" | "floor";
 
 export type Aspect = "16:9" | "9:16" | "1:1";
@@ -170,6 +172,7 @@ export interface Take {
   shot: Shot;
   look: Look;
   audioId?: string;
+  audioReference?: AudioReference;
   duration?: number;
 }
 
@@ -196,6 +199,7 @@ export interface Project {
   enhance: Enhance;
   booth: Booth;
   likeness: Likeness;
+  avatar?: AvatarProfile;
 }
 
 export const ASPECT_RATIO: Record<Aspect, string> = {

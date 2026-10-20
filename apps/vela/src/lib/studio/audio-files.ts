@@ -9,18 +9,26 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-export async function saveAudio(id: string, blob: Blob): Promise<void> {
+export async function saveMediaBatch(items: { id: string; blob: Blob }[]): Promise<void> {
   const db = await openDb();
-  await new Promise<void>((resolve, reject) => {
-    const tx = db.transaction("audio", "readwrite");
-    tx.objectStore("audio").put(blob, id);
-    tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
-  const prev = urls.get(id);
-  if (prev) URL.revokeObjectURL(prev);
-  urls.set(id, URL.createObjectURL(blob));
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction("audio", "readwrite");
+      for (const item of items) tx.objectStore("audio").put(item.blob, item.id);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error ?? new Error("Media save was aborted."));
+    });
+  } finally { db.close(); }
+  for (const { id, blob } of items) {
+    const prev = urls.get(id);
+    if (prev) URL.revokeObjectURL(prev);
+    urls.set(id, URL.createObjectURL(blob));
+  }
+}
+
+export async function saveAudio(id: string, blob: Blob): Promise<void> {
+  await saveMediaBatch([{ id, blob }]);
 }
 
 export async function audioUrl(id: string): Promise<string | null> {

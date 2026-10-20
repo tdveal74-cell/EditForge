@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { AvatarReferencePanel } from "./avatar-reference-panel";
+import { downloadJson, importRead, prepareAvatarHandoff } from "@/lib/studio/avatar-media";
 import { audioUrl, downloadAudio, saveAudio } from "@/lib/studio/audio-files";
 import { Btn, Kicker, Slider } from "@/components/studio/controls";
 import { renderEffect } from "@/lib/studio/effects";
@@ -93,6 +95,7 @@ export function BoothRoom() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [speaking, setSpeaking] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [prompt, setPrompt] = useState("rain");
   const [fx, setFx] = useState<{ id: string; name: string; duration: number } | null>(null);
   const recorder = useRef<MediaRecorder | null>(null);
@@ -100,12 +103,13 @@ export function BoothRoom() {
   const mouth = useMouth();
   const likeness = project.likeness ?? defaultLikeness();
   const plateUrl = usePlate(likeness.plateId);
+  const referenceLook = project.avatar?.looks.find((look) => look.id === project.avatar?.selectedLookId && look.assetId === likeness.plateId);
   const picture = clipAt(project.clips, 0, playhead);
   const cues = extractCues(project.script);
 
   useEffect(() => {
-    if (active) setDraft(snap(active));
-  }, [active?.id]);
+    setDraft(active ? snap(active) : EMPTY);
+  }, [project.id, active]);
 
   useEffect(() => {
     const load = () => setVoices(naturalVoices());
@@ -180,7 +184,7 @@ export function BoothRoom() {
         void saveAudio(id, blob).then(async () => {
           const url = await audioUrl(id);
           const duration = url ? await measure(url) : 2;
-          setDraft((prev) => ({ ...prev, audioId: id, duration }));
+          setDraft((prev) => ({ ...prev, audioId: id, audioReference: undefined, duration }));
           flash("Read saved. Play it, or mark it on the cut.");
         });
       };
@@ -213,13 +217,16 @@ export function BoothRoom() {
         </div>
         <div className="mx-auto w-full max-w-3xl">
           <div className="relative overflow-hidden rounded-lg border border-line bg-ink" style={{ aspectRatio: ASPECT_RATIO[project.aspect] }}>
+            {referenceLook && plateUrl ? <img src={plateUrl} alt={referenceLook.name} className="absolute inset-0 h-full w-full object-contain" /> : <>
             <div className={draft.shot === "close" ? "h-full opacity-30" : "h-full"}>
               <Frame motif={picture?.motif ?? "city"} grade={project.grade} enhance={project.enhance} />
             </div>
             <div className={frame}>
               <Face look={draft.look} mouth={mouth} label={draft.speaker} plateUrl={plateUrl} enhance={project.enhance} likeness={likeness} />
             </div>
+            </>}
           </div>
+          {referenceLook && <p className="mt-2 text-xs text-mute">Original photo with audio preview. Lip-sync rendering is pending.</p>}
           <p className="mt-3 text-sm text-pretty text-paper">{draft.line || "No line yet."}</p>
           <p className="text-xs text-mute">
             {draft.audioId ? "A recorded read is attached." : `About ${speakLength(draft.line || "word", draft.rate)}s spoken.`} The score room is still the music.
@@ -227,6 +234,7 @@ export function BoothRoom() {
         </div>
       </div>
       <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-80">
+        <AvatarReferencePanel />
         <Kicker>Your plate</Kicker>
         <p className="text-xs text-pretty text-mute">A photo you supply. Identity holds the real picture. Catchlight, iris, under-eye, and lip are the hyperreal finish on top of Enhance.</p>
         <div className="flex flex-wrap gap-2">
@@ -278,7 +286,7 @@ export function BoothRoom() {
             <button
               key={`${cue.speaker}-${cue.line}`}
               type="button"
-              onClick={() => setDraft({ ...draft, id: "", speaker: cue.speaker, line: cue.line, audioId: undefined, duration: undefined })}
+              onClick={() => setDraft({ ...draft, id: "", speaker: cue.speaker, line: cue.line, audioId: undefined, audioReference: undefined, duration: undefined })}
               className="min-h-11 rounded-md border border-line px-3 text-left text-sm"
             >
               <span className="text-xs text-copper">{cue.speaker}</span>
@@ -290,7 +298,7 @@ export function BoothRoom() {
           Line
           <textarea
             value={draft.line}
-            onChange={(event) => setDraft({ ...draft, line: event.target.value, audioId: undefined, duration: undefined })}
+            onChange={(event) => setDraft({ ...draft, line: event.target.value, audioId: undefined, audioReference: undefined, duration: undefined })}
             rows={3}
             className="rounded-md border border-line bg-ink px-3 py-2 text-sm text-paper outline-none focus:border-copper"
           />
@@ -329,6 +337,20 @@ export function BoothRoom() {
             {speaking ? "Stop" : "Hear"}
           </Btn>
           <Btn onClick={() => void record()}>{recording ? "Stop recording" : "Record"}</Btn>
+          <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-line px-3 text-sm">
+            Import narration
+            <input type="file" accept="audio/*,.wav,.mp3,.m4a,.ogg,.webm" className="sr-only" disabled={preparing || recording} onChange={(event) => {
+              const file = event.target.files?.[0]; event.target.value = "";
+              if (!file) return;
+              const projectId = project.id;
+              setPreparing(true);
+              void importRead(file).then(({ id, reference }) => {
+                if (useStudio.getState().activeId !== projectId) throw new Error("The project changed during import. Import the read again.");
+                setDraft((prev) => ({ ...prev, audioId: id, audioReference: reference, duration: reference.duration }));
+                flash("Original narration attached. Importing audio does not verify who is speaking.");
+              }).catch((error) => flash(error instanceof Error ? error.message : "The read could not be imported.")).finally(() => setPreparing(false));
+            }} />
+          </label>
           {draft.audioId && (
             <Btn onClick={() => void playStored(draft.audioId!)}>Play read</Btn>
           )}
@@ -336,7 +358,7 @@ export function BoothRoom() {
             <Btn
               onClick={() => {
                 void audioUrl(draft.audioId!).then((url) => {
-                  if (url) downloadAudio("vela-read.webm", url);
+                  if (url) downloadAudio(draft.audioReference?.name ?? "vela-read.webm", url);
                 });
               }}
             >
@@ -344,6 +366,17 @@ export function BoothRoom() {
             </Btn>
           )}
         </div>
+        {project.avatar && <>
+          <Kicker>Workflow handoff</Kicker>
+          <p className="text-xs text-mute">Download the selected original photo, imported narration, and take settings. A renderer must create and verify the movie before TQO can use it.</p>
+          <Btn disabled={preparing || recording} onClick={() => {
+            setPreparing(true);
+            void prepareAvatarHandoff(project, current()).then((packet) => {
+              downloadJson("avatar-take.vela-handoff.json", packet);
+              flash("Handoff prepared. No render or workflow registration has run.");
+            }).catch((error) => flash(error instanceof Error ? error.message : "The handoff could not be prepared.")).finally(() => setPreparing(false));
+          }}>Download render handoff</Btn>
+        </>}
         <Kicker>Sound</Kicker>
         <label className="flex flex-col gap-1 text-xs text-mute">
           Prompt

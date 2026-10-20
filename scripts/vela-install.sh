@@ -33,8 +33,26 @@ if [[ ! -f /tmp/vela-src.tgz ]]; then
   exit 1
 fi
 
+# Reject paths/links that could replace persistent production assets before
+# removing any old application files. This folder is never part of source packs.
+python3 - /tmp/vela-src.tgz <<'PY'
+import pathlib
+import sys
+import tarfile
+
+with tarfile.open(sys.argv[1], "r:gz") as archive:
+    for member in archive:
+        path = pathlib.PurePosixPath(member.name)
+        if path.is_absolute() or ".." in path.parts:
+            raise SystemExit("refusing an unsafe Vela source path")
+        if path.parts and path.parts[0] == "production-assets":
+            raise SystemExit("refusing to replace persistent Vela production assets")
+        if not (member.isfile() or member.isdir()):
+            raise SystemExit("refusing a linked or special Vela source entry")
+PY
+
 mkdir -p "$dest"
-find "$dest" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+find "$dest" -mindepth 1 -maxdepth 1 ! -name production-assets -exec rm -rf {} +
 tar -xzf /tmp/vela-src.tgz -C "$dest"
 if [[ -f /tmp/VELA_RUNBOOK.md ]]; then
   cp /tmp/VELA_RUNBOOK.md "$dest/RUNBOOK.md"

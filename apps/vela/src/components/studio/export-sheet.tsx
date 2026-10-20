@@ -1,4 +1,6 @@
 import { X } from "lucide-react";
+import { useState } from "react";
+import { createProjectBundle, downloadBundle } from "@/lib/studio/project-bundle";
 import { Btn } from "@/components/studio/controls";
 import { fmt, PRESET_COPY, projectDuration, type Preset, type Project } from "@/lib/studio/model";
 import { useProject, useStudio } from "@/lib/studio/store";
@@ -21,6 +23,8 @@ export function ExportSheet() {
   const project = useProject();
   const setPreset = useStudio((state) => state.setPreset);
   const setExportOpen = useStudio((state) => state.setExportOpen);
+  const flash = useStudio((state) => state.flash);
+  const [busy, setBusy] = useState(false);
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center bg-ink/70 p-3 sm:items-center">
@@ -29,7 +33,7 @@ export function ExportSheet() {
           <div>
             <h2 className="font-display text-3xl">Package</h2>
             <p className="mt-1 text-sm text-pretty text-mute">
-              One file holds the edit, grade, stage, enhance stack, booth takes, score, still, titles, board, and script. The contact sheet is a still of the cut, not a rendered movie.
+              Back up the project with its original media, or download metadata only. The contact sheet is a still of the cut, not a rendered movie.
             </p>
           </div>
           <button type="button" aria-label="Close" className="inline-flex size-11 items-center justify-center" onClick={() => setExportOpen(false)}>
@@ -80,8 +84,13 @@ export function ExportSheet() {
           </li>
         </ul>
         <div className="flex flex-wrap gap-2">
+          <Btn tone="copper" disabled={busy} onClick={() => {
+            setBusy(true);
+            void createProjectBundle(project).then((blob) => { downloadBundle(project.name, blob); flash("Project and original media packaged. Test a restore before relying on a backup."); })
+              .catch((error) => flash(String(error.message ?? error))).finally(() => setBusy(false));
+          }}>{busy ? "Packing original media…" : "Project + media backup"}</Btn>
           <Btn tone="copper" onClick={() => downloadProject(project)}>
-            Download project
+            Metadata only
           </Btn>
           <Btn onClick={() => downloadSheet(project)}>Contact sheet</Btn>
         </div>

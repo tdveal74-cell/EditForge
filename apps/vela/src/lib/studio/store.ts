@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { studioStorage } from "./safe-storage";
+import { mediaDuration, snapTime, type FrameRate, type MediaAsset, type Track } from "./media-model";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { setStepListener, startLoop, stopLoop } from "@/lib/studio/audio";
 import { planFloor, type FloorMark, type FloorSeat, type FloorStep } from "@/lib/studio/floor";
@@ -77,6 +79,11 @@ interface Studio {
   setLogline: (logline: string) => void;
   setPreset: (preset: Preset) => void;
   setAspect: (aspect: Aspect) => void;
+  setFps: (fps: FrameRate) => void;
+  importMediaAsset: (asset: MediaAsset, projectId: string) => boolean;
+  placeMedia: (assetId: string, track?: Track) => void;
+  updateMediaClip: (id: string, value: Partial<Pick<Clip, "gainDb" | "fadeIn" | "fadeOut" | "muted">>) => void;
+  setSoloTrack: (track: Track | null) => void;
   setPlayhead: (time: number) => void;
   togglePlay: () => void;
   setPlaying: (playing: boolean) => void;
@@ -231,7 +238,45 @@ export const useStudio = create<Studio>()(
           aspect: PRESET_ASPECT[preset],
         })),
       setAspect: (aspect) => patch(set, get, (project) => ({ ...project, aspect })),
-      setPlayhead: (time) => set({ playhead: Math.max(0, time) }),
+      setFps: (fps) => {
+        if (![24, 25, 30, 50, 60].includes(fps)) return;
+        patch(set, get, (project) => ({ ...project, fps }));
+        get().setPlayhead(get().playhead);
+      },
+      importMediaAsset: (asset, projectId) => {
+        if (get().activeId !== projectId) return false;
+        patch(set, get, (project) => ({ ...project, media: project.media?.some((item) => item.id === asset.id)
+          ? project.media.map((item) => item.id === asset.id ? asset : item) : [...(project.media ?? []), asset] }));
+        return true;
+      },
+      placeMedia: (assetId, track) => {
+        const project = active(get());
+        const asset = project.media?.find((item) => item.id === assetId);
+        if (!asset) return;
+        const audio = asset.kind === "audio";
+        const lane: Track = audio ? (track && track >= 3 ? track : 3) : 0;
+        const start = audio ? snapTime(get().playhead, project.fps ?? 24)
+          : snapTime(project.clips.filter((item) => item.track === 0).reduce((end, item) => Math.max(end, item.start + item.duration), 0), project.fps ?? 24);
+        const clip: Clip = { id: uid("clip"), name: asset.name, kind: audio ? "voice" : "picture", track: lane,
+          start, duration: mediaDuration(asset, project.fps ?? 24), sourceIn: 0, mediaId: asset.id, motif: audio ? "mic" : "city", gainDb: 0 };
+        patch(set, get, (current) => ({ ...current, clips: [...current.clips, clip] }));
+        set({ selectedClipId: clip.id, playhead: start, playing: false });
+      },
+      updateMediaClip: (id, value) => patch(set, get, (project) => ({ ...project, clips: project.clips.map((clip) => {
+        if (clip.id !== id || !clip.mediaId) return clip;
+        return { ...clip, ...(value.gainDb !== undefined ? { gainDb: Math.max(-60, Math.min(24, value.gainDb)) } : {}),
+          ...(value.fadeIn !== undefined ? { fadeIn: Math.min(clip.duration, snapTime(value.fadeIn, project.fps ?? 24)) } : {}),
+          ...(value.fadeOut !== undefined ? { fadeOut: Math.min(clip.duration, snapTime(value.fadeOut, project.fps ?? 24)) } : {}),
+          ...(value.muted !== undefined ? { muted: value.muted } : {}) };
+      }) })),
+      setSoloTrack: (soloTrack) => {
+        if (soloTrack != null && soloTrack !== 2 && get().scoreOn) { stopLoop(); set({ scoreOn: false }); }
+        patch(set, get, (project) => ({ ...project, soloTrack }));
+      },
+      setPlayhead: (time) => {
+        if (!Number.isFinite(time)) return;
+        set({ playhead: get().playing ? Math.max(0, time) : snapTime(time, active(get()).fps ?? 24) });
+      },
       setPlaying: (playing) => set({ playing }),
       togglePlay: () => {
         const state = get();
@@ -284,14 +329,19 @@ export const useStudio = create<Studio>()(
         patch(set, get, (project) => ({
           ...project,
           clips: project.clips.map((clip) =>
-            clip.id === id ? { ...clip, start: Math.max(0, Number(start.toFixed(2))) } : clip,
+            clip.id === id ? { ...clip, start: snapTime(start, project.fps ?? 24) } : clip,
           ),
         })),
       setClipDuration: (id, duration) =>
         patch(set, get, (project) => ({
           ...project,
           clips: project.clips.map((clip) =>
-            clip.id === id ? { ...clip, duration: Math.max(0.25, duration) } : clip,
+            clip.id === id ? { ...clip, duration: (() => {
+              const fps = project.fps ?? 24;
+              const asset = project.media?.find((item) => item.id === clip.mediaId);
+              const limit = asset?.duration ? Math.max(1 / fps, Math.floor((asset.duration - (clip.sourceIn ?? 0)) * fps + 1e-6) / fps) : Infinity;
+              return Math.min(limit, Math.max(1 / fps, snapTime(duration, fps)));
+            })() } : clip,
           ),
         })),
       setClipName: (id, name) =>
@@ -309,8 +359,8 @@ export const useStudio = create<Studio>()(
           state.flash("Select a clip to split.");
           return;
         }
-        const at = state.playhead;
-        if (at <= clip.start + 0.15 || at >= clip.start + clip.duration - 0.15) {
+        const at = snapTime(state.playhead, project.fps ?? 24);
+        if (at < clip.start + 1 / (project.fps ?? 24) - 1e-7 || at > clip.start + clip.duration - 1 / (project.fps ?? 24) + 1e-7) {
           state.flash("Park the playhead inside the clip.");
           return;
         }
@@ -318,14 +368,15 @@ export const useStudio = create<Studio>()(
           ...clip,
           id: uid("clip"),
           name: `${clip.name} B`,
-          start: Number(at.toFixed(2)),
-          duration: Number((clip.start + clip.duration - at).toFixed(2)),
+          start: at,
+          duration: snapTime(clip.start + clip.duration - at, project.fps ?? 24),
+          ...(clip.mediaId ? { sourceIn: (clip.sourceIn ?? 0) + at - clip.start } : {}),
         };
         patch(set, get, (current) => ({
           ...current,
           clips: current.clips.flatMap((item) =>
             item.id === clip.id
-              ? [{ ...item, duration: Number((at - item.start).toFixed(2)) }, right]
+              ? [{ ...item, duration: snapTime(at - item.start, project.fps ?? 24) }, right]
               : [item],
           ),
         }));
@@ -348,7 +399,7 @@ export const useStudio = create<Studio>()(
           ...clip,
           id: uid("clip"),
           name: `${clip.name} copy`,
-          start: Number((clip.start + clip.duration).toFixed(2)),
+          start: snapTime(clip.start + clip.duration, active(get()).fps ?? 24),
         };
         patch(set, get, (project) => ({ ...project, clips: [...project.clips, copy] }));
         set({ selectedClipId: copy.id });
@@ -800,7 +851,7 @@ export const useStudio = create<Studio>()(
     }),
     {
       name: "vela-studio-v1",
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(studioStorage),
       skipHydration: true,
       partialize: (state) => ({
         projects: state.projects,

@@ -30,6 +30,7 @@ import { TitleRoom } from "@/components/studio/titles";
 import { stopLoop } from "@/lib/studio/audio";
 import { stopPerformance, syncPerformance } from "@/lib/studio/performance";
 import { projectDuration, type Room } from "@/lib/studio/model";
+import { StorageNotice } from "./storage-notice";
 import { useStudio } from "@/lib/studio/store";
 
 const ROOMS: { id: Room; label: string; icon: typeof LayoutDashboard }[] = [
@@ -123,6 +124,7 @@ export function Studio() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-ink text-paper">
+      <StorageNotice />
       <Header />
       <div className="flex min-h-0 flex-1">
         <Rail />

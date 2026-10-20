@@ -1,3 +1,5 @@
+import { isMediaAsset, SH135_HASH, type FrameRate, type MediaAsset, type Track } from "./media-model";
+
 export type Room = "bay" | "cut" | "score" | "still" | "title" | "board" | "script" | "mcp" | "stage" | "enhance" | "booth" | "floor";
 
 export type Aspect = "16:9" | "9:16" | "1:1";
@@ -25,7 +27,7 @@ export interface Clip {
   id: string;
   name: string;
   kind: ClipKind;
-  track: 0 | 1 | 2;
+  track: Track;
   start: number;
   duration: number;
   motif: Motif;
@@ -36,6 +38,12 @@ export interface Clip {
   look?: Look;
   shot?: Shot;
   audioId?: string;
+  mediaId?: string;
+  sourceIn?: number;
+  gainDb?: number;
+  fadeIn?: number;
+  fadeOut?: number;
+  muted?: boolean;
 }
 
 export interface Caption {
@@ -196,6 +204,9 @@ export interface Project {
   enhance: Enhance;
   booth: Booth;
   likeness: Likeness;
+  fps?: FrameRate;
+  media?: MediaAsset[];
+  soloTrack?: Track | null;
 }
 
 export const ASPECT_RATIO: Record<Aspect, string> = {
@@ -281,7 +292,7 @@ export function fmt(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}.${f}`;
 }
 
-export function clipAt(clips: Clip[], track: 0 | 1 | 2, time: number): Clip | null {
+export function clipAt(clips: Clip[], track: Track, time: number): Clip | null {
   const hits = clips.filter(
     (clip) => clip.track === track && time >= clip.start && time < clip.start + clip.duration - 0.001,
   );
@@ -884,7 +895,8 @@ export function withStage(project: Project): Project {
       ? { takes: project.booth.takes, activeId: project.booth.activeId ?? project.booth.takes[0]?.id ?? null }
       : (seeded?.booth ?? { takes: [], activeId: null });
   const likeness = { ...defaultLikeness(), ...project.likeness };
-  return { ...project, stage, enhance, booth, likeness };
+  return { ...project, stage, enhance, booth, likeness, fps: project.fps ?? 24,
+    media: (project.media ?? []).map((asset) => ({ ...asset, locked: asset.sha256 === SH135_HASH || asset.locked })) };
 }
 
 export const LOCATION_MOTIF: Record<Location, Motif> = {
@@ -916,6 +928,9 @@ export function isProject(value: unknown): value is Project {
     typeof project.id === "string" &&
     typeof project.name === "string" &&
     typeof project.script === "string" &&
+    (project.fps === undefined || [24, 25, 30, 50, 60].includes(project.fps)) &&
+    (project.media === undefined || (Array.isArray(project.media) && project.media.every(isMediaAsset))) &&
+    (project.soloTrack == null || [0, 1, 2, 3, 4, 5, 6, 7].includes(project.soloTrack)) &&
     Array.isArray(project.clips) &&
     Array.isArray(project.layers) &&
     Array.isArray(project.captions) &&

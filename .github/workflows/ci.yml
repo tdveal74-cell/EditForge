@@ -12,6 +12,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  vela-installer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check Vela installer syntax
+        run: bash -n scripts/vela-install.sh
+
+      - name: Test Vela asset preservation and failed builds
+        run: python3 scripts/test_vela_install_assets.py
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20

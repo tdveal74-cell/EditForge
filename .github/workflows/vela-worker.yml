@@ -1,0 +1,31 @@
+name: Vela render worker
+
+on:
+  pull_request:
+    branches: [vela-src, main]
+    paths:
+      - 'apps/vela/worker/**'
+      - '.github/workflows/vela-worker.yml'
+  push:
+    branches: [vela-src]
+    paths:
+      - 'apps/vela/worker/**'
+      - '.github/workflows/vela-worker.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  render-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Test rendered frames, audio timing and failure handling
+        run: python3 -m unittest discover -s apps/vela/worker -p 'test_*.py' -v

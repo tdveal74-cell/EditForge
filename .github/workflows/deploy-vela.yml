@@ -77,7 +77,18 @@ jobs:
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh-keyscan -T 15 -p "${PORT:-22}" -H "$HOST" >> ~/.ssh/known_hosts
+          scanned=0
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -p "${PORT:-22}" -H "$HOST" >> ~/.ssh/known_hosts; then
+              scanned=1
+              break
+            fi
+            sleep $((attempt * 3))
+          done
+          if [[ "$scanned" -ne 1 ]]; then
+            echo "VPS SSH host did not answer after 3 attempts" >&2
+            exit 1
+          fi
           chmod 600 ~/.ssh/known_hosts
 
       - name: Copy the runbook and the pack

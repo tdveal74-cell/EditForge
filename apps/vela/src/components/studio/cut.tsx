@@ -1,4 +1,7 @@
 import { useRef } from "react";
+import { MediaBin } from "./media-bin";
+import { MediaAudio, MediaPicture } from "./media-preview";
+import { frameAt, type FrameRate, type Track } from "@/lib/studio/media-model";
 import { Pause, Play, Scissors } from "lucide-react";
 import { Btn, Field, Kicker, Slider } from "@/components/studio/controls";
 import { Frame } from "@/components/studio/frame";
@@ -25,6 +28,9 @@ export function CutRoom() {
   const deleteCaption = useStudio((state) => state.deleteCaption);
   const addCaption = useStudio((state) => state.addCaption);
   const setPlayhead = useStudio((state) => state.setPlayhead);
+  const setPlaying = useStudio((state) => state.setPlaying);
+  const setFps = useStudio((state) => state.setFps);
+  const updateMediaClip = useStudio((state) => state.updateMediaClip);
   const mouth = useMouth();
   const likeness = project.likeness ?? defaultLikeness();
   const plateUrl = usePlate(likeness.plateId);
@@ -39,6 +45,9 @@ export function CutRoom() {
   const caption = project.captions.find((item) => playhead >= item.start && playhead < item.end);
   const selected = project.clips.find((clip) => clip.id === selectedId) ?? null;
   const ratio = ASPECT_RATIO[project.aspect];
+  const fps = project.fps ?? 24;
+  const source = project.media?.find((item) => item.id === picture?.mediaId);
+  const stepFrame = (delta: number) => { setPlaying(false); setPlayhead(Math.min(duration, Math.max(0, (frameAt(playhead, fps) + delta) / fps))); };
 
   return (
     <div className="flex flex-col gap-4 p-3 lg:flex-row lg:p-5">
@@ -54,7 +63,9 @@ export function CutRoom() {
               maxHeight: "20rem",
             }}
           >
-            {picture ? <Frame motif={picture.motif} grade={project.grade} enhance={project.enhance} /> : <div className="grid h-full place-items-center text-sm text-mute">No picture here</div>}
+            {picture ? source ? <MediaPicture key={picture.id} clip={picture} asset={source} time={playhead} playing={playing} fps={fps} />
+              : picture.mediaId ? <div className="grid h-full place-items-center text-sm">Missing source media. Import the original again.</div>
+                : <Frame motif={picture.motif} grade={project.grade} enhance={project.enhance} /> : <div className="grid h-full place-items-center text-sm text-mute">No picture here</div>}
             {title && <TitleOverlay clip={title} />}
             {voice && (
               <div className="absolute bottom-2 left-2 h-[46%] w-[30%]">
@@ -78,6 +89,8 @@ export function CutRoom() {
             )}
           </div>
         </div>
+        <MediaAudio project={project} time={playhead} playing={playing} />
+        {source && <p className="text-xs text-mute">{source.preview ? "Proxy preview; original retained." : "Original source preview."} Grade and skin export are still pending.</p>}
 
         <div className="flex flex-wrap items-center gap-2">
           <Btn tone="copper" onClick={togglePlay}>
@@ -85,8 +98,13 @@ export function CutRoom() {
             {playing ? "Pause" : "Play"}
           </Btn>
           <span className="tabular-nums text-sm text-mute">
-            {fmt(playhead)} / {fmt(duration)}
+            Frame {frameAt(playhead, fps)} / {frameAt(duration, fps)} · {fmt(playhead)} / {fmt(duration)}
           </span>
+          <Btn onClick={() => stepFrame(-1)}>Previous frame</Btn>
+          <Btn onClick={() => stepFrame(1)}>Next frame</Btn>
+          <label className="text-xs text-mute">Timeline fps <select aria-label="Timeline fps" value={fps} onChange={(event) => { setPlaying(false); setFps(Number(event.target.value) as FrameRate); }} className="min-h-11 rounded border border-line bg-ink px-2 text-paper">
+            {[24, 25, 30, 50, 60].map((rate) => <option key={rate} value={rate}>{rate}</option>)}
+          </select></label>
           <Btn onClick={splitClip}>
             <Scissors className="size-4" />
             Split
@@ -100,6 +118,7 @@ export function CutRoom() {
       </div>
 
       <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-72">
+        <MediaBin />
         <div className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-3">
           <Kicker>Clip</Kicker>
           {selected ? (
@@ -107,12 +126,19 @@ export function CutRoom() {
               <Field label="Name" value={selected.name} onChange={(name) => setClipName(selected.id, name)} />
               <Slider
                 label="Length"
-                min={0.25}
-                max={12}
-                step={0.25}
+                min={1 / fps}
+                max={Math.max(12, selected.duration)}
+                step={1 / fps}
                 value={selected.duration}
                 onChange={(value) => setClipDuration(selected.id, value)}
               />
+              {selected.mediaId && <>
+                <p className="text-xs text-mute">Source in: {(selected.sourceIn ?? 0).toFixed(6)}s</p>
+                <Slider label="Gain dB" min={-60} max={24} step={0.5} value={selected.gainDb ?? 0} onChange={(gainDb) => updateMediaClip(selected.id, { gainDb })} />
+                <Slider label="Fade in seconds" min={0} max={selected.duration} step={1 / fps} value={selected.fadeIn ?? 0} onChange={(fadeIn) => updateMediaClip(selected.id, { fadeIn })} />
+                <Slider label="Fade out seconds" min={0} max={selected.duration} step={1 / fps} value={selected.fadeOut ?? 0} onChange={(fadeOut) => updateMediaClip(selected.id, { fadeOut })} />
+                <Btn onClick={() => updateMediaClip(selected.id, { muted: !selected.muted })}>{selected.muted ? "Unmute" : "Mute"}</Btn>
+              </>}
               <div className="flex gap-2">
                 <Btn onClick={duplicateClip}>Duplicate</Btn>
                 <Btn onClick={deleteClip}>Remove</Btn>
@@ -191,7 +217,10 @@ function Timeline({
   clips: Clip[];
   selectedId: string | null;
 }) {
-  const pps = 64;
+  const project = useProject();
+  const fps = project.fps ?? 24;
+  const setSoloTrack = useStudio((state) => state.setSoloTrack);
+  const pps = Math.min(64, 24000 / Math.max(1, duration));
   const width = duration * pps + 32;
   const contentRef = useRef<HTMLDivElement>(null);
   const setPlayhead = useStudio((state) => state.setPlayhead);
@@ -208,17 +237,18 @@ function Timeline({
     setPlayhead(time);
   };
 
-  const tracks: { track: 0 | 1 | 2; label: string }[] = [
+  const tracks: { track: Track; label: string }[] = [
     { track: 0, label: "Picture" },
     { track: 1, label: "Title" },
     { track: 2, label: "Score" },
+    ...([3, 4, 5, 6, 7] as Track[]).map((track) => ({ track, label: `A${track - 2}` })),
   ];
 
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-panel">
       <div ref={contentRef} className="relative" style={{ width }}>
         <div className="relative h-8 border-b border-line" onPointerDown={(event) => seek(event.clientX)}>
-          {Array.from({ length: Math.ceil(duration) + 1 }, (_, second) => (
+          {Array.from({ length: Math.ceil(duration / Math.max(1, Math.ceil(duration / 100))) + 1 }, (_, index) => index * Math.max(1, Math.ceil(duration / 100))).map((second) => (
             <span key={second} className="absolute top-1 text-xs text-mute tabular-nums" style={{ left: second * pps }}>
               {second}s
             </span>
@@ -228,7 +258,7 @@ function Timeline({
           <div key={lane.track} className="relative h-14 border-b border-line" onPointerDown={(event) => {
             if (event.target === event.currentTarget) seek(event.clientX);
           }}>
-            <span className="pointer-events-none absolute top-1 left-1 text-xs text-mute">{lane.label}</span>
+            <button type="button" className={`absolute top-0 left-1 z-10 min-h-5 text-xs ${project.soloTrack === lane.track ? "text-copper" : "text-mute"}`} onClick={() => setSoloTrack(project.soloTrack === lane.track ? null : lane.track)}>{lane.label} · {project.soloTrack === lane.track ? "Solo on" : "Solo"}</button>
             {clips
               .filter((clip) => clip.track === lane.track)
               .map((clip) => (
@@ -245,7 +275,7 @@ function Timeline({
                     const el = event.currentTarget;
                     el.setPointerCapture(event.pointerId);
                     const move = (ev: PointerEvent) => {
-                      const next = Math.round((start0 + (ev.clientX - origin) / pps) * 4) / 4;
+                      const next = Math.round((start0 + (ev.clientX - origin) / pps) * fps) / fps;
                       moveClip(clip.id, Math.max(0, next));
                     };
                     const up = () => {
@@ -279,8 +309,8 @@ function Timeline({
                       const el = event.currentTarget;
                       el.setPointerCapture(event.pointerId);
                       const move = (ev: PointerEvent) => {
-                        const next = Math.round((dur0 + (ev.clientX - origin) / pps) * 4) / 4;
-                        setClipDuration(clip.id, Math.max(0.25, next));
+                        const next = Math.round((dur0 + (ev.clientX - origin) / pps) * fps) / fps;
+                        setClipDuration(clip.id, Math.max(1 / fps, next));
                       };
                       const up = () => {
                         el.removeEventListener("pointermove", move);

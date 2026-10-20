@@ -125,7 +125,8 @@ function pump() {
 
 function clipAtTime(project: Project, time: number): Clip | null {
   const hits = project.clips.filter(
-    (clip) => (clip.kind === "voice" || clip.kind === "fx") && time >= clip.start && time < clip.start + clip.duration,
+    (clip) => !clip.mediaId && !clip.muted && (project.soloTrack == null || project.soloTrack === clip.track)
+      && (clip.kind === "voice" || clip.kind === "fx") && time >= clip.start && time < clip.start + clip.duration,
   );
   return hits.find((clip) => clip.audioId) ?? hits.find((clip) => clip.kind === "voice") ?? null;
 }

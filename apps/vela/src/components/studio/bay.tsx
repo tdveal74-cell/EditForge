@@ -1,4 +1,5 @@
 import { Btn, Field } from "@/components/studio/controls";
+import { restoreProjectBundle } from "@/lib/studio/project-bundle";
 import { Frame } from "@/components/studio/frame";
 import { projectDuration, fmt, type Project, type Room } from "@/lib/studio/model";
 import { useProject, useStudio } from "@/lib/studio/store";
@@ -66,19 +67,19 @@ export function Bay() {
           <Btn onClick={duplicateProject}>Duplicate</Btn>
           <Btn onClick={deleteProject}>Delete</Btn>
           <label className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-md border border-line bg-raise px-3 text-sm text-paper">
-            Import .vela.json
+            Import project or backup
             <input
               type="file"
-              accept="application/json,.json"
+              accept="application/json,.json,.zip"
               className="sr-only"
               onChange={async (event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";
                 if (!file) return;
                 try {
-                  importProject(JSON.parse(await file.text()) as unknown);
-                } catch {
-                  useStudio.getState().flash("Could not read that file.");
+                  importProject(file.name.toLowerCase().endsWith(".zip") ? await restoreProjectBundle(file) : JSON.parse(await file.text()) as unknown);
+                } catch (error) {
+                  useStudio.getState().flash(error instanceof Error ? error.message : "Could not read that file.");
                 }
               }}
             />

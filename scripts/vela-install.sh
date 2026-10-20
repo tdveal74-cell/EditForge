@@ -39,7 +39,7 @@ tar -xzf /tmp/vela-src.tgz -C "$dest"
 if [[ -f /tmp/VELA_RUNBOOK.md ]]; then
   cp /tmp/VELA_RUNBOOK.md "$dest/RUNBOOK.md"
 fi
-docker build -t vela:local "$dest"
+docker build --progress=plain -t vela:local "$dest"
 if docker ps -a --format '{{.Names}}' | grep -qx vela; then
   docker rm -f vela
 fi

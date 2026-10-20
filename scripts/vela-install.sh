@@ -51,13 +51,18 @@ with tarfile.open(sys.argv[1], "r:gz") as archive:
             raise SystemExit("refusing a linked or special Vela source entry")
 PY
 
+# Build from an isolated source directory before changing the installed app.
+# A failed extraction or build leaves its files and running container intact.
+stage=$(mktemp -d "${dest}.stage.XXXXXX")
+trap 'rm -rf -- "$stage"' EXIT
+tar -xzf /tmp/vela-src.tgz -C "$stage"
+if [[ -f /tmp/VELA_RUNBOOK.md ]]; then
+  cp /tmp/VELA_RUNBOOK.md "$stage/RUNBOOK.md"
+fi
+docker build --progress=plain -t vela:local "$stage"
 mkdir -p "$dest"
 find "$dest" -mindepth 1 -maxdepth 1 ! -name production-assets -exec rm -rf {} +
-tar -xzf /tmp/vela-src.tgz -C "$dest"
-if [[ -f /tmp/VELA_RUNBOOK.md ]]; then
-  cp /tmp/VELA_RUNBOOK.md "$dest/RUNBOOK.md"
-fi
-docker build --progress=plain -t vela:local "$dest"
+cp -a "$stage/." "$dest/"
 if docker ps -a --format '{{.Names}}' | grep -qx vela; then
   docker rm -f vela
 fi

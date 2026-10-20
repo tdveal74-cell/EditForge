@@ -9,7 +9,7 @@ import unittest
 
 
 class VelaInstallAssetsTest(unittest.TestCase):
-    def run_install(self, members, mode="apply"):
+    def run_install(self, members, mode="apply", build_fails=False):
         with tempfile.TemporaryDirectory(prefix="vela-install-test-") as temporary:
             root = Path(temporary)
             dest = root / "vela"
@@ -35,7 +35,7 @@ class VelaInstallAssetsTest(unittest.TestCase):
             binary.mkdir()
             for command in ("docker", "curl"):
                 script = binary / command
-                script.write_text("#!/bin/sh\nexit 0\n")
+                script.write_text("#!/bin/sh\nif [ \"$1\" = build ] && [ \"$VELA_TEST_BUILD_FAIL\" = 1 ]; then exit 17; fi\nexit 0\n")
                 script.chmod(0o755)
             source = (Path(__file__).parent / "vela-install.sh").read_text()
             source = source.replace("dest=/opt/vela", f"dest={dest}")
@@ -43,7 +43,7 @@ class VelaInstallAssetsTest(unittest.TestCase):
             source = source.replace("/tmp/VELA_RUNBOOK.md", str(root / "absent-runbook.md"))
             runner = root / "installer.sh"
             runner.write_text(source)
-            result = subprocess.run(["bash", str(runner), mode], capture_output=True, text=True, env={**os.environ, "PATH": str(binary) + os.pathsep + os.environ["PATH"]})
+            result = subprocess.run(["bash", str(runner), mode], capture_output=True, text=True, env={**os.environ, "VELA_TEST_BUILD_FAIL": "1" if build_fails else "0", "PATH": str(binary) + os.pathsep + os.environ["PATH"]})
             self.assertEqual(hashlib.sha256(protected.read_bytes()).hexdigest(), original_hash)
             return result, (dest / "old-app.txt").exists(), (dest / "package.json").exists()
 
@@ -52,6 +52,12 @@ class VelaInstallAssetsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(old_exists)
         self.assertTrue(new_exists)
+
+    def test_failed_build_keeps_previous_application_and_assets(self):
+        result, old_exists, new_exists = self.run_install([("package.json", "{}", "file")], build_fails=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue(old_exists, "a failed candidate build must preserve the previous application")
+        self.assertFalse(new_exists)
 
     def test_pack_cannot_overwrite_the_asset_directory(self):
         result, old_exists, _ = self.run_install([("./production-assets/protected.asset", "replacement", "file")])

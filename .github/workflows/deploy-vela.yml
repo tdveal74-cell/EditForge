@@ -89,7 +89,7 @@ jobs:
           set -euo pipefail
           scp -P "${PORT:-22}" scripts/vela-install.sh docs/VELA_RUNBOOK.md /tmp/vela-src.tgz \
             "${USER}@${HOST}:/tmp/"
-          ssh -p "${PORT:-22}" "${USER}@${HOST}" "chmod 700 /tmp/vela-install.sh"
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=40 -p "${PORT:-22}" "${USER}@${HOST}" "chmod 700 /tmp/vela-install.sh"
 
       - name: Run the install
         env:
@@ -104,4 +104,4 @@ jobs:
           else
             mode=apply
           fi
-          ssh -p "${PORT:-22}" "${USER}@${HOST}" "bash /tmp/vela-install.sh ${mode}"
+          ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=40 -p "${PORT:-22}" "${USER}@${HOST}" "bash /tmp/vela-install.sh ${mode}"

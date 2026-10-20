@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { setStepListener, startLoop, stopLoop } from "@/lib/studio/audio";
 import { planFloor, type FloorMark, type FloorSeat, type FloorStep } from "@/lib/studio/floor";
-import { stopPerformance, syncPerformance } from "@/lib/studio/performance";
+import { applyVoiceBody, stopPerformance, syncPerformance } from "@/lib/studio/performance";
 import {
   beatsToBoard,
   blankProject,
@@ -32,6 +32,7 @@ import {
   type Enhance,
   type Fill,
   type Layer,
+  type Likeness,
   type Motif,
   type Preset,
   type Project,
@@ -99,6 +100,7 @@ interface Studio {
   sendShot: () => void;
   setEnhance: (patch: Partial<Enhance>) => void;
   setEnhanceScale: (scale: 1 | 2) => void;
+  setLikeness: (patch: Partial<Likeness>) => void;
   saveTake: (take: Take) => void;
   deleteTake: (id: string) => void;
   placeVoice: (take: Take) => void;
@@ -465,6 +467,14 @@ export const useStudio = create<Studio>()(
           ...project,
           enhance: { ...project.enhance, scale },
         })),
+      setLikeness: (next) => {
+        patch(set, get, (project) => ({
+          ...project,
+          likeness: { ...project.likeness, ...next },
+        }));
+        const likeness = active(get()).likeness;
+        applyVoiceBody({ warmth: likeness.warmth, presence: likeness.presence, breath: likeness.breath });
+      },
       saveTake: (take) =>
         patch(set, get, (project) => {
           const booth = project.booth ?? { takes: [], activeId: null };

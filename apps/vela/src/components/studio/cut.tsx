@@ -2,8 +2,8 @@ import { useRef } from "react";
 import { Pause, Play, Scissors } from "lucide-react";
 import { Btn, Field, Kicker, Slider } from "@/components/studio/controls";
 import { Frame } from "@/components/studio/frame";
-import { Presenter } from "@/components/studio/presenter";
-import { ASPECT_RATIO, clipAt, fmt, projectDuration, type Clip } from "@/lib/studio/model";
+import { Face, usePlate } from "@/components/studio/plate";
+import { ASPECT_RATIO, clipAt, defaultLikeness, fmt, projectDuration, type Clip } from "@/lib/studio/model";
 import { useMouth } from "@/lib/studio/performance";
 import { useProject, useStudio } from "@/lib/studio/store";
 
@@ -26,6 +26,8 @@ export function CutRoom() {
   const addCaption = useStudio((state) => state.addCaption);
   const setPlayhead = useStudio((state) => state.setPlayhead);
   const mouth = useMouth();
+  const likeness = project.likeness ?? defaultLikeness();
+  const plateUrl = usePlate(likeness.plateId);
 
   const duration = projectDuration(project);
   const picture = clipAt(project.clips, 0, playhead);
@@ -56,7 +58,14 @@ export function CutRoom() {
             {title && <TitleOverlay clip={title} />}
             {voice && (
               <div className="absolute bottom-2 left-2 h-[46%] w-[30%]">
-                <Presenter look={voice.look ?? "ink"} mouth={mouth} label={voice.sub} />
+                <Face
+                  look={voice.look ?? "ink"}
+                  mouth={mouth}
+                  label={voice.sub}
+                  plateUrl={plateUrl}
+                  enhance={project.enhance}
+                  likeness={likeness}
+                />
               </div>
             )}
             {caption && (

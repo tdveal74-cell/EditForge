@@ -144,6 +144,18 @@ export interface Enhance {
   scale: 1 | 2;
 }
 
+export interface Likeness {
+  plateId: string | null;
+  identity: number;
+  catchlight: number;
+  iris: number;
+  underEye: number;
+  lip: number;
+  warmth: number;
+  presence: number;
+  breath: number;
+}
+
 export type Shot = "close" | "medium" | "wide";
 
 export type Look = "ink" | "paper" | "lamp";
@@ -183,6 +195,7 @@ export interface Project {
   stage: Stage;
   enhance: Enhance;
   booth: Booth;
+  likeness: Likeness;
 }
 
 export const ASPECT_RATIO: Record<Aspect, string> = {
@@ -226,6 +239,10 @@ export function melody(pattern: string): number[] {
       const n = Number(c);
       return Number.isFinite(n) ? n : 0;
     });
+}
+
+export function defaultLikeness(): Likeness {
+  return { plateId: null, identity: 82, catchlight: 48, iris: 36, underEye: 22, lip: 30, warmth: 46, presence: 38, breath: 16 };
 }
 
 export function defaultGrade(): Grade {
@@ -589,6 +606,7 @@ export function blankProject(name: string): Project {
     stage: defaultStage(),
     enhance: defaultEnhance(),
     booth: { takes: [], activeId: null },
+    likeness: defaultLikeness(),
   };
 }
 
@@ -685,6 +703,7 @@ Hands wrap a paper cup. The city keeps its secret.
       ],
     },
     enhance: { pass: "fix", area: "face", texture: 64, freckles: 34, smoothness: 12, detail: 42, scale: 1 },
+    likeness: defaultLikeness(),
     booth: {
       takes: [
         {
@@ -772,6 +791,7 @@ The theme is a loop, not a song. Leave space for the guest.
       ],
     },
     enhance: { pass: "retouch", area: "face", texture: 18, freckles: 6, smoothness: 72, detail: 14, scale: 1 },
+    likeness: defaultLikeness(),
     booth: {
       takes: [
         {
@@ -863,7 +883,8 @@ export function withStage(project: Project): Project {
     project.booth && Array.isArray(project.booth.takes)
       ? { takes: project.booth.takes, activeId: project.booth.activeId ?? project.booth.takes[0]?.id ?? null }
       : (seeded?.booth ?? { takes: [], activeId: null });
-  return { ...project, stage, enhance, booth };
+  const likeness = { ...defaultLikeness(), ...project.likeness };
+  return { ...project, stage, enhance, booth, likeness };
 }
 
 export const LOCATION_MOTIF: Record<Location, Motif> = {

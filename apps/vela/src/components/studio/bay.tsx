@@ -1,7 +1,20 @@
 import { Btn, Field } from "@/components/studio/controls";
 import { Frame } from "@/components/studio/frame";
-import { projectDuration, fmt, type Project } from "@/lib/studio/model";
+import { projectDuration, fmt, type Project, type Room } from "@/lib/studio/model";
 import { useProject, useStudio } from "@/lib/studio/store";
+
+const JOBS: { name: string; room: Room; note: string }[] = [
+  { name: "Character consistency", room: "booth", note: "Identity hold on your plate." },
+  { name: "Lipsync", room: "booth", note: "The mouth follows the read." },
+  { name: "Face, your plate only", room: "booth", note: "No invented face." },
+  { name: "Skin and upscale", room: "enhance", note: "Pores, shine, retouch, inspect." },
+  { name: "Video edit and extend", room: "cut", note: "Trim and length live on the timeline." },
+  { name: "Grade and effects", room: "cut", note: "Not a second effects rack." },
+  { name: "Motion and pose", room: "stage", note: "Figure, product, camera." },
+  { name: "Product holding", room: "stage", note: "A prop, not a new room." },
+  { name: "Draw and stills", room: "still", note: "Paint stays on the still." },
+  { name: "Sound and the bed", room: "score", note: "Music. One-shot sounds are made in Booth." },
+];
 
 export function Bay() {
   const project = useProject();
@@ -70,6 +83,26 @@ export function Bay() {
               }}
             />
           </label>
+        </div>
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-2xl">Same jobs. No second copy.</h2>
+        <p className="max-w-xl text-sm text-pretty text-mute">
+          The generator menu is already these rooms. Hyperreal skin is Enhance. Your face is a plate in Booth.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {JOBS.map((job) => (
+            <button
+              key={job.name}
+              type="button"
+              onClick={() => setRoom(job.room)}
+              className="min-h-11 rounded-md border border-line bg-panel px-3 py-2 text-left"
+            >
+              <span className="block text-sm text-paper">{job.name}</span>
+              <span className="block text-xs text-mute">{job.note}</span>
+            </button>
+          ))}
         </div>
       </section>
 

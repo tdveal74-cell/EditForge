@@ -3,10 +3,10 @@ import { audioUrl, downloadAudio, saveAudio } from "@/lib/studio/audio-files";
 import { Btn, Kicker, Slider } from "@/components/studio/controls";
 import { renderEffect } from "@/lib/studio/effects";
 import { Frame } from "@/components/studio/frame";
-import { Presenter } from "@/components/studio/presenter";
-import { ASPECT_RATIO, clipAt, extractCues, speakLength, uid, type Look, type Shot, type Take } from "@/lib/studio/model";
+import { Face, usePlate } from "@/components/studio/plate";
+import { ASPECT_RATIO, clipAt, defaultLikeness, extractCues, speakLength, uid, type Look, type Shot, type Take } from "@/lib/studio/model";
 import { playStored, pushMouth, stopPerformance, useMouth } from "@/lib/studio/performance";
-import { canSpeak, deviceVoices, speakLine } from "@/lib/studio/speech";
+import { canSpeak, naturalVoices, speakLine } from "@/lib/studio/speech";
 import { useProject, useStudio } from "@/lib/studio/store";
 
 const LOOKS: Look[] = ["lamp", "ink", "paper"];
@@ -19,6 +19,41 @@ const SETUPS: { label: string; shot: Shot; look: Look }[] = [
 
 function snap(take: Take): Take {
   return { ...take, rate: Math.round(take.rate * 20) / 20, pitch: Math.round(take.pitch * 20) / 20 };
+}
+
+function plateBlob(file: File): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const max = 1280;
+      const scale = Math.min(1, max / Math.max(image.width, image.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(image.width * scale));
+      canvas.height = Math.max(1, Math.round(image.height * scale));
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        URL.revokeObjectURL(url);
+        reject(new Error("image"));
+        return;
+      }
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => {
+          URL.revokeObjectURL(url);
+          if (blob) resolve(blob);
+          else reject(new Error("image"));
+        },
+        "image/jpeg",
+        0.86,
+      );
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("image"));
+    };
+    image.src = url;
+  });
 }
 
 const EMPTY: Take = {
@@ -47,6 +82,7 @@ export function BoothRoom() {
   const project = useProject();
   const playhead = useStudio((state) => state.playhead);
   const saveTake = useStudio((state) => state.saveTake);
+  const setLikeness = useStudio((state) => state.setLikeness);
   const deleteTake = useStudio((state) => state.deleteTake);
   const placeVoice = useStudio((state) => state.placeVoice);
   const placeFx = useStudio((state) => state.placeFx);
@@ -62,6 +98,8 @@ export function BoothRoom() {
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
   const mouth = useMouth();
+  const likeness = project.likeness ?? defaultLikeness();
+  const plateUrl = usePlate(likeness.plateId);
   const picture = clipAt(project.clips, 0, playhead);
   const cues = extractCues(project.script);
 
@@ -70,7 +108,7 @@ export function BoothRoom() {
   }, [active?.id]);
 
   useEffect(() => {
-    const load = () => setVoices(deviceVoices());
+    const load = () => setVoices(naturalVoices());
     load();
     window.speechSynthesis?.addEventListener("voiceschanged", load);
     return () => {
@@ -170,7 +208,7 @@ export function BoothRoom() {
         <div>
           <h1 className="font-display text-4xl">Booth</h1>
           <p className="mt-2 max-w-xl text-pretty text-mute">
-            Speak the line, record a read, or make a sound. The figure performs on your picture, and the cut plays it back.
+            Your plate performs on the picture. Pores and retouch stay in Enhance. Vela does not invent a face and does not send the photo anywhere.
           </p>
         </div>
         <div className="mx-auto w-full max-w-3xl">
@@ -179,7 +217,7 @@ export function BoothRoom() {
               <Frame motif={picture?.motif ?? "city"} grade={project.grade} enhance={project.enhance} />
             </div>
             <div className={frame}>
-              <Presenter look={draft.look} mouth={mouth} label={draft.speaker} />
+              <Face look={draft.look} mouth={mouth} label={draft.speaker} plateUrl={plateUrl} enhance={project.enhance} likeness={likeness} />
             </div>
           </div>
           <p className="mt-3 text-sm text-pretty text-paper">{draft.line || "No line yet."}</p>
@@ -189,6 +227,42 @@ export function BoothRoom() {
         </div>
       </div>
       <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-80">
+        <Kicker>Your plate</Kicker>
+        <p className="text-xs text-pretty text-mute">A photo you supply. Identity holds the real picture. Catchlight, iris, under-eye, and lip are the hyperreal finish on top of Enhance.</p>
+        <div className="flex flex-wrap gap-2">
+          <label className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-line bg-raise px-3 text-sm text-paper">
+            {plateUrl ? "Replace plate" : "Load plate"}
+            <input
+              type="file"
+              accept="image/*"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                void plateBlob(file).then(async (blob) => {
+                  const id = uid("plate");
+                  await saveAudio(id, blob);
+                  setLikeness({ plateId: id });
+                  flash("Plate is on this device. Enhance still owns skin.");
+                }).catch(() => flash("That picture could not be read."));
+              }}
+            />
+          </label>
+          {likeness.plateId && (
+            <Btn onClick={() => setLikeness({ plateId: null })}>Use the figure</Btn>
+          )}
+        </div>
+        <Slider label="Identity" min={0} max={100} value={likeness.identity} onChange={(identity) => setLikeness({ identity })} />
+        <Slider label="Catchlight" min={0} max={100} value={likeness.catchlight} onChange={(catchlight) => setLikeness({ catchlight })} />
+        <Slider label="Iris" min={0} max={100} value={likeness.iris} onChange={(iris) => setLikeness({ iris })} />
+        <Slider label="Under-eye" min={0} max={100} value={likeness.underEye} onChange={(underEye) => setLikeness({ underEye })} />
+        <Slider label="Lip" min={0} max={100} value={likeness.lip} onChange={(lip) => setLikeness({ lip })} />
+        <Kicker>Voice body</Kicker>
+        <p className="text-xs text-pretty text-mute">Warmth, presence, and breath shape a recorded read. Hear still uses a voice on this device, with the pitch falling at the end of a sentence.</p>
+        <Slider label="Warmth" min={0} max={100} value={likeness.warmth} onChange={(warmth) => setLikeness({ warmth })} />
+        <Slider label="Presence" min={0} max={100} value={likeness.presence} onChange={(presence) => setLikeness({ presence })} />
+        <Slider label="Breath" min={0} max={100} value={likeness.breath} onChange={(breath) => setLikeness({ breath })} />
         <Kicker>Setup</Kicker>
         <div className="flex flex-wrap gap-2">
           {SETUPS.map((setup) => (

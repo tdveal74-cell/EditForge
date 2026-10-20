@@ -20,75 +20,76 @@ function skinAmounts(enhance: Enhance) {
   return { pores: 0.2 + texture * 0.65, freckles: 0.12 + freckles * 0.75, even: smooth * 0.3, detail: 0.14 + detail * 0.45, shine: 0.06 };
 }
 
+export function SkinFinish({ enhance }: { enhance: Enhance }) {
+  const skin = skinAmounts(enhance);
+  return (
+    <div
+      className="pointer-events-none absolute inset-0"
+      style={{
+        maskImage: skinMask(enhance.area),
+        WebkitMaskImage: skinMask(enhance.area),
+        maskComposite: "add",
+        WebkitMaskComposite: "source-over",
+      }}
+    >
+      {skin.pores > 0.02 && (
+        <div
+          className="absolute inset-0 mix-blend-overlay"
+          style={{
+            opacity: skin.pores,
+            backgroundImage:
+              "radial-gradient(circle, color-mix(in srgb, var(--color-ink) 70%, var(--color-copper)) 0.4px, transparent 0.9px)",
+            backgroundSize: "4px 4px",
+          }}
+        />
+      )}
+      {skin.freckles > 0.02 && (
+        <div
+          className="absolute inset-0"
+          style={{
+            opacity: skin.freckles,
+            backgroundImage:
+              "radial-gradient(circle at 42% 44%, var(--color-copper) 0 1.5px, transparent 2px), radial-gradient(circle at 58% 48%, var(--color-copper) 0 1px, transparent 1.8px), radial-gradient(circle at 48% 56%, var(--color-copper) 0 1.2px, transparent 2px), radial-gradient(circle at 63% 40%, var(--color-copper) 0 0.8px, transparent 1.6px), radial-gradient(circle at 36% 52%, var(--color-copper) 0 1px, transparent 1.7px)",
+          }}
+        />
+      )}
+      {skin.detail > 0.02 && (
+        <div
+          className="absolute inset-0 mix-blend-overlay"
+          style={{
+            opacity: skin.detail,
+            backgroundImage: "repeating-linear-gradient(90deg, transparent 0 2px, color-mix(in srgb, var(--color-paper) 55%, transparent) 2px 3px)",
+          }}
+        />
+      )}
+      {skin.even > 0.02 && <div className="absolute inset-0 bg-paper" style={{ opacity: skin.even * 0.28 }} />}
+      {skin.shine > 0.02 && (
+        <div
+          className="absolute inset-0 mix-blend-multiply"
+          style={{
+            opacity: skin.shine,
+            background: "radial-gradient(ellipse 30% 18% at 58% 36%, transparent, rgb(16 17 14) 70%)",
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 export function Frame({ motif, grade, enhance }: { motif: Motif; grade?: Grade; enhance?: Enhance }) {
   const depth = grade?.depth ?? 0;
   const blur = depth > 0 ? `blur(${(depth / 18).toFixed(2)}px)` : undefined;
   const gradeFilter = grade
     ? `brightness(${(1 + grade.exposure / 140).toFixed(3)}) contrast(${(1 + grade.contrast / 120).toFixed(3)}) saturate(${(1 + grade.saturation / 100).toFixed(3)}) sepia(${Math.max(0, grade.warmth) / 180}) hue-rotate(${(-Math.min(0, grade.warmth) * 0.6).toFixed(2)}deg)`
     : "";
-  const skin = enhance ? skinAmounts(enhance) : null;
 
   return (
-    <div
-      className="relative h-full w-full overflow-hidden bg-ink"
-      style={{ filter: gradeFilter || undefined }}
-    >
+    <div className="relative h-full w-full overflow-hidden bg-ink" style={{ filter: gradeFilter || undefined }}>
       <div className="absolute inset-0" style={{ filter: blur }}>
         <Backdrop motif={motif} />
       </div>
       <Subject motif={motif} />
-      {skin && (
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            maskImage: enhance ? skinMask(enhance.area) : undefined,
-            WebkitMaskImage: enhance ? skinMask(enhance.area) : undefined,
-            maskComposite: "add",
-            WebkitMaskComposite: "source-over",
-          }}
-        >
-          {skin.pores > 0.02 && (
-            <div
-              className="absolute inset-0 mix-blend-overlay"
-              style={{
-                opacity: skin.pores,
-                backgroundImage:
-                  "radial-gradient(circle, color-mix(in srgb, var(--color-ink) 70%, var(--color-copper)) 0.4px, transparent 0.9px)",
-                backgroundSize: "4px 4px",
-              }}
-            />
-          )}
-          {skin.freckles > 0.02 && (
-            <div
-              className="absolute inset-0"
-              style={{
-                opacity: skin.freckles,
-                backgroundImage:
-                  "radial-gradient(circle at 42% 44%, var(--color-copper) 0 1.5px, transparent 2px), radial-gradient(circle at 58% 48%, var(--color-copper) 0 1px, transparent 1.8px), radial-gradient(circle at 48% 56%, var(--color-copper) 0 1.2px, transparent 2px), radial-gradient(circle at 63% 40%, var(--color-copper) 0 0.8px, transparent 1.6px), radial-gradient(circle at 36% 52%, var(--color-copper) 0 1px, transparent 1.7px)",
-              }}
-            />
-          )}
-          {skin.detail > 0.02 && (
-            <div
-              className="absolute inset-0 mix-blend-overlay"
-              style={{
-                opacity: skin.detail,
-                backgroundImage: "repeating-linear-gradient(90deg, transparent 0 2px, color-mix(in srgb, var(--color-paper) 55%, transparent) 2px 3px)",
-              }}
-            />
-          )}
-          {skin.even > 0.02 && <div className="absolute inset-0 bg-paper" style={{ opacity: skin.even * 0.28 }} />}
-          {skin.shine > 0.02 && (
-            <div
-              className="absolute inset-0 mix-blend-multiply"
-              style={{
-                opacity: skin.shine,
-                background: "radial-gradient(ellipse 30% 18% at 58% 36%, transparent, rgb(16 17 14) 70%)",
-              }}
-            />
-          )}
-        </div>
-      )}
+      {enhance && <SkinFinish enhance={enhance} />}
       {grade && grade.vignette > 0 && (
         <div
           className="pointer-events-none absolute inset-0"
@@ -108,8 +109,7 @@ function Backdrop({ motif }: { motif: Motif }) {
         <div
           className="absolute inset-0 opacity-50"
           style={{
-            backgroundImage:
-              "repeating-linear-gradient(108deg, transparent 0 12px, rgb(243 238 228 / 0.28) 12px 13px)",
+            backgroundImage: "repeating-linear-gradient(108deg, transparent 0 12px, rgb(243 238 228 / 0.28) 12px 13px)",
           }}
         />
       </div>

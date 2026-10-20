@@ -4,6 +4,10 @@ This change replaces the demo-only Cut path with real source-media handling.
 It is a foundation for the open EP01 repairs, not an accepted repaired episode.
 It is independent of the avatar work in PR #81.
 
+The Vela image installs the existing lockfile with `npm ci --legacy-peer-deps`,
+the route used for validation. It no longer re-resolves optional peer dependencies
+during every Docker build. No dependency versions or lockfile were changed.
+
 ## Implemented
 
 - MP4/MOV/WebM, WAV/OGG/MP3/M4A/FLAC and PNG/JPEG/WebP file import into a

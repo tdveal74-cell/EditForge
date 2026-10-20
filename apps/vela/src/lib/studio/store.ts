@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { AvatarProfile } from "./avatar-reference";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { setStepListener, startLoop, stopLoop } from "@/lib/studio/audio";
 import { planFloor, type FloorMark, type FloorSeat, type FloorStep } from "@/lib/studio/floor";
@@ -101,6 +102,7 @@ interface Studio {
   setEnhance: (patch: Partial<Enhance>) => void;
   setEnhanceScale: (scale: 1 | 2) => void;
   setLikeness: (patch: Partial<Likeness>) => void;
+  setAvatar: (profile: AvatarProfile, expectedProjectId: string) => boolean;
   saveTake: (take: Take) => void;
   deleteTake: (id: string) => void;
   placeVoice: (take: Take) => void;
@@ -474,6 +476,13 @@ export const useStudio = create<Studio>()(
         }));
         const likeness = active(get()).likeness;
         applyVoiceBody({ warmth: likeness.warmth, presence: likeness.presence, breath: likeness.breath });
+      },
+      setAvatar: (profile, expectedProjectId) => {
+        if (get().activeId !== expectedProjectId) return false;
+        const look = profile.looks.find((item) => item.id === profile.selectedLookId);
+        if (!look) return false;
+        patch(set, get, (project) => ({ ...project, avatar: profile, likeness: { ...project.likeness, plateId: look.assetId } }));
+        return true;
       },
       saveTake: (take) =>
         patch(set, get, (project) => {

@@ -13,9 +13,10 @@ export function usePlate(id: string | null): string | null {
       return;
     }
     let live = true;
+    setUrl(null);
     void audioUrl(id).then((next) => {
       if (live) setUrl(next);
-    });
+    }).catch(() => { if (live) setUrl(null); });
     return () => {
       live = false;
     };

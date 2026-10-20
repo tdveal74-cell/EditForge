@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #10110e;
+  --color-panel: #181914;
+  --color-raise: #22231c;
+  --color-line: #34352c;
+  --color-paper: #f3eee4;
+  --color-mute: #a39c8e;
+  --color-copper: #d4894a;
+  --color-copper-ink: #2a1a0c;
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input[type="range"] {
+    accent-color: var(--color-copper);
+    height: 2.75rem;
+    width: 100%;
+  }
+
+  ::selection {
+    background: var(--color-copper);
+    color: var(--color-copper-ink);
+  }
+}
+
+@keyframes vela-rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes vela-snap {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes vela-type {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+.vela-rise {
+  animation: vela-rise 0.55s ease both;
+}
+.vela-snap {
+  animation: vela-snap 0.2s ease both;
+}
+.vela-type {
+  animation: vela-type 0.7s steps(18, end) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vela-rise,
+  .vela-snap,
+  .vela-type {
+    animation: none;
+  }
+}

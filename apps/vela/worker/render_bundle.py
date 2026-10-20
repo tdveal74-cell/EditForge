@@ -40,6 +40,17 @@ def atomic_json(path, value):
     temporary.replace(path)
 
 
+def verify_intermediates(entries, output, phase):
+    """Reject a segment changed after validation, including during muxing."""
+    for path, expected in entries:
+        actual = {"bytes": path.stat().st_size, "sha256": digest(path)} if path.is_file() else None
+        if actual != expected:
+            atomic_json(output / "verification-failure.json", {
+                "phase": phase, "segment": path.name, "expected": expected, "actual": actual,
+            })
+            raise ValueError(f"Validated picture segment changed {phase}: {path.name}")
+
+
 def run(args, timeout=600):
     """Bound subprocess lifetime; a cancellation also stops the child process."""
     process = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -239,6 +250,7 @@ def render(bundle, output, height=720):
                     if clip["i"] + clip["n"] > length * fps + 1e-4:
                         raise ValueError("Clip extends past original source duration")
             video_parts = []
+            segment_identities = []
             for index, (start, end, clip) in enumerate(spans):
                 status("rendering_picture", segment=index + 1, segments=len(spans))
                 part = root / f"picture-{index:04d}.mp4"
@@ -252,10 +264,13 @@ def render(bundle, output, height=720):
                     offset = 0 if asset["kind"] == "image" else clip["i"] + start - clip["s"]
                     filters = f"fps={fps}:round=up:start_time=0,trim=start_frame={offset}:end_frame={offset + frames},setpts=PTS-STARTPTS,scale={width}:{height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,setsar=1,format=yuv420p"
                 ffmpeg(args + ["-map", "0:v:0", "-an", "-vf", filters, "-frames:v", str(frames), "-c:v", "libx264", "-preset", "fast", "-crf", "18", "-threads", "2", str(part)])
+                identity = {"bytes": part.stat().st_size, "sha256": digest(part)}
                 part_info = probe(part, count=True)
                 actual = int(next(s for s in part_info["streams"] if s["codec_type"] == "video")["nb_read_frames"])
                 if actual != frames:
                     raise ValueError(f"Picture segment frame mismatch: expected {frames}, got {actual}")
+                verify_intermediates([(part, identity)], output, "during segment validation")
+                segment_identities.append((part, identity))
                 video_parts.append(part)
             status("mixing_audio")
             # Decode every selected interval into PCM at its exact source offset;
@@ -296,7 +311,9 @@ def render(bundle, output, height=720):
             concat = root / "pictures.txt"
             concat.write_text("".join(f"file '{p.name}'\n" for p in video_parts))
             result = root / "source-cut-review.mp4"
+            verify_intermediates(segment_identities, output, "before muxing")
             ffmpeg(["-f", "concat", "-safe", "1", "-i", str(concat), "-i", str(mix), "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-t", f"{total/fps:.12f}", "-movflags", "+faststart", str(result)])
+            verify_intermediates(segment_identities, output, "during muxing")
             status("verifying")
             output_info = probe(result, count=True)
             video = next(s for s in output_info["streams"] if s["codec_type"] == "video")

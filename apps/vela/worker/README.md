@@ -65,6 +65,10 @@ FFmpeg version and probe output. The full movie must decode without errors.
 The final audio duration must match the picture within one AAC frame. Audible
 sync still requires content-specific review; this metadata check does not
 prove lip sync. Overloaded mixes fail instead of being silently limited.
+Picture intermediates are hashed around their frame-count validation and
+checked again before and after muxing. A changed segment fails the job with
+its expected/actual size and hash in `verification-failure.json`; no movie or
+success receipt is published and no automatic retry conceals the failure.
 
 Inputs are bounded to 2 GiB per stored-ZIP, 256 MiB per source, 2,000 entries,
 500 clips, 40 million source pixels and one hour of timeline. The CLI verifies
@@ -82,7 +86,8 @@ The synthetic-media tests verify every frame of a 24-to-30 fps split, an audio
 marker with source-in and timeline delay (within 2 ms after AAC), fresh output
 and overwrite refusal, still import, overlap/solo selection, malformed and
 tampered ZIP rejection, source-end limits, unsupported caption/grid rejection,
-real CLI cancellation, and rejection of a clipping mix.
+real CLI cancellation, rejection of a clipping mix, and a validated segment
+being truncated both before muxing and after an otherwise successful mux.
 
 A separate smoke run uses the existing browser-exported EP01 test bundle:
 SH070 split at frame 100, SH100 starting at frame 181, and the explicitly
@@ -92,13 +97,23 @@ approved EP01 footage. No original media or rendered test output belongs in git.
 
 ### Open reliability finding, 2026-10-20
 
-One real-source repeat failed the final combined frame/rate validation. Its
-generic error did not preserve the mismatching fields, so the cause is not
-established. A subsequent diagnostic run and three consecutive repeats passed
-and produced identical MP4 SHA-256
+The intermittent real-source failure has now been reproduced with diagnostics:
+the final picture contained only 100 of the expected 421 frames, while audio
+continued for the full timeline. In a retained reproduction, the second
+picture segment had passed its 81-frame check but was later an incomplete
+1,048,624-byte file with no MP4 `moov` index. The first and third segment
+hashes matched a successful run. This points to an intermediate changing
+after validation; the writer or runtime cause is not established.
+
+The new intermediate identity checks reject such changes before/after muxing
+and preserve exact expected/actual evidence. Fault-injection tests cover both
+points, including rejection after a complete movie was already muxed. This
+hardening is not a claim that the underlying mutation has been fixed.
+
+Successful real-source repeats produced identical MP4 SHA-256
 `98344ba0fff479ff4c89e608c05b6bdb4509e9d648010d948c14ea30ada0a81a`.
-The failure was not accepted or retried automatically. Failures of that check
-now save `verification-failure.json` with the expected counts/rate and the
-actual probe result. Keep this worker a review candidate until the isolated
-failure is explained and VPS execution is verified. Passing later repeats
-does not establish that the initial failure has been fixed.
+Sixteen standalone mux repeats with the original duration limit and sixteen
+without it passed using retained good segments; removing that limit was not
+adopted as a fix. Final frame/rate failures also save the actual probe result.
+Keep this worker a review candidate until the mutation is explained and VPS
+execution is verified. Passing later repeats does not establish a repair.

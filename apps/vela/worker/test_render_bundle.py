@@ -213,6 +213,34 @@ class RenderTests(unittest.TestCase):
         finally:
             render_bundle.probe = original_probe
 
+    def test_validated_segment_changes_before_or_during_mux_are_rejected(self):
+        import render_bundle
+        original_ffmpeg = render_bundle.ffmpeg
+        for phase in ("before muxing", "during muxing"):
+            with self.subTest(phase=phase):
+                output = self.root / ("changed-segment-" + phase.replace(" ", "-"))
+                bundle = self.write_bundle(output.name)
+                try:
+                    def mutate_segment(args):
+                        result = original_ffmpeg(args)
+                        trigger = "pcm_f32le" in args if phase == "before muxing" else "concat" in args
+                        if trigger:
+                            segment = Path(args[-1]).parent / "picture-0001.mp4"
+                            segment.write_bytes(segment.read_bytes()[:48])
+                        return result
+                    render_bundle.ffmpeg = mutate_segment
+                    with contextlib.redirect_stdout(io.StringIO()), self.assertRaisesRegex(ValueError, "segment changed " + phase):
+                        render(bundle, output, 360)
+                    diagnostic = json.loads((output / "verification-failure.json").read_text())
+                    self.assertEqual(diagnostic["phase"], phase)
+                    self.assertEqual(diagnostic["segment"], "picture-0001.mp4")
+                    self.assertNotEqual(diagnostic["expected"]["sha256"], diagnostic["actual"]["sha256"])
+                    self.assertFalse((output / "receipt.json").exists())
+                    self.assertFalse((output / "source-cut-review.mp4").exists())
+                    self.assertFalse(any(output.glob(".work-*")))
+                finally:
+                    render_bundle.ffmpeg = original_ffmpeg
+
 
 if __name__ == "__main__":
     unittest.main()

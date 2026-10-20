@@ -1,0 +1,107 @@
+name: Deploy Vela beside EditForge
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type vela to authorize. Required for both dry run and live install.
+        required: true
+        type: string
+      dry_run:
+        description: Print the host and container names. Do not build or replace anything.
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vela-hostinger-install
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: Install Vela on srv1936199
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: production
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Reject a bad confirmation
+        env:
+          CONFIRM: ${{ inputs.confirm }}
+        run: |
+          set -euo pipefail
+          if [[ "$CONFIRM" != "vela" ]]; then
+            echo "confirm must equal vela" >&2
+            exit 1
+          fi
+
+      - name: Require the EditForge door secrets
+        env:
+          HOST: ${{ secrets.EDITFORGE_VPS_HOST }}
+          USER: ${{ secrets.EDITFORGE_VPS_USER }}
+          KEY: ${{ secrets.EDITFORGE_VPS_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          [[ -n "$HOST" ]] || { echo "missing secret EDITFORGE_VPS_HOST" >&2; missing=1; }
+          [[ -n "$USER" ]] || { echo "missing secret EDITFORGE_VPS_USER" >&2; missing=1; }
+          [[ -n "$KEY" ]] || { echo "missing secret EDITFORGE_VPS_SSH_KEY" >&2; missing=1; }
+          exit "$missing"
+
+      - name: Fetch the Vela source branch
+        run: |
+          set -euo pipefail
+          git fetch origin vela-src
+          git checkout origin/vela-src -- apps/vela
+
+      - name: Pack Vela
+        run: |
+          set -euo pipefail
+          tar -C apps/vela -czf /tmp/vela-src.tgz .
+
+      - name: Install SSH key
+        uses: webfactory/ssh-agent@v0.9.1
+        with:
+          ssh-private-key: ${{ secrets.EDITFORGE_VPS_SSH_KEY }}
+
+      - name: Trust host key
+        env:
+          HOST: ${{ secrets.EDITFORGE_VPS_HOST }}
+          PORT: ${{ secrets.EDITFORGE_VPS_PORT }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -T 15 -p "${PORT:-22}" -H "$HOST" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Copy the runbook and the pack
+        env:
+          HOST: ${{ secrets.EDITFORGE_VPS_HOST }}
+          USER: ${{ secrets.EDITFORGE_VPS_USER }}
+          PORT: ${{ secrets.EDITFORGE_VPS_PORT }}
+        run: |
+          set -euo pipefail
+          scp -P "${PORT:-22}" scripts/vela-install.sh docs/VELA_RUNBOOK.md /tmp/vela-src.tgz \
+            "${USER}@${HOST}:/tmp/"
+          ssh -p "${PORT:-22}" "${USER}@${HOST}" "chmod 700 /tmp/vela-install.sh"
+
+      - name: Run the install
+        env:
+          HOST: ${{ secrets.EDITFORGE_VPS_HOST }}
+          USER: ${{ secrets.EDITFORGE_VPS_USER }}
+          PORT: ${{ secrets.EDITFORGE_VPS_PORT }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          if [[ "$DRY" == "true" ]]; then
+            mode=dry-run
+          else
+            mode=apply
+          fi
+          ssh -p "${PORT:-22}" "${USER}@${HOST}" "bash /tmp/vela-install.sh ${mode}"

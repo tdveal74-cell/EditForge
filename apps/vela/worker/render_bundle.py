@@ -302,7 +302,8 @@ def render(bundle, output, height=720):
             video = next(s for s in output_info["streams"] if s["codec_type"] == "video")
             sound = next(s for s in output_info["streams"] if s["codec_type"] == "audio")
             if int(video["nb_read_frames"]) != total or video["r_frame_rate"] != f"{fps}/1":
-                raise ValueError("Output timebase or frame count mismatch")
+                atomic_json(output / "verification-failure.json", {"expected_frames": total, "expected_fps": fps, "output_probe": output_info})
+                raise ValueError(f"Output timebase/frame mismatch: expected {total} at {fps}/1, got {video['nb_read_frames']} at {video['r_frame_rate']}; duration={video.get('duration')}")
             if abs(float(sound["duration"]) - total / fps) > 1024 / 48000 or abs(float(sound.get("start_time", 0))) > 1 / 48000:
                 raise ValueError("Output audio duration/start mismatch")
             ffmpeg(["-i", str(result), "-map", "0:v:0", "-map", "0:a:0", "-f", "null", "-"])

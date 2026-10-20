@@ -89,3 +89,16 @@ SH070 split at frame 100, SH100 starting at frame 181, and the explicitly
 labelled test tone from frames 150–270. That produces 421 frames at 30 fps.
 This is evidence for export of the existing failed drafts, not repaired or
 approved EP01 footage. No original media or rendered test output belongs in git.
+
+### Open reliability finding, 2026-10-20
+
+One real-source repeat failed the final combined frame/rate validation. Its
+generic error did not preserve the mismatching fields, so the cause is not
+established. A subsequent diagnostic run and three consecutive repeats passed
+and produced identical MP4 SHA-256
+`98344ba0fff479ff4c89e608c05b6bdb4509e9d648010d948c14ea30ada0a81a`.
+The failure was not accepted or retried automatically. Failures of that check
+now save `verification-failure.json` with the expected counts/rate and the
+actual probe result. Keep this worker a review candidate until the isolated
+failure is explained and VPS execution is verified. Passing later repeats
+does not establish that the initial failure has been fixed.

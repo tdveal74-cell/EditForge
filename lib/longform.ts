@@ -1,10 +1,12 @@
+export type ChapterSource = "gen" | "nle" | "stock" | "avatar" | "vo-bed";
+
 export type Chapter = {
   id: string;
   title: string;
   startSec: number;
   targetDurationSec: number;
   script: string;
-  segmentSource: "gen" | "nle" | "stock" | "avatar" | "vo-bed";
+  segmentSource: ChapterSource;
 };
 
 export type LongFormProject = {
@@ -21,6 +23,8 @@ export type StitchPlan = {
   requiresRubricPass: boolean;
   estimatedMinutes: number;
 };
+
+export const CHAPTER_SOURCES: ChapterSource[] = ["gen", "nle", "stock", "avatar", "vo-bed"];
 
 export const LONGFORM_TIERS = [
   { id: "short-doc", label: "Short doc", maxMin: 8, notes: "YouTube short-form long" },
@@ -42,6 +46,77 @@ export const SAMPLE_LONGFORM: LongFormProject = {
     { id: "ch-5", title: "Close", startSec: 870, targetDurationSec: 90, script: "Intentional ending.", segmentSource: "nle" },
   ],
 };
+
+export function isChapterSource(v: string): v is ChapterSource {
+  return (CHAPTER_SOURCES as readonly string[]).includes(v);
+}
+
+export type ParseProjectResult =
+  | { ok: true; project: LongFormProject }
+  | { ok: false; reason: string };
+
+/**
+ * The project the operator edited, or a reason it is not one.
+ *
+ * `/api/longform/plan` used to ignore the body and plan SAMPLE_LONGFORM. A
+ * missing chapters array is a 400, not a silent sample stitch.
+ */
+export function parseLongformProject(raw: unknown): ParseProjectResult {
+  if (!raw || typeof raw !== "object") {
+    return { ok: false, reason: "project required — the plan is of the chapters on the page, not the sample" };
+  }
+  const body = raw as Record<string, unknown>;
+  const chaptersRaw = body.chapters;
+  if (!Array.isArray(chaptersRaw) || chaptersRaw.length === 0) {
+    return { ok: false, reason: "chapters required — the sample is not planned by default" };
+  }
+  const chapters: Chapter[] = [];
+  for (const item of chaptersRaw) {
+    if (!item || typeof item !== "object") {
+      return { ok: false, reason: "Each chapter must be an object" };
+    }
+    const row = item as Record<string, unknown>;
+    const id = String(row.id ?? "").trim();
+    const title = String(row.title ?? "").trim();
+    if (!id) return { ok: false, reason: "Each chapter needs an id" };
+    if (!title) return { ok: false, reason: "Each chapter needs a title" };
+    const startSec = Number(row.startSec);
+    const targetDurationSec = Number(row.targetDurationSec);
+    if (!Number.isFinite(startSec) || startSec < 0) {
+      return { ok: false, reason: `Chapter "${id}" needs a start in seconds` };
+    }
+    if (!Number.isFinite(targetDurationSec) || targetDurationSec <= 0) {
+      return { ok: false, reason: `Chapter "${id}" needs a duration in seconds` };
+    }
+    const segmentSource = String(row.segmentSource || "");
+    if (!isChapterSource(segmentSource)) {
+      return { ok: false, reason: `Chapter "${id}" has unknown source "${segmentSource}"` };
+    }
+    chapters.push({
+      id,
+      title,
+      startSec,
+      targetDurationSec,
+      script: String(row.script ?? ""),
+      segmentSource,
+    });
+  }
+  const id = String(body.id ?? "").trim() || "lf-edit";
+  const title = String(body.title ?? "").trim() || "Untitled long-form";
+  const targetDurationSec = Number(body.targetDurationSec);
+  return {
+    ok: true,
+    project: {
+      id,
+      title,
+      targetDurationSec: Number.isFinite(targetDurationSec) && targetDurationSec > 0
+        ? targetDurationSec
+        : totalChapterDuration(chapters),
+      chapters,
+      status: "draft",
+    },
+  };
+}
 
 export function totalChapterDuration(chapters: Chapter[]): number {
   return chapters.reduce((s, c) => s + c.targetDurationSec, 0);
@@ -69,4 +144,24 @@ export function longformStrategy(totalSec: number): string {
   if (min <= 3) return "Single-timeline or few gen clips; still stitch-aware.";
   if (min <= 25) return "Chapter pipeline: NLE spine + gen inserts + VO beds + stitch.";
   return "Feature length: NLE is primary; gen only for controlled inserts; farm encode required.";
+}
+
+/** Stitch plan as a file. Not a running episode renderer. */
+export function buildLongformBoard(project: LongFormProject = SAMPLE_LONGFORM): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "longform-stitch-plan",
+        notice:
+          "Stitch plan as a file. Not a running episode renderer. The stitch gate is a recorded rubric pass on a named cut, not a caller checkbox.",
+        id: project.id,
+        title: project.title,
+        targetDurationSec: project.targetDurationSec,
+        assembledSec: totalChapterDuration(project.chapters),
+        chapters: project.chapters,
+      },
+      null,
+      2,
+    ) + "\n"
+  );
 }

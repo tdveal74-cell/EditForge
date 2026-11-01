@@ -1,51 +1,82 @@
-import type { Metadata } from "next";
+"use client";
+
+import { useMemo, useState } from "react";
 import { PageHeader } from "@/components/PageHeader";
-import { Badge } from "@/components/ui/badge";
-
-export const metadata: Metadata = { title: "Script notes" };
-
-const beats = [
-  {
-    scene: "1A",
-    slug: "COLD OPEN — SHARED SHADOW",
-    note: "Environment establishes first. No rush to dialogue.",
-    marks: ["Establish"],
-  },
-  { scene: "1B", slug: "QUESTION", note: "Auren asks. Hold on silence.", marks: ["VO", "Hold"] },
-  { scene: "2A", slug: "ORACLE WALK", note: "Still-frame eligible at end of beat.", marks: ["Still hold"] },
-];
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/field";
+import { downloadText } from "@/lib/download";
+import { SAMPLE_BEATS, buildScriptBoard, newScriptBeat, type ScriptBeat } from "@/lib/script-board";
 
 export default function ScriptPage() {
+  const [beats, setBeats] = useState<ScriptBeat[]>(SAMPLE_BEATS);
+  const board = useMemo(() => buildScriptBoard(beats), [beats]);
+
+  function update(i: number, patch: Partial<ScriptBeat>) {
+    setBeats((list) => list.map((b, idx) => (idx === i ? { ...b, ...patch } : b)));
+  }
+
   return (
     <main className="mx-auto max-w-3xl px-6 py-12">
       <PageHeader
-        eyebrow="Script"
-        title="Scene notes"
-        description="Continuity and editorial intent. Screenplay tools stay external — this is the production note layer the cut is built against."
+        eyebrow="Board"
+        title="Sample beats"
+        description="Edit continuity beats, then download JSON. Not a screenplay tool. Screenplay apps stay external — this is a note layer."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" onClick={() => downloadText("editforge-script-board.json", board, "application/json")}>
+              Download beats
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setBeats((list) => [...list, newScriptBeat()])}>
+              Add beat
+            </Button>
+          </div>
+        }
       />
 
       <ol className="mt-10 space-y-3">
-        {beats.map((b) => (
+        {beats.map((b, i) => (
           <li
-            key={b.scene}
-            className="rounded-card border border-border bg-surface-elevated p-4 shadow-card transition-all duration-flagship ease-flagship hover:border-border-strong hover:shadow-lifted"
+            key={`${b.scene}-${i}`}
+            className="rounded-card border border-border bg-surface-elevated p-4 shadow-card"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-baseline gap-2.5">
-                <span className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-navy/50">
-                  {b.scene}
-                </span>
-                <h2 className="text-sm font-semibold tracking-tight text-navy">{b.slug}</h2>
-              </div>
-              <div className="flex gap-1.5">
-                {b.marks.map((m) => (
-                  <Badge key={m} tone="outline">
-                    {m}
-                  </Badge>
-                ))}
-              </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                className="w-20"
+                value={b.scene}
+                onChange={(e) => update(i, { scene: e.target.value })}
+                aria-label={`Scene ${i + 1}`}
+              />
+              <Input
+                className="min-w-[12rem] flex-1 font-semibold"
+                value={b.slug}
+                onChange={(e) => update(i, { slug: e.target.value })}
+                aria-label={`Slug ${i + 1}`}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setBeats((list) => (list.length <= 1 ? list : list.filter((_, idx) => idx !== i)))}
+                disabled={beats.length <= 1}
+              >
+                Remove
+              </Button>
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-navy/70">{b.note}</p>
+            <Textarea
+              className="mt-2 min-h-[72px]"
+              value={b.note}
+              onChange={(e) => update(i, { note: e.target.value })}
+              aria-label={`Note ${i + 1}`}
+            />
+            <Input
+              className="mt-2"
+              value={b.marks.join(", ")}
+              onChange={(e) =>
+                update(i, { marks: e.target.value.split(",").map((m) => m.trim()).filter(Boolean) })
+              }
+              aria-label={`Marks ${i + 1}`}
+              placeholder="marks, comma separated"
+            />
           </li>
         ))}
       </ol>

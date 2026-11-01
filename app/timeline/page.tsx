@@ -1,7 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { TRACK_ORDER, totalDuration } from "@/lib/timeline";
+import { TRACK_ORDER, totalDuration, buildAssemblySketch } from "@/lib/timeline";
+import { downloadText } from "@/lib/download";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/PageHeader";
 import { assembleNode01, node01Timeline } from "@/lib/assembly";
 import { NODE01_VO } from "@/lib/masters";
@@ -42,13 +44,25 @@ export default function TimelinePage() {
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
       <PageHeader
-        eyebrow="Timeline"
-        title="Assembly"
-        description="Ascension Caudex, Node 01 — five picture masters against eleven narration lines. Picture is cut to the recorded read, so the runtime is the read."
+        eyebrow="Board"
+        title="Assembly sketch"
+        description="Read-only sketch of Node 01 — five picture masters against eleven narration lines. Not an NLE: you cannot trim, recut, or rearrange here. Picture is cut to the recorded read, so the runtime is the read."
         actions={
-          <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
-            {dur.toFixed(2)}s
-          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-control border border-border-faint bg-surface-elevated px-3 py-1.5 font-mono text-xs tabular-nums text-navy/60">
+              {dur.toFixed(2)}s
+            </span>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={() =>
+                downloadText("editforge-assembly-sketch.json", buildAssemblySketch(clips), "application/json")
+              }
+            >
+              Download sketch
+            </Button>
+          </div>
         }
       />
 

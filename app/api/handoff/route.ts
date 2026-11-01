@@ -1,8 +1,11 @@
-import { buildEDL, buildPathContract, buildShotPackage, buildStemSheet, LOUDNESS_TARGETS, slug, TIMEBASES, type Timebase } from "@/lib/handoff";
+import { buildCatalogExport, buildEDL, buildMixSession, buildNodeGraph, buildPathContract, buildRenderPlan, buildShotPackage, buildStemSheet, LOUDNESS_TARGETS, slug, TIMEBASES, type Timebase } from "@/lib/handoff";
 import { getCut } from "@/lib/store";
+import { listAssets } from "@/lib/catalog";
 import { shotsForCut } from "@/lib/vfxboard";
 import { SAMPLE_TIMELINE } from "@/lib/timeline";
 import type { VfxShot } from "@/lib/vfxShot";
+import { getAudioLaw } from "@/lib/audiostore";
+import type { AudioLevel } from "@/lib/audio";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +19,7 @@ export const dynamic = "force-dynamic";
  * middleware applies to this path like any other.
  */
 
-const KINDS = ["edl", "stems", "shots", "paths"] as const;
+const KINDS = ["edl", "stems", "shots", "paths", "plan", "session", "catalog", "graph"] as const;
 type Kind = (typeof KINDS)[number];
 
 function isKind(v: string): v is Kind {
@@ -31,6 +34,21 @@ export async function GET(req: Request) {
   if (!isKind(kind)) {
     return json({ error: `kind must be one of ${KINDS.join(", ")}` }, 400);
   }
+
+  // Catalog export is the MAM index — it is not a cut artifact.
+  if (kind === "catalog") {
+    const assets = await listAssets();
+    const body = buildCatalogExport({ assets, title: "Asset catalog" });
+    return new Response(body, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json; charset=utf-8",
+        "Content-Disposition": 'attachment; filename="editforge-catalog.json"',
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   if (!cutId) {
     return json({ error: "cutId required — an artifact belongs to a cut" }, 400);
   }
@@ -56,10 +74,12 @@ export async function GET(req: Request) {
   const clips = cut.clips ?? SAMPLE_TIMELINE;
   const assemblySource = cut.clips ? "cut assembly" : "sample assembly";
   const name = slug(cut.title) || cut.id;
+  const hierarchy = kind === "stems" || kind === "session" ? await getAudioLaw() : undefined;
 
   // Only the shot package consults the board; reading it for an EDL would be a
   // store round-trip that changes nothing in the file.
-  const board = kind === "shots" ? await shotsForCut(cut.id) : undefined;
+  const board = kind === "shots" || kind === "graph" ? await shotsForCut(cut.id) : undefined;
+  const index = kind === "paths" ? await listAssets() : undefined;
 
   const built = build(kind, {
     cut,
@@ -68,7 +88,10 @@ export async function GET(req: Request) {
     name,
     assemblySource,
     board,
+    index: index?.map((a) => ({ name: a.name, type: a.type, location: a.location })),
     targetId: url.searchParams.get("target"),
+    jobKind: url.searchParams.get("jobKind"),
+    hierarchy,
   });
   if ("error" in built) return json({ error: built.error }, 400);
 
@@ -85,15 +108,18 @@ export async function GET(req: Request) {
 }
 
 function build(
-  kind: Kind,
+  kind: Exclude<Kind, "catalog">,
   ctx: {
-    cut: { id: string; title: string };
+    cut: { id: string; title: string; rubricPass?: boolean };
     clips: typeof SAMPLE_TIMELINE;
     fps: Timebase;
     name: string;
     assemblySource: string;
     board?: VfxShot[];
+    index?: { name: string; type: string; location?: string }[];
     targetId: string | null;
+    jobKind?: string | null;
+    hierarchy?: AudioLevel[];
   }
 ): { body: string; contentType: string; filename: string } | { error: string } {
   const { cut, clips, fps, name, assemblySource } = ctx;
@@ -113,7 +139,7 @@ function build(
         return { error: `target must be one of ${LOUDNESS_TARGETS.map((t) => t.id).join(", ")}` };
       }
       return {
-        body: `${note}\n` + buildStemSheet({ title: cut.title, clips, target }),
+        body: `${note}\n` + buildStemSheet({ title: cut.title, clips, target, hierarchy: ctx.hierarchy }),
         contentType: "text/csv; charset=utf-8",
         filename: `${name}_stems_${target.id}.csv`,
       };
@@ -128,10 +154,44 @@ function build(
 
     case "paths":
       return {
-        body: buildPathContract({ cutId: cut.id, title: cut.title }),
+        body: buildPathContract({ cutId: cut.id, title: cut.title, index: ctx.index }),
         contentType: "application/json; charset=utf-8",
         filename: `${name}_paths.json`,
       };
+
+    case "session": {
+      const target = LOUDNESS_TARGETS.find((t) => t.id === (ctx.targetId || "shortform"));
+      if (!target) {
+        return { error: `target must be one of ${LOUDNESS_TARGETS.map((t) => t.id).join(", ")}` };
+      }
+      return {
+        body: buildMixSession({ title: cut.title, clips, target, hierarchy: ctx.hierarchy, assemblySource }),
+        contentType: "application/json; charset=utf-8",
+        filename: `${name}_mix_session.json`,
+      };
+    }
+
+    case "graph":
+      return {
+        body: buildNodeGraph({ title: cut.title, clips, fps, board: ctx.board }),
+        contentType: "application/json; charset=utf-8",
+        filename: `${name}_nodes.json`,
+      };
+
+    case "plan": {
+      const jobKind = ctx.jobKind === "export" ? "export" : "proxy";
+      return {
+        body: buildRenderPlan({
+          cutId: cut.id,
+          title: cut.title,
+          kind: jobKind,
+          rubricPass: Boolean(ctx.cut.rubricPass),
+          assemblySource,
+        }),
+        contentType: "application/json; charset=utf-8",
+        filename: `${name}_ffmpeg_${jobKind}.json`,
+      };
+    }
   }
 }
 

@@ -56,15 +56,22 @@ export default function RubricPage() {
         }
       />
 
-      <div className="mt-8 max-w-xs">
+      <div className="mt-8 max-w-xl">
         <Label text="Cut">
-          <Select value={cutId} onChange={(e) => setCutId(e.target.value)}>
-            {cuts.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-              </option>
-            ))}
-          </Select>
+          {cuts.length === 0 ? (
+            <p className="rounded-card border border-dashed border-border px-4 py-6 text-sm text-navy/55">
+              No cuts in the store yet. Create one on /projects before recording a rubric pass —
+              the gate has to attach to a cut.
+            </p>
+          ) : (
+            <Select value={cutId} onChange={(e) => setCutId(e.target.value)}>
+              {cuts.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.title}
+                </option>
+              ))}
+            </Select>
+          )}
         </Label>
       </div>
 

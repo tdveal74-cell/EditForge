@@ -38,3 +38,19 @@ export const TSWS_PRESETS: LanePreset[] = [
     ],
   },
 ];
+
+/** Lane restraint as a file. Constrains grade — does not invent a look. */
+export function buildPresetPack(presets: LanePreset[] = TSWS_PRESETS): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "lane-preset-pack",
+        notice:
+          "Sample lane notes as JSON. A preset constrains the grade. It is not a live look engine and not a product LUT pack.",
+        presets,
+      },
+      null,
+      2
+    ) + "\n"
+  );
+}

@@ -54,8 +54,12 @@ export function toneFor(status: string): Tone {
   const s = status.toLowerCase();
   // `archived` is settled, not unstarted — it was falling through to `pending`
   // and drawing the most finished state in the studio as "not begun".
-  if (["approved", "resolved", "ready", "completed", "shipped", "archived", "done", "live"].includes(s))
+  if (["approved", "resolved", "completed", "shipped", "archived", "done"].includes(s))
     return "done";
+  // Ready is a taxonomy label for a working surface, not a finished run.
+  // Live is a provider mode — in-flight work, not a settled job.
+  if (s === "ready") return "pending";
+  if (s === "live") return "active";
   if (["wip", "running", "processing", "review", "grade", "rendering", "stitching"].includes(s)) return "active";
   // `rejected` belongs here, not in the fallthrough: a rejected roll landing on
   // `pending` would draw the hollow "not started yet" ring, which is the exact

@@ -182,7 +182,7 @@ describe("provider boundary", () => {
     expect(isLiveWired("runway")).toBe(true);
     expect(isLiveWired("elevenlabs")).toBe(true);
     expect(isLiveWired("heygen")).toBe(true);
-    expect(isLiveWired("mock")).toBe(true);
+    expect(isLiveWired("mock")).toBe(false); // mock has no endpoint and no wire — it is the offline path, not a live one
     expect(isLiveWired("kling")).toBe(true);
     expect(isLiveWired("veo")).toBe(true);
     expect(isLiveWired("seedream")).toBe(true);

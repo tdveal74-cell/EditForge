@@ -23,3 +23,26 @@ export type VfxShot = {
   note?: string;
   updatedAt: string;
 };
+
+/** Shot tracker as a file. Not Fusion, not a compositor. */
+export function buildVfxBoardFile(shots: VfxShot[]): string {
+  return (
+    JSON.stringify(
+      {
+        kind: "vfx-shot-board",
+        notice:
+          "Shot tracker as a file. Not Fusion, not After Effects, not a compositor. Heavy comp stays external.",
+        shots: shots.map((s) => ({
+          id: s.id,
+          desc: s.desc,
+          status: s.status,
+          engine: s.engine,
+          cutId: s.cutId,
+          note: s.note,
+        })),
+      },
+      null,
+      2,
+    ) + "\n"
+  );
+}

@@ -21,13 +21,20 @@ describe("status tone", () => {
   });
 
   it("marks settled work as done", () => {
-    for (const s of ["approved", "shipped", "completed", "done", "ready", "live"]) {
+    for (const s of ["approved", "shipped", "completed", "done", "archived"]) {
       expect(toneFor(s)).toBe("done");
     }
   });
 
+  it("does not treat Ready taxonomy or Live provider mode as done", () => {
+    expect(toneFor("ready")).not.toBe("done");
+    expect(toneFor("ready")).toBe("pending");
+    expect(toneFor("live")).not.toBe("done");
+    expect(toneFor("live")).toBe("active");
+  });
+
   it("marks work in flight as active", () => {
-    for (const s of ["wip", "running", "review", "grade", "rendering"]) {
+    for (const s of ["wip", "running", "review", "grade", "rendering", "live"]) {
       expect(toneFor(s)).toBe("active");
     }
   });

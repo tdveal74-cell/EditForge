@@ -37,6 +37,12 @@ type Props = {
   options?: Record<string, unknown>;
   requiresRubricPass?: boolean;
   blockedReason?: string;
+  /** Parent owns the media well (gen-video / voice / avatar). */
+  hideResult?: boolean;
+  onJobChange?: (job: StudioJob | null) => void;
+  /** Controlled provider. Defaults to mock when omitted. */
+  providerId?: string;
+  onProviderChange?: (id: string) => void;
 };
 
 const SETTLED: JobStatus[] = ["completed", "failed", "cancelled", "validating"];
@@ -63,8 +69,15 @@ export function JobRunner({
   options,
   requiresRubricPass,
   blockedReason,
+  hideResult,
+  onJobChange,
+  providerId,
+  onProviderChange,
 }: Props) {
-  const [provider, setProvider] = useState(providers[0]?.id ?? "mock");
+  const [internalProvider, setInternalProvider] = useState(
+    providers.find((p) => p.id === "mock")?.id ?? providers[0]?.id ?? "mock"
+  );
+  const provider = providerId ?? internalProvider;
   const [job, setJob] = useState<StudioJob | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -97,6 +110,15 @@ export function JobRunner({
       }
     })();
   }, []);
+
+  useEffect(() => {
+    onJobChange?.(job);
+  }, [job, onJobChange]);
+
+  function chooseProvider(id: string) {
+    onProviderChange?.(id);
+    if (providerId === undefined) setInternalProvider(id);
+  }
 
   const key = idempotencyKeyFor(kind, { ...brief, provider });
   const chosen = readiness[provider];
@@ -204,7 +226,7 @@ export function JobRunner({
     <section className="mt-6 rounded-card border border-border bg-surface-elevated p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <Label text="Run against" className="min-w-48 flex-1">
-          <Select value={provider} onChange={(e) => setProvider(e.target.value)} disabled={tracking}>
+          <Select value={provider} onChange={(e) => chooseProvider(e.target.value)} disabled={tracking}>
             {providers.map((p) => {
               const r = readiness[p.id];
               // "live" has to mean runnable, not merely credentialled: a
@@ -312,7 +334,7 @@ export function JobRunner({
 
       {job && (
         <div className="mt-4 space-y-3">
-          {(job.status === "completed" || job.status === "validating") && (
+          {!hideResult && (job.status === "completed" || job.status === "validating") && (
             <div className="overflow-hidden rounded-card border border-border bg-surface shadow-card">
               <div className="flex min-h-[8rem] flex-col items-center justify-center bg-navy/[0.03] px-4 py-8">
                 {job.result ? (

@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { SAMPLE_AVATARS, AVATAR_FLOW } from "@/lib/avatar";
+import type { StudioJob } from "@/lib/jobs";
 import { Button } from "@/components/ui/button";
 import { Label, Select, Textarea, Output } from "@/components/ui/field";
 import { Section } from "@/components/ui/section";
 import { StatusLabel, toneFor } from "@/components/ui/status-dot";
 import { PageHeader } from "@/components/PageHeader";
 import { JobRunner } from "@/components/JobRunner";
+import { JobResultStage } from "@/components/JobResultStage";
 import { providerChoicesFor } from "@/lib/provider-registry";
 
 const DESIGN_SOURCES = ["signal", "monochrome", "claude", "mat", "blockframe"];
@@ -19,6 +21,7 @@ export default function AvatarPage() {
   );
   const [design, setDesign] = useState("signal");
   const [out, setOut] = useState<string | null>(null);
+  const [job, setJob] = useState<StudioJob | null>(null);
 
   async function plan() {
     const res = await fetch("/api/avatar/plan", {
@@ -34,37 +37,30 @@ export default function AvatarPage() {
       <PageHeader
         eyebrow="AI Media"
         title="Avatar / talking head"
-        description="HeyGen renders the performance. EditForge owns the brief, the cut linkage, and the rubric gate."
+        description="HeyGen renders the performance when wired. EditForge owns the brief, the cut linkage, and the rubric gate. Mock is the default."
       />
 
       <div className="mt-10 grid gap-8 lg:grid-cols-5">
-        {/* Stage */}
         <section className="lg:col-span-3">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Stage</p>
-          <div className="mt-3 overflow-hidden rounded-card border border-border bg-surface-elevated shadow-card">
-            <div className="flex min-h-[14rem] flex-col items-center justify-center bg-gradient-to-b from-navy/[0.04] to-surface-muted/40 px-6 py-12">
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-navy/40">
-                Avatar output
-              </p>
-              <p className="mt-3 max-w-sm text-center text-sm leading-relaxed text-navy/70">
-                Completed avatar renders appear here. Until a job returns media,
-                the stage stays honest — no placeholder talking head implied as live.
-              </p>
-              <p className="mt-5 rounded-control border border-border-faint bg-surface-elevated px-3 py-1 text-xs text-navy/50">
-                Design source · {design}
-              </p>
-            </div>
+          <div className="mt-3">
+            <JobResultStage
+              job={job}
+              kind="video"
+              emptyTitle="No avatar render yet"
+              emptyBody="One stage. A mock run records the job and produces no face. Live HeyGen needs a key, avatar id, and voice id."
+            />
           </div>
 
           <div className="mt-4 rounded-card border border-border-faint bg-surface-muted/50 px-4 py-3">
             <p className="text-xs leading-relaxed text-navy/60">
               <span className="font-medium text-navy/80">Honesty mark:</span> mock paths never
-              invent face or performance media. Simulated runs are labeled. Live requires provider
-              credentials and still respects the rubric before master.
+              invent face or performance media. Sample briefs below are drafts, not completed
+              renders.
             </p>
           </div>
 
-          <Section title="Projects" count={SAMPLE_AVATARS.length}>
+          <Section title="Sample briefs" count={SAMPLE_AVATARS.length}>
             <ul className="grid gap-2 sm:grid-cols-2">
               {SAMPLE_AVATARS.map((a) => (
                 <li
@@ -95,7 +91,6 @@ export default function AvatarPage() {
           </Section>
         </section>
 
-        {/* Brief */}
         <section className="lg:col-span-2">
           <p className="text-xs font-medium uppercase tracking-[0.15em] text-navy/45">Brief</p>
           <div className="mt-3 space-y-4">
@@ -129,6 +124,8 @@ export default function AvatarPage() {
               brief={{ prompt, designSource: design }}
               options={{ designSource: design }}
               providers={AVATAR_PROVIDERS}
+              hideResult
+              onJobChange={setJob}
             />
           </div>
         </section>

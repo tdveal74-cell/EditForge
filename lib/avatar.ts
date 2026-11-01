@@ -9,7 +9,7 @@ export type AvatarProject = {
 
 export const SAMPLE_AVATARS: AvatarProject[] = [
   { id: "av-tsws-cold", title: "TSWS cold open — avatar bed", status: "draft", scriptPreview: "Where are we today?", designSource: "signal" },
-  { id: "av-tqo-teach", title: "TQO presenter teach via HeyGen", status: "ready", scriptPreview: "Three steps. No hype.", designSource: "monochrome" },
+  { id: "av-tqo-teach", title: "TQO presenter teach via HeyGen", status: "draft", scriptPreview: "Three steps. No hype.", designSource: "monochrome" },
 ];
 
 /**
